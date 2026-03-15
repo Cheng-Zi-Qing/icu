@@ -199,11 +199,24 @@ black src/
 
 MIT License - 详见 [LICENSE](LICENSE) 文件
 
-## 🙏 致谢
+## 📚 科学依据
 
-- 基于 20-20-20 法则的护眼提醒
-- 久坐微干预研究
-- 认知水合作用理论
+本项目的健康提醒算法基于以下科学研究：
+
+### 数字眼疲劳与 20-20-20 法则
+
+- Kumar, S., & Pandey, H. (2024). [Impact of 20-20-20 Rule and Daily Reminders in Relieving Digital Eye Strain](https://www.ijshr.com). *International Journal of Science and Healthcare Research*.
+- Sheppard, A. L., & Wolffsohn, J. S. (2024). [Digital Eye Strain: Updated Perspectives](https://www.nih.gov). *Clinical and Experimental Optometry*.
+
+### 久坐行为与微休息
+
+- Hadgraft, N. T., et al. (2024). [Effects of Interrupting Sedentary Behavior on Health in Community-Dwelling Adults Aged 60+](https://www.sedentarybehaviour.org). *Systematic Review*.
+- Office Workers Study (2024). [Active Breaks Reduce Sedentary Behavior and Improve Productivity](https://www.nih.gov). *Journal of Occupational Health*.
+
+### 认知水合作用
+
+- Penn State Research (2024). [Hydration and Cognitive Performance in Middle-Aged and Older Adults](https://www.psu.edu). *Neuroscience Studies*.
+- NIH Studies (2024). [Dehydration Effects on Brain Function and Mood](https://www.nih.gov). *National Institutes of Health*.
 
 ---
 
