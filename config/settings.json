@@ -1,0 +1,25 @@
+{
+  "user": {
+    "body_weight": 70,
+    "cup_volume": 300,
+    "work_hours": 8
+  },
+  "ai": {
+    "mode": "fixed",
+    "local_api": {
+      "enabled": false,
+      "url": "http://localhost:11434/api/generate",
+      "model": "qwen2.5:7b"
+    },
+    "cloud_api": {
+      "enabled": false,
+      "provider": "openai",
+      "api_key": "",
+      "model": "gpt-4"
+    }
+  },
+  "timers": {
+    "eye_interval": 1200,
+    "stretch_interval": 2700
+  }
+}

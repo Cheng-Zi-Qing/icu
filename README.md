@@ -3,19 +3,20 @@
 > **I**ntelligent **C**are **U**nit - 专为极客与重度脑力工作者设计的轻量级、非侵入式健康状态管理桌宠
 
 [![Python](https://img.shields.io/badge/Python-3.9+-blue.svg)](https://www.python.org/)
-[![macOS](https://img.shields.io/badge/macOS-11.0+-green.svg)](https://www.apple.com/macos/)
+[![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-green.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ## 📖 项目简介
 
-I.C.U. 是一款基于有限状态机（FSM）架构的 macOS 桌面宠物应用，通过事件驱动的状态切换和科学的健康提醒算法，帮助开发者在保持心流的同时关注健康。
+I.C.U. 是一款基于有限状态机（FSM）架构的轻量级桌面健康助手，通过事件驱动的状态切换和科学的健康提醒算法，帮助开发者在保持心流的同时关注健康。
 
 ### 核心理念
 
+- **极致轻量**：纯 Python 实现，最小依赖，资源占用低
+- **跨平台**：支持 macOS 和 Linux
 - **0 打扰**：摒弃死板的定时器，采用手动状态切换，不打断心流
 - **科学依据**：基于 20-20-20 法则、久坐微干预、认知水合作用等医学研究
-- **个性化**：动态水合算法根据体重和杯容量定制提醒频率
-- **可爱陪伴**：多种桌宠形象可选，支持自定义
+- **灵活文案**：支持固定话术/本地大模型/云服务三种模式
 
 ## ✨ 核心功能
 
@@ -75,30 +76,34 @@ I.C.U. 是一款基于有限状态机（FSM）架构的 macOS 桌面宠物应用
 
 **动画引擎**：只需提供 1 张静态图，代码自动生成所有状态动画（浮动、摇摆、拉伸、跳跃等）
 
-### 🤖 AI 文案系统（可选）
+### 🤖 灵活的文案系统
 
-- 集成本地 Ollama API，生成个性化提醒文案
-- 每个形象预设独特人设和语气风格
-- 降级方案：API 失败时使用默认文案库
+三种模式可选：
+
+1. **固定话术**（默认）：零依赖，内置文案库
+2. **本地大模型**：调用 Ollama 等本地 API
+3. **云服务**：调用 OpenAI/Claude 等云端 API
+
+每个形象预设独特人设和语气风格，自动降级保证可用性。
 
 ## 🛠️ 技术栈
 
 | 技术 | 用途 |
 |------|------|
 | Python 3.9+ | 核心语言 |
-| PySide6 | 桌宠 UI（透明窗口、边缘吸附） |
-| rumps | Menu Bar 状态切换 |
+| tkinter | 轻量级 GUI（Python 内置） |
 | transitions | 有限状态机引擎 |
-| SQLite | 数据持久化 |
-| Ollama API | AI 文案生成（可选） |
+| SQLite | 数据持久化（Python 内置） |
+| requests | HTTP 请求（可选，用于云服务） |
+
+**设计原则**：最小依赖，开箱即用
 
 ## 📦 安装
 
 ### 前置要求
 
-- macOS 11.0+
 - Python 3.9+
-- （可选）Ollama（用于 AI 文案生成）
+- macOS 或 Linux
 
 ### 安装步骤
 
@@ -107,26 +112,24 @@ I.C.U. 是一款基于有限状态机（FSM）架构的 macOS 桌面宠物应用
 git clone https://github.com/yourusername/icu.git
 cd icu
 
-# 创建虚拟环境
-python3 -m venv venv
-source venv/bin/activate
-
-# 安装依赖
-pip install -r requirements.txt
+# 安装依赖（仅需一个外部包）
+pip install transitions
 
 # 运行应用
 python main.py
 ```
 
-### 可选：安装 Ollama
+### 可选：配置 AI 文案
 
+**本地模型（推荐）：**
 ```bash
-# 使用 Homebrew 安装
-brew install ollama
-
-# 下载推荐模型
+# 安装 Ollama
+curl -fsSL https://ollama.com/install.sh | sh
 ollama pull qwen2.5:7b
 ```
+
+**云服务：**
+在配置文件中设置 API Key（支持 OpenAI/Claude/其他兼容服务）
 
 ## 🚀 快速开始
 
