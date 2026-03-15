@@ -1,0 +1,11 @@
+{
+  "current_pet": "seal",
+  "available_pets": [
+    {
+      "id": "seal",
+      "name": "仰卧起坐海豹",
+      "style": "16-bit 像素风",
+      "prompt": "Pixel art shimeji asset of a cute, plump grey seal, 16-bit style, neutral standing pose, transparent background, clean edges, 64x64 pixels"
+    }
+  ]
+}
