@@ -1,6 +1,8 @@
 # I.C.U. - 基于 FSM 的健康状态管理桌宠
 
 > **I**ntelligent **C**are **U**nit - 专为极客与重度脑力工作者设计的轻量级、非侵入式健康状态管理桌宠
+>
+> **"I am watching u"** - 你的健康守护者
 
 [![Python](https://img.shields.io/badge/Python-3.9+-blue.svg)](https://www.python.org/)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-green.svg)](https://www.python.org/)
