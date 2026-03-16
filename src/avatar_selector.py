@@ -10,6 +10,7 @@ class AvatarSelector(QDialog):
     """形象选择器对话框"""
     def __init__(self, avatar_manager, current_id=None, parent=None):
         super().__init__(parent)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.avatar_manager = avatar_manager
         self.selected_id = current_id
         self.setup_ui()
@@ -20,11 +21,49 @@ class AvatarSelector(QDialog):
         self.setWindowTitle("选择你的桌宠形象")
         self.setFixedSize(500, 600)
 
+        # 像素风格样式
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #2b2b2b;
+            }
+            QLabel {
+                color: #e0e0e0;
+                font-family: 'Courier New', monospace;
+                font-size: 13px;
+            }
+            QListWidget {
+                background-color: #3a3a3a;
+                color: #e0e0e0;
+                border: 3px solid #5a5a5a;
+                border-style: inset;
+                font-family: 'Courier New', monospace;
+            }
+            QListWidget::item:selected {
+                background-color: #4a4a4a;
+                color: #00ff00;
+            }
+            QPushButton {
+                background-color: #3a3a3a;
+                color: #e0e0e0;
+                border: 3px solid #5a5a5a;
+                border-style: outset;
+                padding: 10px 20px;
+                font-family: 'Courier New', monospace;
+            }
+            QPushButton:hover {
+                background-color: #4a4a4a;
+            }
+            QPushButton:pressed {
+                border-style: inset;
+            }
+        """)
+
         layout = QVBoxLayout()
 
         # 标题
         title = QLabel("选择你的桌宠形象")
-        title.setStyleSheet("font-size: 16px; font-weight: bold;")
+        title.setStyleSheet("font-size: 18px; font-weight: bold; color: #00ff00;")
+        title.setAlignment(Qt.AlignCenter)
 
         # 形象列表
         self.avatar_list = QListWidget()

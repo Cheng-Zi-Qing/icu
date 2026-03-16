@@ -1,22 +1,18 @@
 {
   "user": {
-    "body_weight": 70,
-    "cup_volume": 300,
+    "body_weight": 90,
+    "cup_volume": 350,
     "work_hours": 8
   },
   "ai": {
-    "mode": "fixed",
+    "mode": "local",
     "local_api": {
-      "enabled": false,
-      "url": "http://localhost:11434/api/generate",
-      "model": "qwen2.5:7b"
+      "enabled": true,
+      "url": "http://localhost:11434",
+      "model": "qwen3.5:35b"
     },
-    "cloud_api": {
-      "enabled": false,
-      "provider": "openai",
-      "api_key": "",
-      "model": "gpt-4"
-    }
+    "remote_models": [],
+    "image_models": []
   },
   "timers": {
     "eye_interval": 1200,
@@ -29,7 +25,7 @@
     "auto_hide_delay": 2000
   },
   "avatar": {
-    "current_id": "seal",
+    "current_id": "capybara",
     "custom_avatars": []
   }
 }

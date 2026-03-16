@@ -20,61 +20,50 @@ def main():
     from PySide6.QtCore import Qt
     from src.pet_widget import PetWidget
     from src.state_sync import StateSync
+    from src.pet_instance import set_pet_instance
 
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
 
     state_sync = StateSync()
     pet = PetWidget()
+    set_pet_instance(pet)  # 注册全局实例
+
+    # 启动提醒系统
+    from src.reminder import ReminderSystem
+    reminder = ReminderSystem()
+
+    # 初始状态设为 idle（在监听前设置）
+    state_sync.write_state('idle')
+    pet.set_state('idle')
 
     # 监听状态变化
     def on_state_change(state_data):
         if state_data:
-            pet.set_state(state_data.get('state', 'idle'))
+            new_state = state_data.get('state', 'idle')
+            pet.set_state(new_state)
+
+            # 根据状态控制提醒系统
+            if new_state in ['working', 'focus']:
+                reminder.start()
+            else:
+                reminder.stop()
 
     state_sync.watch_state(on_state_change)
 
-    # 初始状态
-    initial_state = state_sync.read_state()
-    if initial_state:
-        pet.set_state(initial_state.get('state', 'idle'))
+    # 检查是否需要显示周报
+    from src.weekly_check import WeeklyCheck
+    weekly = WeeklyCheck()
+    if weekly.should_show_report():
+        from src.weekly_report import WeeklyReportDialog
+        from src.daily_stats import DailyStats
 
-    # 退出信号
-    pet.quit_requested.connect(lambda: (
-        state_sync.write_state('quit'),
-        state_sync.stop_watch(),
-        app.quit()
-    ))
+        stats = DailyStats()
+        week_data = stats.get_week_stats()
 
-    pet.show()
-    sys.exit(app.exec())
-
-
-if __name__ == '__main__':
-    main()
-
-    # 托盘菜单
-    tray_menu = QMenu()
-    show_action = tray_menu.addAction("显示/隐藏")
-    quit_action = tray_menu.addAction("退出")
-
-    show_action.triggered.connect(lambda: pet.setVisible(not pet.isVisible()))
-    quit_action.triggered.connect(app.quit)
-
-    tray_icon.setContextMenu(tray_menu)
-    tray_icon.show()
-
-    # 监听状态变化
-    def on_state_change(state_data):
-        if state_data:
-            pet.set_state(state_data.get('state', 'idle'))
-
-    state_sync.watch_state(on_state_change)
-
-    # 初始状态
-    initial_state = state_sync.read_state()
-    if initial_state:
-        pet.set_state(initial_state.get('state', 'idle'))
+        dialog = WeeklyReportDialog(week_data, pet)
+        dialog.exec()
+        weekly.mark_shown()  # 无论如何都标记已显示
 
     # 退出信号
     pet.quit_requested.connect(lambda: (
