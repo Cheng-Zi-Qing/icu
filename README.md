@@ -118,6 +118,15 @@ Dependencies install automatically on first run.
 
 Access via: Menu Bar → AI Configuration
 
+## 📚 Scientific Foundation
+
+I.C.U.'s health reminders are based on peer-reviewed research:
+
+- **20-20-20 Rule**: American Academy of Ophthalmology recommendation for reducing digital eye strain
+- **Sedentary Breaks**: Research shows movement breaks every 30-60 minutes reduce health risks
+- **Hydration Formula**: Based on European Food Safety Authority (EFSA) guidelines (35ml/kg body weight)
+- **Cognitive Performance**: Studies link proper hydration and breaks to improved focus and productivity
+
 ## 🛠️ Tech Stack
 
 | Technology | Purpose |
