@@ -122,10 +122,52 @@ cd icu
 
 I.C.U. 的健康提醒基于同行评审的研究：
 
-- **20-20-20 法则**：美国眼科学会推荐，减少数字眼疲劳
-- **久坐休息**：研究表明每 30-60 分钟运动休息可降低健康风险
-- **补水公式**：基于欧洲食品安全局 (EFSA) 指南（35ml/kg 体重）
-- **认知表现**：研究证明适当补水和休息可提高专注力和生产力
+### 👁️ 护眼模块：20-20-20 法则与数字眼疲劳 (DES)
+
+**核心研究：**
+- **[The 20/20/20 rule: Practicing pattern and associations with asthenopic symptoms](https://pubmed.ncbi.nlm.nih.gov/37203083/)**
+  - 证实遵循 20-20-20 法则（每 20 分钟看向 20 英尺外 20 秒）能有效降低眼干、烧灼感、视力模糊等视疲劳症状
+  - [PMC 免费全文](https://pmc.ncbi.nlm.nih.gov/articles/PMC10391416/)
+
+**进阶研究：**
+- **[Digital Eye Strain - A Comprehensive Review](https://pmc.ncbi.nlm.nih.gov/articles/PMC9434525/)**
+  - 使用电脑时眨眼频率断崖式下跌：从 18.4 次/分钟降至 3.6 次/分钟
+  - 眨眼减少导致眼表泪膜破裂和水分蒸发，引发数字眼疲劳
+
+### 🧘 拉伸模块：久坐对肌肉骨骼与认知的影响
+
+**核心研究：**
+- **[The Short Term Musculoskeletal and Cognitive Effects of Prolonged Sitting During Office Computer Work](https://pubmed.ncbi.nlm.nih.gov/30087262/)**
+  - 连续静坐 2 小时后，全身肌肉骨骼不适感显著增加（尤其下背部）
+  - 创造性解决问题时的错误率上升
+  - 强烈建议通过"微休息"打断久坐
+  - [PMC 免费全文](https://pmc.ncbi.nlm.nih.gov/articles/PMC6122014/)
+
+**进阶研究：**
+- **[Musculoskeletal neck pain in children and adolescents: Risk factors and complications](https://pmc.ncbi.nlm.nih.gov/articles/PMC5445652/)**
+  - 头部中立姿势重量：4.54-5.44 公斤（10-12 磅）
+  - 前倾姿势 (FHP) 导致颈椎负荷剧增：
+    - 前倾 15°：12.25 公斤
+    - 前倾 45°：22.23 公斤
+    - 前倾 60°：27.22 公斤（60 磅）
+  - 长期 FHP 导致"短信颈"综合征
+
+### 💧 补水模块：轻度脱水对认知表现的影响
+
+**核心研究：**
+- **[The Hydration Equation: Update on Water Balance and Cognitive Performance](https://pmc.ncbi.nlm.nih.gov/articles/PMC4207053/)**
+  - 仅 1-2% 体液流失（口渴感临界点）就会导致：
+    - 精神疲劳增加
+    - 注意力下降
+    - 反应时间变慢
+    - 情绪恶化
+  - 不要等渴了再喝水 - 保持高频次、小口径摄入
+
+**进阶研究：**
+- **[Water, Hydration and Health](https://pmc.ncbi.nlm.nih.gov/articles/PMC2908954/)**
+  - 肾脏最大排尿容积：约 1 升/小时
+  - 一次性大量喝水无效 - 超量水分会迅速排出
+  - 支持"少量多次、高频滴灌"补水策略
 
 ## 🛠️ 技术栈
 

@@ -122,10 +122,52 @@ Access via: Menu Bar → AI Configuration
 
 I.C.U.'s health reminders are based on peer-reviewed research:
 
-- **20-20-20 Rule**: American Academy of Ophthalmology recommendation for reducing digital eye strain
-- **Sedentary Breaks**: Research shows movement breaks every 30-60 minutes reduce health risks
-- **Hydration Formula**: Based on European Food Safety Authority (EFSA) guidelines (35ml/kg body weight)
-- **Cognitive Performance**: Studies link proper hydration and breaks to improved focus and productivity
+### 👁️ Eye Care Module: 20-20-20 Rule & Digital Eye Strain (DES)
+
+**Primary Research:**
+- **[The 20/20/20 rule: Practicing pattern and associations with asthenopic symptoms](https://pubmed.ncbi.nlm.nih.gov/37203083/)**
+  - Confirms that following the 20-20-20 rule (every 20 minutes, look 20 feet away for 20 seconds) effectively reduces eye dryness, burning sensation, and blurred vision
+  - [Full text on PMC](https://pmc.ncbi.nlm.nih.gov/articles/PMC10391416/)
+
+**Advanced Research:**
+- **[Digital Eye Strain - A Comprehensive Review](https://pmc.ncbi.nlm.nih.gov/articles/PMC9434525/)**
+  - Blink rate drops dramatically during computer use: from 18.4 blinks/min to 3.6 blinks/min
+  - Reduced blinking causes tear film breakup and evaporation, leading to DES
+
+### 🧘 Stretch Module: Sedentary Impact on Musculoskeletal & Cognition
+
+**Primary Research:**
+- **[The Short Term Musculoskeletal and Cognitive Effects of Prolonged Sitting During Office Computer Work](https://pubmed.ncbi.nlm.nih.gov/30087262/)**
+  - After 2 hours of continuous sitting, musculoskeletal discomfort increases significantly (especially lower back)
+  - Error rates in creative problem-solving tasks increase
+  - Strongly recommends micro-breaks to interrupt prolonged sitting
+  - [Full text on PMC](https://pmc.ncbi.nlm.nih.gov/articles/PMC6122014/)
+
+**Advanced Research:**
+- **[Musculoskeletal neck pain in children and adolescents: Risk factors and complications](https://pmc.ncbi.nlm.nih.gov/articles/PMC5445652/)**
+  - Head weight in neutral position: 4.54-5.44 kg (10-12 lbs)
+  - Forward head posture (FHP) dramatically increases cervical spine load:
+    - 15° forward: 12.25 kg
+    - 45° forward: 22.23 kg
+    - 60° forward: 27.22 kg (60 lbs)
+  - Prolonged FHP leads to "text neck" syndrome
+
+### 💧 Hydration Module: Mild Dehydration & Cognitive Performance
+
+**Primary Research:**
+- **[The Hydration Equation: Update on Water Balance and Cognitive Performance](https://pmc.ncbi.nlm.nih.gov/articles/PMC4207053/)**
+  - Just 1-2% body fluid loss (threshold for thirst sensation) impairs:
+    - Mental fatigue increases
+    - Attention decreases
+    - Reaction time slows
+    - Mood deteriorates
+  - Don't wait until thirsty - maintain frequent, small-volume intake
+
+**Advanced Research:**
+- **[Water, Hydration and Health](https://pmc.ncbi.nlm.nih.gov/articles/PMC2908954/)**
+  - Kidney's maximum urine output: ~1 L/hour
+  - Drinking large volumes at once is ineffective - excess water is rapidly excreted
+  - Supports "frequent small sips" hydration strategy
 
 ## 🛠️ Tech Stack
 
