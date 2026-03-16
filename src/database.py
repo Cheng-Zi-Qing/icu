@@ -77,6 +77,24 @@ class Database:
         )
         self.conn.commit()
 
+    def log_reminder(self, reminder_type, focus_duration, user_response, response_time=0):
+        """记录健康提醒"""
+        cursor = self.conn.cursor()
+        cursor.execute(
+            'INSERT INTO health_reminders (reminder_type, focus_duration, user_response, response_time) VALUES (?, ?, ?, ?)',
+            (reminder_type, focus_duration, user_response, response_time)
+        )
+        self.conn.commit()
+
+    def log_water_intake(self, volume_ml, cup_percentage):
+        """记录饮水"""
+        cursor = self.conn.cursor()
+        cursor.execute(
+            'INSERT INTO water_intake (volume_ml, cup_percentage) VALUES (?, ?)',
+            (volume_ml, cup_percentage)
+        )
+        self.conn.commit()
+
     def close(self):
         """关闭数据库连接"""
         self.conn.close()

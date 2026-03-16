@@ -1,4 +1,8 @@
 """测试核心 FSM 功能"""
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from src.state_machine import HealthStateMachine
 from src.hydration import HydrationCalculator
 from src.database import Database

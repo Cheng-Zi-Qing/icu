@@ -1,0 +1,8 @@
+#!/bin/bash
+cd "$(dirname "$0")"
+
+if ! python3 -c "import rumps" 2>/dev/null; then
+    pip3 install -r requirements.txt
+fi
+
+python3 -m src.main

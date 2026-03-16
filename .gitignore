@@ -27,6 +27,7 @@ build/
 
 # Logs
 *.log
+logs/
 
 # Config
 config/local_settings.json

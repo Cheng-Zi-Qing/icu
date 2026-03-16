@@ -15,8 +15,14 @@ $ARGUMENTS
 
 ## 目录结构
 
+PRD 文档存放在 Obsidian Vault：
 ```
 ~/Documents/Obsidian Vault/个性项目/icu/prd/
+```
+
+其他报告文档存放在项目本地：
+```
+./docs/
 ```
 
 ## 文件命名

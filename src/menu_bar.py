@@ -1,6 +1,11 @@
 """Menu Bar UI 模块"""
 import rumps
 from src.state_machine import HealthStateMachine
+from src.reminder import ReminderManager
+from src.hydration import HydrationCalculator
+from src.database import Database
+from src.pet_widget import PetWidget
+from src.report_generator import ReportGenerator
 
 
 class ICUMenuBar(rumps.App):
@@ -8,7 +13,13 @@ class ICUMenuBar(rumps.App):
 
     def __init__(self):
         super().__init__("I.C.U.", "🛌")
+        self.db = Database()
+        self.hydration_calc = HydrationCalculator()
         self.fsm = HealthStateMachine()
+        self.reminder = ReminderManager(self.db, self.hydration_calc)
+        self.report = ReportGenerator(self.db)
+        self.pet = PetWidget()
+        self.pet.show()
         self.update_menu()
 
     def update_menu(self):
@@ -25,12 +36,16 @@ class ICUMenuBar(rumps.App):
     @rumps.clicked("开始工作")
     def start_work(self, _):
         self.fsm.start_work()
+        self.reminder.start_reminders()
+        self.pet.set_state('working')
         self.icon = "💻"
         self.update_menu()
 
     @rumps.clicked("进入专注")
     def enter_focus(self, _):
         self.fsm.enter_focus()
+        self.reminder.pause_reminders()
+        self.pet.set_state('focus')
         self.icon = "🔕"
         self.update_menu()
 
@@ -40,17 +55,30 @@ class ICUMenuBar(rumps.App):
             self.fsm.exit_focus()
         else:
             self.fsm.resume_work()
+        self.reminder.resume_reminders()
+        self.pet.set_state('working')
         self.icon = "💻"
         self.update_menu()
 
     @rumps.clicked("暂离")
     def take_break(self, _):
         self.fsm.take_break()
+        self.reminder.pause_reminders()
+        self.pet.set_state('break')
         self.icon = "☕"
         self.update_menu()
 
     @rumps.clicked("下班")
     def stop_work(self, _):
         self.fsm.stop_work()
+        self.reminder.stop_reminders()
+        self.pet.set_state('idle')
         self.icon = "🛌"
+        self.report.generate_daily_report()
         self.update_menu()
+
+    def quit_application(self, _=None):
+        """退出应用"""
+        self.reminder.stop_reminders()
+        self.pet.close()
+        rumps.quit_application()
