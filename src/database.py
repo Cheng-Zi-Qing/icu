@@ -5,18 +5,28 @@ from pathlib import Path
 
 
 class Database:
-    """SQLite 数据库"""
+    """
+    SQLite 数据库管理
+
+    负责状态切换、健康提醒、饮水记录的持久化存储
+    """
 
     def __init__(self, db_path='data/icu.db'):
+        """
+        初始化数据库连接
+
+        Args:
+            db_path: 数据库文件路径，默认 'data/icu.db'
+        """
         Path(db_path).parent.mkdir(exist_ok=True)
         self.conn = sqlite3.connect(db_path)
         self.create_tables()
 
     def create_tables(self):
-        """创建表"""
+        """创建数据表（如果不存在）"""
         cursor = self.conn.cursor()
 
-        # 状态切换记录
+        # 状态切换记录表
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS state_transitions (
                 id INTEGER PRIMARY KEY,
@@ -27,7 +37,7 @@ class Database:
             )
         ''')
 
-        # 健康提醒记录
+        # 健康提醒记录表
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS health_reminders (
                 id INTEGER PRIMARY KEY,
@@ -39,7 +49,7 @@ class Database:
             )
         ''')
 
-        # 饮水记录
+        # 饮水记录表
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS water_intake (
                 id INTEGER PRIMARY KEY,
@@ -52,7 +62,14 @@ class Database:
         self.conn.commit()
 
     def log_state_transition(self, from_state, to_state, duration=0):
-        """记录状态切换"""
+        """
+        记录状态切换
+
+        Args:
+            from_state: 源状态
+            to_state: 目标状态
+            duration: 持续时长（秒），默认 0
+        """
         cursor = self.conn.cursor()
         cursor.execute(
             'INSERT INTO state_transitions (from_state, to_state, duration_seconds) VALUES (?, ?, ?)',
@@ -61,5 +78,5 @@ class Database:
         self.conn.commit()
 
     def close(self):
-        """关闭连接"""
+        """关闭数据库连接"""
         self.conn.close()
