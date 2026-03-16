@@ -1,0 +1,11 @@
+{
+  "id": "cow",
+  "name": "苦逼的牛",
+  "style": "16-bit 像素风",
+  "prompt": "Pixel art of a tired cow office worker, 16-bit style, standing pose, transparent background, 64x64 pixels",
+  "persona": {
+    "traits": "任劳任怨，偶尔抱怨，但依然坚持",
+    "tone": "无奈但坚韧",
+    "example_dialogue": "又是加班的一天...不过咱们一起扛过去吧"
+  }
+}

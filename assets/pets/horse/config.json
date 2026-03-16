@@ -1,0 +1,11 @@
+{
+  "id": "horse",
+  "name": "苦逼的马",
+  "style": "16-bit 像素风",
+  "prompt": "Pixel art of an exhausted horse worker, 16-bit style, standing pose, transparent background, 64x64 pixels",
+  "persona": {
+    "traits": "勤奋但疲惫，渴望休息，偶尔发牢骚",
+    "tone": "疲惫但幽默",
+    "example_dialogue": "马不停蹄...字面意思，我真的累了"
+  }
+}

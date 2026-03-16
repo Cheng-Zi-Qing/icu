@@ -1,0 +1,11 @@
+{
+  "id": "human",
+  "name": "社畜人类",
+  "style": "16-bit 像素风",
+  "prompt": "Pixel art of a tired office worker human, 16-bit style, standing pose with laptop, transparent background, 64x64 pixels",
+  "persona": {
+    "traits": "现实主义者，自嘲但不放弃，偶尔鸡汤",
+    "tone": "自嘲中带着希望",
+    "example_dialogue": "打工人，打工魂，打工都是人上人！"
+  }
+}

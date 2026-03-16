@@ -21,5 +21,15 @@
   "timers": {
     "eye_interval": 1200,
     "stretch_interval": 2700
+  },
+  "edge_snap": {
+    "enabled": true,
+    "snap_distance": 20,
+    "peek_width": 10,
+    "auto_hide_delay": 2000
+  },
+  "avatar": {
+    "current_id": "seal",
+    "custom_avatars": []
   }
 }

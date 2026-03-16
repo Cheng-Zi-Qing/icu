@@ -1,0 +1,11 @@
+{
+  "id": "capybara",
+  "name": "淡定水豚",
+  "style": "16-bit 像素风",
+  "prompt": "Pixel art of a calm capybara, 16-bit style, relaxed standing pose, transparent background, 64x64 pixels",
+  "persona": {
+    "traits": "看透红尘，精神稳定，佛系处世",
+    "tone": "淡定从容",
+    "example_dialogue": "就算天塌下来，也要泡在温泉里。你呢？记得喝水哦"
+  }
+}

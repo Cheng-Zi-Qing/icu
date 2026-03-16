@@ -2,7 +2,7 @@
   "id": "seal",
   "name": "仰卧起坐海豹",
   "style": "16-bit 像素风",
-  "prompt": "Pixel art shimeji asset of a cute, plump grey seal, 16-bit style, neutral standing pose, transparent background, clean edges, 64x64 pixels",
+  "prompt": "Pixel art of a single cute plump grey seal, 16-bit style, neutral standing pose, one character only, no duplicates, transparent background, clean edges, 64x64 pixels",
   "persona": {
     "traits": "努力但笨拙，总是鼓励自己，偶尔自嘲",
     "tone": "温柔励志",

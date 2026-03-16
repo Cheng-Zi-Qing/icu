@@ -37,3 +37,7 @@ models/
 
 # PRD Documents (maintained separately)
 docs/prd/
+
+# Environment variables
+.env
+.env.local
