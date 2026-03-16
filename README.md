@@ -1,65 +1,79 @@
-# I.C.U. - FSM-Based Health Management Desktop Pet
+# I.C.U. - Your AI-Powered Health Companion
 
 [中文](README_CN.md) | English
 
-> **I**ntelligent **C**are **U**nit - A lightweight, non-intrusive health management desktop pet designed for geeks and knowledge workers
+> **I**ntelligent **C**are **U**nit - A customizable desktop pet that keeps you healthy while you code
 >
-> 💡 **I.C.U. = I see u** - I see you! Stop sitting, staring at screens, and forgetting to drink water!
+> 💡 **I.C.U. = I see u** - Your personal health guardian with personality!
 
 [![Python](https://img.shields.io/badge/Python-3.9+-blue.svg)](https://www.python.org/)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-green.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-## 📖 Overview
+## 🌟 What Makes I.C.U. Special
 
-I.C.U. is a lightweight desktop health assistant based on Finite State Machine (FSM) architecture. Through event-driven state transitions and scientific health reminder algorithms, it helps developers maintain their health while staying in flow.
+### 🎨 Fully Customizable Avatars & Personalities
+- **AI-Generated Pets**: Create your unique desktop companion in minutes
+- **Custom Personalities**: Each pet has its own tone, traits, and messages
+- **Built-in Collection**: Capybara, cow, horse, seal, and more
+- **Zero-Code Creation**: Just describe what you want, AI does the rest
 
-### Core Philosophy
+### 💪 Science-Based Health Management
+- **Smart Reminders**: Eye care (20-20-20 rule), stretch breaks, hydration tracking
+- **Dynamic Algorithms**: Personalized water intake based on your body weight
+- **Flow-Friendly**: Manual state control - never interrupts your focus
+- **Weekly Reports**: Track your health habits and improvements
 
-- **Ultra Lightweight**: Pure Python implementation, minimal dependencies, low resource usage
-- **Cross-Platform**: Supports macOS and Linux
-- **Zero Interruption**: Manual state switching instead of rigid timers, no flow disruption
-- **Science-Based**: Based on 20-20-20 rule, sedentary micro-interventions, cognitive hydration research
-- **AI-First**: Local privacy AI + context awareness + zero-code custom avatars
+### 🤖 AI-First Design
+- **Local Privacy**: All AI processing stays on your machine
+- **Context-Aware**: Understands what you're working on
+- **Personality System**: Pets respond with character-appropriate messages
+- **Multi-Model Support**: Ollama local models + remote APIs + image generation
 
-## ✨ Features
+## ✨ Key Features
 
-### 🔄 Four Work States
+### 🎭 Create Your Perfect Pet
 
-| State | Icon | Description | Behavior |
-|-------|------|-------------|----------|
-| Idle/Off | 🛌 | Zero resource consumption | Destroy all timers, generate daily report |
-| Working | 💻 | Main loop running | Eye care (20min), stretch (45min), hydration (dynamic) |
-| Focus | 🔕 | Freeze timers | Block popups, record health debt |
-| Break | ☕ | Reset timers | No health debt during break |
+**Three Ways to Get Your Companion:**
+1. **Choose from Built-in Pets**: Capybara, cow, horse, seal, human
+2. **AI-Generated Custom Pet**: Describe your ideal pet, AI creates it
+3. **Upload Your Own**: Bring your favorite character to life
 
-### 💧 Dynamic Hydration Algorithm
+**Personality System:**
+- Each pet has unique traits and speaking style
+- AI-generated contextual messages
+- Customizable personality descriptions
+- Character-appropriate responses
 
+### 💊 Health Management That Works
+
+**Smart Work States:**
+- **Idle** 🛌: Rest mode, generates daily health report
+- **Working** 💻: Active health monitoring with reminders
+- **Focus** 🔕: Pauses reminders, tracks health debt
+- **Break** ☕: Resets timers, no penalties
+
+**Science-Based Reminders:**
+- **Eye Care**: 20-20-20 rule (every 20 min, look 20 feet away for 20 sec)
+- **Stretch**: Movement breaks every 45 minutes
+- **Hydration**: Dynamic intervals based on your body weight
+
+**Personalized Hydration:**
 ```
 Daily water = Body weight (kg) × 35ml
 Work water = Daily water × 65%
-Dynamic interval = Work hours ÷ (Water needed ÷ Cup volume)
+Reminder interval = Work hours ÷ (Water needed ÷ Cup volume)
 ```
 
-- Auto-calculate reminder frequency based on weight and cup size
-- Safety threshold: 30-120 minute intervals
-- Multi-level feedback: Finished (+100%) / Half cup (+50%) / Later
+### 📊 Track Your Progress
+- Daily health reports with statistics
+- Weekly summaries and trends
+- Reminder completion rates
+- Health debt tracking during focus mode
 
-### 🤖 AI-First Features
+## 🚀 Quick Start
 
-- **Context-Aware Engine**: Detects active app, clipboard type, typing activity
-- **Zero-Code Avatar**: Generate custom pet in 1 minute with AI
-- **Personality System**: AI-generated dialogue matching avatar personality
-- **Privacy First**: All sensitive data stays local, never uploaded
-
-## 📦 Installation & Launch
-
-### Requirements
-
-- Python 3.9+
-- macOS or Linux
-
-### Quick Start
+### Installation
 
 ```bash
 git clone https://github.com/yourusername/icu.git
@@ -67,41 +81,53 @@ cd icu
 ./icu
 ```
 
-Dependencies will be installed automatically on first run.
+Dependencies install automatically on first run.
 
-### Exit
+### First Time Setup
 
-- Right-click pet → Exit
-- Menu Bar → Exit
+1. **Choose Your Pet**: Select from built-in avatars or create a custom one
+2. **Configure Health Settings**:
+   - Menu Bar → Personal Settings
+   - Enter your body weight and cup volume
+3. **Optional AI Setup**:
+   - Menu Bar → AI Configuration
+   - Configure local Ollama or remote AI models
 
-### Development Mode
+### Daily Usage
 
-```bash
-# Run tests
-python3 tests/test_core.py
-python3 tests/test_integration.py
-```
+1. **Start Your Day**: Menu Bar → Start Work
+2. **Stay Healthy**: Respond to gentle reminders from your pet
+3. **Need Focus?**: Menu Bar → Enter Focus (pauses reminders)
+4. **Take Breaks**: Menu Bar → Break (resets timers)
+5. **End Your Day**: Menu Bar → Off Work (generates daily report)
 
-## 🚀 Usage
+### Create Custom Pet
 
-1. **First Launch**: Choose your favorite pet avatar
-2. **Configure**: Menu Bar → Settings → Enter weight and cup volume
-3. **Start Working**: Menu Bar → Start Work
-4. **State Switching**:
-   - Need focus: Menu Bar → Enter Focus
-   - Take break: Menu Bar → Break
-   - End work: Menu Bar → Off Work
+1. Menu Bar → Change Avatar → Add Custom Avatar
+2. **Step 1**: Describe your pet (e.g., "a calm capybara")
+3. **Step 2**: AI optimizes the prompt and generates images
+4. **Step 3**: AI creates personality and messages
+5. Done! Your unique pet is ready
+
+### AI Configuration
+
+**Three Model Types:**
+- **Local Models**: Ollama for prompt optimization and personality
+- **Remote Text Models**: OpenAI, Claude, or custom APIs
+- **Image Models**: Stable Diffusion or HuggingFace models
+
+Access via: Menu Bar → AI Configuration
 
 ## 🛠️ Tech Stack
 
 | Technology | Purpose |
 |------------|---------|
 | Python 3.9+ | Core language |
-| PySide6 | Pet widget UI |
+| PySide6 | Pet widget & dialogs |
 | rumps | macOS menu bar |
-| transitions | FSM engine |
-| SQLite | Data persistence |
 | Ollama | Local AI (optional) |
+| HuggingFace | Image generation |
+| SQLite | Data persistence |
 
 ## 📁 Project Structure
 
@@ -109,27 +135,30 @@ python3 tests/test_integration.py
 icu/
 ├── icu                     # Launch script
 ├── src/
-│   ├── __main__.py         # Entry point
-│   ├── state_machine.py    # FSM core
-│   ├── menu_bar.py         # Menu bar UI
-│   ├── pet_widget.py       # Pet widget
-│   ├── reminder.py         # Reminder logic
-│   ├── ai_assistant.py     # AI assistant
-│   ├── report_generator.py # Report generator
-│   └── database.py         # SQLite persistence
-├── assets/pets/            # Pet avatars
-├── config/                 # Configuration
-└── tests/                  # Tests
+│   ├── pet_widget.py       # Desktop pet UI
+│   ├── menu_bar.py         # Menu bar control
+│   ├── avatar_wizard.py    # Custom pet creator
+│   ├── ai_config_dialog.py # AI model configuration
+│   ├── reminder.py         # Health reminders
+│   ├── daily_stats.py      # Statistics tracking
+│   └── weekly_report.py    # Weekly summaries
+├── builder/                # AI generation tools
+│   ├── prompt_optimizer.py # Prompt enhancement
+│   ├── vision_generator.py # Image generation
+│   └── persona_forge.py    # Personality creation
+├── assets/pets/            # Pet avatars & configs
+└── config/                 # User settings
 ```
 
 ## 🎯 Roadmap
 
-- [x] PRD 1.1: FSM + Reminders
-- [x] PRD 1.2: Pet Widget + Animations
+- [x] PRD 1.1: FSM + Health Reminders
+- [x] PRD 1.2: Desktop Pet Widget
 - [x] PRD 1.3: Reports + AI Assistant
-- [ ] Weekly reports
-- [ ] More pet avatars
+- [x] PRD 1.4: Custom Avatar Creator
+- [ ] Multi-language support
 - [ ] Cloud sync (optional)
+- [ ] Mobile companion app
 
 ## 📄 License
 
