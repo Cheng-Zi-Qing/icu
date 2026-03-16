@@ -50,9 +50,15 @@ class ReminderManager:
         self.start_reminders()
 
     def _show_notification(self, title, message):
-        """显示macOS通知"""
-        script = f'display notification "{message}" with title "{title}"'
-        subprocess.run(['osascript', '-e', script])
+        """显示提醒（通过桌宠气泡）"""
+        from src.pet_instance import get_pet_instance
+        pet = get_pet_instance()
+        if pet:
+            pet.show_bubble(message)
+        else:
+            # 降级到系统通知
+            script = f'display notification "{message}" with title "{title}"'
+            subprocess.run(['osascript', '-e', script])
 
     def _eye_reminder(self):
         """护眼提醒"""
@@ -78,3 +84,68 @@ class ReminderManager:
         interval = self.hydration_calc.calculate()['interval']
         self.timers['water'] = threading.Timer(interval, self._water_reminder)
         self.timers['water'].start()
+
+
+class ReminderSystem:
+    """独立提醒系统"""
+
+    def __init__(self):
+        self.timers = {}
+        self.running = False
+        self.load_config()
+
+    def load_config(self):
+        """加载配置"""
+        try:
+            with open('config/settings.json', 'r') as f:
+                config = json.load(f)
+            self.eye_interval = config.get('timers', {}).get('eye_interval', 1200)
+            self.stretch_interval = config.get('timers', {}).get('stretch_interval', 2700)
+        except:
+            self.eye_interval = 1200
+            self.stretch_interval = 2700
+
+    def start(self):
+        """启动提醒"""
+        if self.running:
+            return
+        self.running = True
+        self._schedule_eye()
+        self._schedule_stretch()
+
+    def stop(self):
+        """停止提醒"""
+        self.running = False
+        for timer in self.timers.values():
+            if timer:
+                timer.cancel()
+        self.timers.clear()
+
+    def _show_notification(self, message, reminder_type):
+        """显示气泡"""
+        from src.pet_instance import get_pet_instance
+        pet = get_pet_instance()
+        if pet:
+            pet.show_bubble(message, reminder_type)
+
+    def _schedule_eye(self):
+        """调度护眼提醒"""
+        if not self.running:
+            return
+        from src.ai_assistant import AIAssistant
+        ai = AIAssistant()
+        msg = ai.generate_reminder('eye_care')
+        self._show_notification(msg, 'eye_care')
+        self.timers['eye'] = threading.Timer(self.eye_interval, self._schedule_eye)
+        self.timers['eye'].start()
+
+    def _schedule_stretch(self):
+        """调度拉伸提醒"""
+        if not self.running:
+            return
+        from src.ai_assistant import AIAssistant
+        ai = AIAssistant()
+        msg = ai.generate_reminder('stretch')
+        self._show_notification(msg, 'stretch')
+        self.timers['stretch'] = threading.Timer(self.stretch_interval, self._schedule_stretch)
+        self.timers['stretch'].start()

@@ -1,25 +1,8 @@
 #!/bin/bash
 cd "$(dirname "$0")"
 
-if ! python3 -c "import rumps" 2>/dev/null; then
+if ! python3 -c "import PySide6" 2>/dev/null; then
     pip3 install -r requirements.txt
 fi
 
-case "$1" in
-    --menu-only)
-        python3 -m src
-        ;;
-    --pet-only)
-        python3 -m src.pet_main
-        ;;
-    *)
-        python3 -m src &
-        MENU_PID=$!
-        sleep 1
-        python3 -m src.pet_main &
-        PET_PID=$!
-
-        trap "kill $MENU_PID $PET_PID 2>/dev/null; exit" INT TERM
-        wait $MENU_PID $PET_PID
-        ;;
-esac
+python3 -m src.pet_main

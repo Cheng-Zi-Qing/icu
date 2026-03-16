@@ -34,10 +34,12 @@ class StateSync:
 
     def watch_state(self, callback):
         """监听状态变化"""
+        state_file = self.state_file
+
         class StateChangeHandler(FileSystemEventHandler):
             def on_modified(self, event):
                 if event.src_path.endswith('current_state.json'):
-                    callback(StateSync(self.state_file).read_state())
+                    callback(StateSync(state_file).read_state())
 
         self.observer = Observer()
         self.observer.schedule(StateChangeHandler(), str(self.state_file.parent), recursive=False)

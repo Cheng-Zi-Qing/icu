@@ -1,0 +1,21 @@
+{
+  "2026-03-16": {
+    "work_minutes": 0,
+    "focus_count": 0,
+    "focus_minutes": 0,
+    "break_count": 0,
+    "eye_care": {
+      "triggered": 5,
+      "responded": 5
+    },
+    "stretch": {
+      "triggered": 6,
+      "responded": 6
+    },
+    "hydration": {
+      "triggered": 0,
+      "responded": 0,
+      "cups": 0
+    }
+  }
+}

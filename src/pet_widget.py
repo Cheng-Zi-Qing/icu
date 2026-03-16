@@ -11,6 +11,7 @@ class PetWidget(QWidget):
     """桌宠窗口"""
 
     quit_requested = Signal()
+    show_bubble_signal = Signal(str, str, int)  # 气泡信号(消息, 提醒类型, 持续时间)
 
     def __init__(self, pet_id=None):
         super().__init__()
@@ -32,6 +33,7 @@ class PetWidget(QWidget):
         self.peek_width = 10
         self.is_hidden = False
         self.current_edge = None
+        self.bubble = None
 
         # 窗口设置
         self.setWindowFlags(
@@ -66,6 +68,9 @@ class PetWidget(QWidget):
         self.mouse_check_timer.start(100)
 
         self.current_state = 'idle'
+
+        # 连接气泡信号
+        self.show_bubble_signal.connect(self._show_bubble_slot)
 
     def load_pet_image(self):
         """加载桌宠图片"""
@@ -155,13 +160,78 @@ class PetWidget(QWidget):
     def show_context_menu(self, pos):
         """显示右键菜单"""
         menu = QMenu(self)
+        menu.setStyleSheet("""
+            QMenu {
+                background-color: #2b2b2b;
+                color: #e0e0e0;
+                border: 2px solid #4a4a4a;
+                font-family: 'Courier New', monospace;
+                font-size: 13px;
+            }
+            QMenu::item {
+                padding: 8px 20px;
+            }
+            QMenu::item:selected {
+                background-color: #3a3a3a;
+                color: #00ff00;
+            }
+            QMenu::separator {
+                height: 2px;
+                background-color: #4a4a4a;
+            }
+        """)
+
+        # 读取当前状态
+        try:
+            with open('data/current_state.json', 'r') as f:
+                state_data = json.load(f)
+                current_state = state_data.get('state', 'idle')
+        except:
+            current_state = 'idle'
+
+        # 根据状态显示不同菜单
+        start_work_action = None
+        focus_action = None
+        break_action = None
+        stop_work_action = None
+        resume_work_action = None
+
+        if current_state == 'idle':
+            start_work_action = menu.addAction("开始工作")
+        elif current_state == 'working':
+            focus_action = menu.addAction("进入专注")
+            break_action = menu.addAction("暂离")
+            stop_work_action = menu.addAction("下班")
+        elif current_state in ['focus', 'break']:
+            resume_work_action = menu.addAction("回来工作")
+            stop_work_action = menu.addAction("下班")
+
+        menu.addSeparator()
         change_avatar_action = menu.addAction("更换形象")
+        user_config_action = menu.addAction("个人设置")
+        ai_config_action = menu.addAction("AI 配置")
         quit_action = menu.addAction("退出")
+
         action = menu.exec(pos)
+
         if action == quit_action:
             self.quit_requested.emit()
         elif action == change_avatar_action:
             self.show_avatar_selector()
+        elif action == user_config_action:
+            self.show_user_config()
+        elif action == ai_config_action:
+            self.show_ai_config()
+        elif action == start_work_action:
+            self.trigger_state_change('working')
+        elif action == resume_work_action:
+            self.trigger_state_change('working')
+        elif action == focus_action:
+            self.trigger_state_change('focus')
+        elif action == break_action:
+            self.trigger_state_change('break')
+        elif action == stop_work_action:
+            self.trigger_state_change('idle')
 
     def mouseMoveEvent(self, event):
         """鼠标拖拽"""
@@ -321,3 +391,77 @@ class PetWidget(QWidget):
             # 重新加载形象
             self.pet_id = selector.selected_id
             self.load_pet_image()
+
+    def show_user_config(self):
+        """显示个人设置"""
+        from src.user_config_dialog import UserConfigDialog
+        dialog = UserConfigDialog(self)
+        dialog.exec()
+
+    def show_ai_config(self):
+        """显示 AI 配置"""
+        from src.ai_config_dialog import AIConfigDialog
+        dialog = AIConfigDialog(self)
+        dialog.exec()
+
+    def trigger_state_change(self, new_state):
+        """触发状态切换"""
+        old_state = None
+        try:
+            with open('data/current_state.json', 'r') as f:
+                old_state = json.load(f).get('state')
+        except:
+            pass
+
+        with open('data/current_state.json', 'w') as f:
+            json.dump({'state': new_state, 'timestamp': int(time.time())}, f)
+
+        # 下班时弹出每日报告
+        if old_state == 'working' and new_state == 'idle':
+            self.show_daily_report()
+
+    def show_daily_report(self):
+        """显示每日报告"""
+        from src.daily_report import DailyReportDialog
+        from src.daily_stats import DailyStats
+
+        stats = DailyStats()
+        today_stats = stats.get_today_stats()
+
+        dialog = DailyReportDialog(today_stats, self)
+        dialog.exec()
+
+    def show_bubble(self, message, reminder_type='info', duration=10000):
+        """显示气泡提示（线程安全）"""
+        self.show_bubble_signal.emit(message, reminder_type, duration)
+
+    def _show_bubble_slot(self, message, reminder_type, duration):
+        """气泡显示槽函数（主线程）"""
+        from src.bubble_label import BubbleLabel
+
+        if self.bubble:
+            self.bubble.hide()
+
+        self.bubble = BubbleLabel(message, reminder_type, self)
+        self.bubble.completed.connect(self._on_reminder_completed)
+        self.bubble.ignored.connect(self._on_reminder_ignored)
+
+        # 气泡位置：桌宠上方
+        bubble_x = self.x() + (self.width() - self.bubble.width()) // 2
+        bubble_y = self.y() - self.bubble.height() - 10
+        self.bubble.move(bubble_x, bubble_y)
+
+        self.bubble.show_bubble(duration)
+
+    def _on_reminder_completed(self, reminder_type):
+        """提醒完成"""
+        from src.daily_stats import DailyStats
+        stats = DailyStats()
+        stats.log_reminder_response(reminder_type, True)
+
+    def _on_reminder_ignored(self, reminder_type):
+        """提醒忽略"""
+        from src.daily_stats import DailyStats
+        stats = DailyStats()
+        stats.log_reminder_response(reminder_type, False)
+
