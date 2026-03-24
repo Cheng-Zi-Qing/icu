@@ -42,3 +42,6 @@ docs/prd/
 .env
 .env.local
 assets/pets_backup/
+
+# Local worktrees
+.worktrees/
