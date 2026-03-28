@@ -19,13 +19,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         do {
             let paths = try AppPaths.live()
             let assetLocator = PetAssetLocator(appPaths: paths)
-            for line in RuntimeLaunchDiagnostics.lines(
+            RuntimeLaunchDiagnostics.emit(
                 appPaths: paths,
                 repoRootURL: assetLocator.repoRootURL,
                 bundleResourceURL: Bundle.main.resourceURL
-            ) {
-                print(line)
-            }
+            )
 
             let store = try StateStore(paths: paths)
             let sessionController = try WorkSessionController(store: store)

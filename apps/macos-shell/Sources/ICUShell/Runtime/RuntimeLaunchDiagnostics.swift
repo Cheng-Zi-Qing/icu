@@ -10,6 +10,23 @@ struct RuntimeLaunchDiagnostics {
         ]
     }
 
+    static func emit(
+        appPaths: AppPaths,
+        repoRootURL: URL?,
+        bundleResourceURL: URL?,
+        output: FileHandle = .standardOutput
+    ) {
+        let payload = lines(
+            appPaths: appPaths,
+            repoRootURL: repoRootURL,
+            bundleResourceURL: bundleResourceURL
+        ).joined(separator: "\n") + "\n"
+
+        if let data = payload.data(using: .utf8) {
+            output.write(data)
+        }
+    }
+
     private static func runtimeMode(repoRootURL: URL?, bundleResourceURL: URL?) -> String {
         guard let bundleResourceURL else {
             return "repo"

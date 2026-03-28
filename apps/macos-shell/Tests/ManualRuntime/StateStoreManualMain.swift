@@ -7,6 +7,7 @@ struct StateStoreManualMain {
             try testAppPathsLivePrefersICUAppSupportRootOverride()
             try testRuntimeLaunchDiagnosticsIncludeBundleAndAppSupportPaths()
             try testRuntimeLaunchDiagnosticsUsesRepoModeWhenRepoRootIsOutsideBundleResources()
+            try testRuntimeLaunchDiagnosticsEmitWritesImmediatelyToProvidedOutput()
             try testTextCatalogReturnsBaseValueWhenNoOverrideExists()
             try testTextCatalogUsesOverrideWithoutDroppingBaseFallback()
             try testTextCatalogFallsBackToCallerDefaultForUnknownKey()
