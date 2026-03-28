@@ -190,7 +190,7 @@ run_case() {
     assert_contains "$output" "[verify_macos_shell] Skipping swift test because Xcode is not active."
   fi
 
-  if [[ "$package_check_enabled" == "1" ]]; then
+  if [[ "$package_check_enabled" == "1" || "$runtime_smoke_enabled" == "1" ]]; then
     assert_contains "$output" "[verify_macos_shell] Packaging app bundle for release smoke check..."
     assert_contains "$output" "[verify_macos_shell] Running app bundle structure check..."
     assert_contains "$(cat "$log_file")" "package "
@@ -263,6 +263,7 @@ run_case_expect_failure() {
 run_case "clt-only"
 run_case "xcode-enabled"
 run_case "clt-only" "1"
+run_case "clt-only" "0" "1"
 run_case "clt-only" "1" "1"
 run_case_expect_failure "clt-only" "1" "1"
 

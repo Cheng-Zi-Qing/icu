@@ -29,7 +29,7 @@ else
   echo "[verify_macos_shell] Skipping swift test because Xcode is not active."
 fi
 
-if [[ "$PACKAGE_CHECK_ENABLED" == "1" ]]; then
+if [[ "$PACKAGE_CHECK_ENABLED" == "1" || "$RUNTIME_SMOKE_ENABLED" == "1" ]]; then
   echo "[verify_macos_shell] Packaging app bundle for release smoke check..."
   APP_BUNDLE_PATH="$(bash "$PACKAGE_SCRIPT" | tail -n 1)"
   echo "[verify_macos_shell] Running app bundle structure check..."
