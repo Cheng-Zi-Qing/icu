@@ -1,0 +1,91 @@
+import Foundation
+
+func writeText(at url: URL, contents: String) throws {
+    try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+    guard let data = contents.data(using: .utf8) else {
+        throw TestFailure(message: "unable to encode text")
+    }
+    try data.write(to: url, options: .atomic)
+}
+
+func loadJSONObject(at url: URL) throws -> [String: Any] {
+    let data = try Data(contentsOf: url)
+    let object = try JSONSerialization.jsonObject(with: data, options: [])
+    guard let dictionary = object as? [String: Any] else {
+        throw TestFailure(message: "expected JSON object at \(url.path)")
+    }
+    return dictionary
+}
+
+func makeTemporaryAppPaths() throws -> AppPaths {
+    let root = try makeTemporaryDirectory()
+    let paths = AppPaths(rootURL: root)
+    try paths.ensureDirectories()
+    try FileManager.default.createDirectory(at: themesDirectory(for: paths), withIntermediateDirectories: true)
+    return paths
+}
+
+func themesDirectory(for paths: AppPaths) -> URL {
+    paths.stateDirectory.appendingPathComponent("themes", isDirectory: true)
+}
+
+func testGenerationSettingsStorePersistsCapabilitiesWithoutDroppingAvatarState() throws {
+    let root = try makeTemporaryDirectory()
+    try writeText(
+        at: root.appendingPathComponent("config/settings.json"),
+        contents: #"{"avatar":{"current_id":"seal"},"timers":{"eye_interval":1200}}"#
+    )
+
+    let store = GenerationSettingsStore(repoRootURL: root)
+    try store.save(
+        GenerationSettings(
+            activeThemeID: "pixel_default",
+            textDescription: GenerationCapabilityConfig(
+                provider: .ollama,
+                baseURL: "http://localhost:11434",
+                model: "qwen3.5:35b",
+                auth: [:],
+                options: ["temperature": 0.7]
+            ),
+            animationAvatar: GenerationCapabilityConfig(
+                provider: .huggingFace,
+                baseURL: "https://api-inference.huggingface.co",
+                model: "stabilityai/stable-diffusion-xl-base-1.0",
+                auth: ["token": "hf_xxx"],
+                options: [:]
+            ),
+            codeGeneration: GenerationCapabilityConfig(
+                provider: .openAICompatible,
+                baseURL: "https://example.invalid/v1",
+                model: "gpt-4.1-mini",
+                auth: ["api_key": "sk-test"],
+                options: [:]
+            )
+        )
+    )
+
+    let rootObject = try loadJSONObject(at: root.appendingPathComponent("config/settings.json"))
+    try expect(
+        ((rootObject["avatar"] as? [String: Any])?["current_id"] as? String) == "seal",
+        "generation save should preserve avatar.current_id"
+    )
+
+    guard let generationBlock = rootObject["generation"] as? [String: Any] else {
+        throw TestFailure(message: "generation block should be written")
+    }
+
+    try expect(
+        ((generationBlock["text_description"] as? [String: Any])?["model"] as? String) == "qwen3.5:35b",
+        "text description model should match stored capability"
+    )
+
+    try expect(
+        (((generationBlock["code_generation"] as? [String: Any])?["auth"] as? [String: Any])?["api_key"] as? String) == "sk-test",
+        "code generation auth api_key should be preserved"
+    )
+
+    try expect(
+        ((rootObject["theme"] as? [String: Any])?["current_id"] as? String) == "pixel_default",
+        "active theme should be written"
+    )
+}

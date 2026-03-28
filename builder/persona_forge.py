@@ -1,7 +1,7 @@
 """第一层：灵魂锻造 (LLM Persona Expansion)"""
 import json
-import requests
 from pathlib import Path
+from ollama_http import get_json, post_json
 
 
 class PersonaForge:
@@ -13,8 +13,7 @@ class PersonaForge:
     def check_ollama(self):
         """检查 Ollama 是否运行"""
         try:
-            response = requests.get(f"{self.ollama_url}/api/tags", timeout=2, proxies={'http': None, 'https': None})
-            models = response.json().get('models', [])
+            models = get_json(f"{self.ollama_url}/api/tags").get('models', [])
             model_names = [m['name'] for m in models]
 
             # 优先使用 35b，其次 27b
@@ -69,9 +68,9 @@ class PersonaForge:
 }}
 """
 
-        response = requests.post(
+        result = post_json(
             f"{self.ollama_url}/api/chat",
-            json={
+            {
                 "model": self.model,
                 "messages": [
                     {"role": "system", "content": system_prompt},
@@ -81,10 +80,7 @@ class PersonaForge:
                 "options": {"temperature": 0.3},
                 "stream": False
             },
-            proxies={'http': None, 'https': None}
         )
-
-        result = response.json()
         content = result['message']['content']
         persona_data = json.loads(content)
 

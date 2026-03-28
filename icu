@@ -1,8 +1,19 @@
-#!/bin/bash
-cd "$(dirname "$0")"
+#!/usr/bin/env bash
+set -euo pipefail
 
-if ! python3 -c "import PySide6" 2>/dev/null; then
-    pip3 install -r requirements.txt
-fi
+ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
+RUN_SCRIPT="${ICU_RUN_SCRIPT:-$ROOT_DIR/tools/run_macos_shell.sh}"
+VERIFY_SCRIPT="${ICU_VERIFY_SCRIPT:-$ROOT_DIR/tools/verify_macos_shell.sh}"
 
-python3 -m src.pet_main
+case "${1:-}" in
+    "")
+        exec bash "$RUN_SCRIPT"
+        ;;
+    --verify)
+        exec bash "$VERIFY_SCRIPT"
+        ;;
+    *)
+        echo "Usage: ./icu [--verify]" >&2
+        exit 1
+        ;;
+esac

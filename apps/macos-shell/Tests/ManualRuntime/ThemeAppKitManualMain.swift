@@ -1,0 +1,61 @@
+import AppKit
+
+@main
+struct ThemeAppKitManualMain {
+    static func main() throws {
+        _ = NSApplication.shared
+        NSApp.setActivationPolicy(.prohibited)
+
+        do {
+            try testGenerationConfigWindowUsesInstalledCopyCatalogForVisibleLabels()
+            try testAvatarPanelThemeReflectsSharedThemeColors()
+            try testAvatarSelectorWindowRestylesWhenThemeChanges()
+            try testAvatarSelectorWindowUsesStudioTabsAndThemeBubblePreviewByDefault()
+            try testAvatarSelectorThemeTabOmitsModelSummaryAndCrossDomainPanels()
+            try testAvatarSelectorThemeTabGeneratesDraftBeforeApplyingTheme()
+            try testAvatarSelectorThemeTabRequiresPreviewBeforeApply()
+            try testAvatarWizardWindowRestylesWhenThemeChanges()
+            try testAvatarWizardUsesInstalledCopyCatalogForVisibleLabels()
+            try testAvatarSelectorWindowSpeechTabShowsBubblePreviewAndApplyActions()
+            try testAvatarSelectorSpeechTabOmitsStyleChromeAndModelSummary()
+            try testAvatarSelectorWindowUsesInstalledCopyCatalogForStudioLabels()
+            try testAvatarSelectorPreservesSelectedStudioTabWhenThemeChanges()
+            try testAvatarWizardPreservesInFlightActionButtonStateWhenThemeChanges()
+            try testAvatarWizardDoesNotAccumulateDuplicateButtonWidthConstraintsAcrossThemeChanges()
+            try testDesktopPetViewRefreshesStatusChipWhenThemeChanges()
+            try testDesktopPetViewUsesInstalledCopyCatalogForInitialStatusLabel()
+            try testDesktopPetViewShowsTransientBubbleSeparateFromStatusChip()
+            try testDesktopPetViewAdvancesFramesForMultiFrameIdleAnimation()
+            try testDesktopPetViewKeepsLegacySingleFrameAnimationStatic()
+            try testDesktopPetViewDoesNotAutoAdvanceWhileDetachedFromWindow()
+            try testDesktopPetViewHitTestUsesAspectFitImageRectForTransparency()
+            try testDesktopPetViewSetWorkStateImmediatelyReloadsMatchingAnimationFamily()
+            try testDesktopPetViewMapsFocusToWorkingAndBreakToAlertAnimationFamilies()
+            try testDesktopPetViewVariantRotationStaysWithinCurrentStateFamily()
+            try testDesktopPetViewTimedVariantRotationStaysWithinCurrentStateFamily()
+            try testDesktopPetViewTimedVariantRotationWorksForSingleFrameVariants()
+            try testDesktopPetViewVariantRotationWaitsForOneCompletedLoop()
+            try testDesktopPetViewOnceVariantUnlocksRotationAtLastFrame()
+            try testPetMotionEnhancerProvidesDistinctProfilesPerState()
+            try testAvatarSelectorSpeechTabAppliesGeneratedCopyToDesktopPetRuntime()
+            try testThemedMenuPanelUsesCompactPreferredSize()
+            try testThemedMenuPanelRendersRowsAndSeparatorsFromSections()
+            try testContextMenuPanelControllerDispatchesSelectedActionAndDismissesPanel()
+            try testFloatingPanelControllerDismissesOnEscape()
+            try testFloatingPanelControllerDismissesOnApplicationDeactivate()
+            try testFloatingPanelControllerRepeatedPresentOnlyDismissesExistingPanels()
+            try testFloatingPanelControllerDismissesOnOutsideClickEvent()
+            try testGenerationConfigWindowUsesModelTabsByDefault()
+            try testGenerationConfigWindowCapabilityDetailUsesBasicAndAdvancedSections()
+            try testGenerationConfigWindowPreservesDraftAcrossNavigationSwitches()
+            try testGenerationConfigWindowUsesCompactFrame()
+            try testGenerationCoordinatorReusesConfigWindowController()
+            try testGenerationConfigWindowLoadsSavedSettingsAndRestylesOnThemeChange()
+            try testGenerationConfigWindowDoesNotRenderThemeGenerationControls()
+            print("ThemeAppKitManualTests: PASS")
+        } catch {
+            fputs("ThemeAppKitManualTests: FAIL - \(error)\n", stderr)
+            exit(1)
+        }
+    }
+}

@@ -1,31 +1,37 @@
 {
-  "user": {
-    "body_weight": 90,
-    "cup_volume": 350,
-    "work_hours": 8
-  },
-  "ai": {
-    "mode": "local",
-    "local_api": {
-      "enabled": true,
-      "url": "http://localhost:11434",
-      "model": "qwen3.5:35b"
+  "ai" : {
+    "image_models" : [
+
+    ],
+    "local_api" : {
+      "enabled" : true,
+      "model" : "qwen3.5:35b",
+      "url" : "http:\/\/localhost:11434"
     },
-    "remote_models": [],
-    "image_models": []
+    "mode" : "local",
+    "remote_models" : [
+
+    ]
   },
-  "timers": {
-    "eye_interval": 1200,
-    "stretch_interval": 2700
+  "avatar" : {
+    "current_id" : "capybara",
+    "custom_avatars" : [
+
+    ]
   },
-  "edge_snap": {
-    "enabled": true,
-    "snap_distance": 20,
-    "peek_width": 10,
-    "auto_hide_delay": 2000
+  "edge_snap" : {
+    "auto_hide_delay" : 2000,
+    "enabled" : true,
+    "peek_width" : 10,
+    "snap_distance" : 20
   },
-  "avatar": {
-    "current_id": "capybara",
-    "custom_avatars": []
+  "timers" : {
+    "eye_interval" : 1200,
+    "stretch_interval" : 2700
+  },
+  "user" : {
+    "body_weight" : 90,
+    "cup_volume" : 350,
+    "work_hours" : 8
   }
 }
