@@ -20,15 +20,22 @@ def _default_image_models():
 
 
 def _load_settings(repo_root: str | None):
-    if not repo_root:
-        return {}
+    candidate_roots = []
 
-    settings_file = Path(repo_root) / "config" / "settings.json"
-    if not settings_file.exists():
-        return {}
+    app_support_root = os.getenv("ICU_APP_SUPPORT_ROOT", "").strip()
+    if app_support_root:
+        candidate_roots.append(Path(app_support_root))
 
-    with settings_file.open("r", encoding="utf-8") as handle:
-        return json.load(handle)
+    if repo_root:
+        candidate_roots.append(Path(repo_root))
+
+    for root in candidate_roots:
+        settings_file = root / "config" / "settings.json"
+        if settings_file.exists():
+            with settings_file.open("r", encoding="utf-8") as handle:
+                return json.load(handle)
+
+    return {}
 
 
 def _load_local_api_url(repo_root: str | None) -> str:

@@ -6,8 +6,8 @@
 >
 > 💡 **I.C.U. = I see u** - Your personal health guardian with personality!
 
-[![Python](https://img.shields.io/badge/Python-3.9+-blue.svg)](https://www.python.org/)
-[![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-green.svg)](https://www.python.org/)
+[![Swift](https://img.shields.io/badge/Swift-6-orange.svg)](https://www.swift.org/)
+[![Platform](https://img.shields.io/badge/Platform-macOS-green.svg)](https://www.apple.com/macos/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ## 🌟 What Makes I.C.U. Special
@@ -89,6 +89,13 @@ Quick verification:
 ./icu --verify
 ```
 
+Package a local `.app` bundle:
+
+```bash
+./icu --package-app
+bash tools/check_macos_app_bundle.sh dist/ICU.app
+```
+
 ### Native macOS shell verification
 
 For the Swift/AppKit shell under `apps/macos-shell`, the short local verification command is:
@@ -110,6 +117,12 @@ Low-level helper:
 bash tools/verify_macos_shell.sh
 ```
 
+To include a release-bundle smoke check in verification:
+
+```bash
+VERIFY_MACOS_SHELL_PACKAGE_CHECK=1 ./icu --verify
+```
+
 To launch the native shell locally:
 
 ```bash
@@ -122,6 +135,12 @@ Low-level helper:
 
 ```bash
 bash tools/run_macos_shell.sh
+```
+
+For packaging, signing, and notarization notes, see:
+
+```bash
+docs/macos-shell-release.md
 ```
 
 Useful local checks after launch:
@@ -137,8 +156,20 @@ Useful local checks after launch:
    - Menu Bar → Personal Settings
    - Enter your body weight and cup volume
 3. **Optional AI Setup**:
-   - Menu Bar → AI Configuration
+   - Menu Bar / right-click menu → Model Configuration
    - Configure local Ollama or remote AI models
+
+User-writeable settings now live at:
+
+```bash
+~/Library/Application Support/ICU/config/settings.json
+```
+
+Speech overrides live at:
+
+```bash
+~/Library/Application Support/ICU/config/copy/active.json
+```
 
 ### Daily Usage
 
@@ -163,7 +194,7 @@ Useful local checks after launch:
 - **Remote Text Models**: OpenAI, Claude, or custom APIs
 - **Image Models**: Stable Diffusion or HuggingFace models
 
-Access via: Menu Bar → AI Configuration
+Access via: Menu Bar / right-click menu → Model Configuration
 
 ## 📚 Scientific Foundation
 
@@ -222,7 +253,7 @@ I.C.U.'s health reminders are based on peer-reviewed research:
 |------------|---------|
 | Swift 6 / SwiftPM | Native macOS shell |
 | AppKit | Desktop pet window and menu interactions |
-| Python 3.9+ | Stdlib-based bridge and residual legacy tooling |
+| Python 3.9+ | Avatar-generation bridge only, not the startup path |
 | Ollama | Local AI (optional) |
 | Hugging Face Inference API | Image generation |
 | SQLite | Data persistence |
@@ -238,6 +269,7 @@ icu/
 │   ├── prompt_optimizer.py # Prompt enhancement
 │   ├── vision_generator.py # Image generation
 │   └── persona_forge.py    # Personality creation
+├── docs/macos-shell-release.md # Release and packaging notes
 ├── src/                    # Remaining legacy non-UI Python modules
 ├── assets/pets/            # Pet avatars & configs
 └── config/                 # User settings

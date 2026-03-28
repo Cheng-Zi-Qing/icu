@@ -2,7 +2,7 @@ import Foundation
 
 final class ThemeGenerationService {
     private let transport: GenerationTransport
-    private let settingsStore: GenerationSettingsStore
+    private let router: GenerationCapabilityRouter
     private let themeManager: ThemeManager
 
     init(
@@ -11,7 +11,7 @@ final class ThemeGenerationService {
         themeManager: ThemeManager
     ) {
         self.transport = transport
-        self.settingsStore = settingsStore
+        self.router = GenerationCapabilityRouter(settingsStore: settingsStore)
         self.themeManager = themeManager
     }
 
@@ -21,17 +21,16 @@ final class ThemeGenerationService {
             throw GenerationRouteError.emptyVibe
         }
 
-        let settings = try settingsStore.load()
-        try validateCapability(settings.textDescription, name: "text_description")
-        try validateCapability(settings.codeGeneration, name: "code_generation")
+        let textCapability = try router.capability(for: .textDescription)
+        let codeCapability = try router.capability(for: .codeGeneration)
 
         let styleIntentJSON = try transport.completeJSON(
             prompt: makeStyleIntentPrompt(vibe: normalizedVibe),
-            capability: settings.textDescription
+            capability: textCapability
         )
         let themePackJSON = try transport.completeJSON(
             prompt: makeThemePackPrompt(styleIntentJSON: styleIntentJSON),
-            capability: settings.codeGeneration
+            capability: codeCapability
         )
 
         return try ThemePack.decodeAndValidate(from: themePackJSON)
@@ -42,16 +41,6 @@ final class ThemeGenerationService {
         try themeManager.apply(pack)
         return pack
     }
-
-    private func validateCapability(_ capability: GenerationCapabilityConfig, name: String) throws {
-        guard capability.provider == .ollama || capability.provider == .openAICompatible else {
-            throw GenerationRouteError.unsupportedProviderForTheme(capability.provider)
-        }
-        guard capability.isConfigured else {
-            throw GenerationRouteError.missingCapabilityConfig(name)
-        }
-    }
-
     private func makeStyleIntentPrompt(vibe: String) -> String {
         """
         You are a style-intent generator for UI themes.

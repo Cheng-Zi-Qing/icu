@@ -101,3 +101,66 @@ func testAvatarSettingsStorePersistsImageModelsWithoutLosingAvatarSettings() thr
     try expect(savedModels == models, "image models should round-trip through settings store")
     try expect(avatar?["current_id"] as? String == "seal", "saving image models should preserve avatar settings")
 }
+
+func testAvatarSettingsStoreFallsBackToRepoSettingsAndWritesUserSelectionToAppSupport() throws {
+    let repoRoot = try makeTemporaryDirectory()
+    let appRoot = try makeTemporaryDirectory()
+    defer {
+        try? FileManager.default.removeItem(at: repoRoot)
+        try? FileManager.default.removeItem(at: appRoot)
+    }
+
+    let repoSettingsURL = repoRoot
+        .appendingPathComponent("config", isDirectory: true)
+        .appendingPathComponent("settings.json", isDirectory: false)
+    try writeFixtureFile(
+        at: repoSettingsURL,
+        contents: """
+        {
+          "generation": {
+            "text_description": {
+              "provider": "ollama",
+              "base_url": "http://localhost:11434",
+              "model": "qwen3.5:35b",
+              "auth": {},
+              "options": {}
+            }
+          },
+          "avatar": {
+            "current_id": "seal",
+            "custom_avatars": []
+          }
+        }
+        """
+    )
+
+    let appPaths = AppPaths(rootURL: appRoot)
+    try appPaths.ensureDirectories()
+
+    let store = AvatarSettingsStore(appPaths: appPaths, repoRootURL: repoRoot)
+    let current = try store.loadCurrentAvatarID()
+    try expect(current == "seal", "avatar store should fall back to repo settings when app support settings are missing")
+
+    try store.saveCurrentAvatarID("horse")
+
+    let appSettingsURL = appRoot
+        .appendingPathComponent("config", isDirectory: true)
+        .appendingPathComponent("settings.json", isDirectory: false)
+    let appData = try Data(contentsOf: appSettingsURL)
+    let appRootObject = try JSONSerialization.jsonObject(with: appData) as? [String: Any]
+    let repoData = try Data(contentsOf: repoSettingsURL)
+    let repoRootObject = try JSONSerialization.jsonObject(with: repoData) as? [String: Any]
+
+    try expect(
+        ((appRootObject?["avatar"] as? [String: Any])?["current_id"] as? String) == "horse",
+        "avatar selection should be written to Application Support settings"
+    )
+    try expect(
+        ((appRootObject?["generation"] as? [String: Any])?["text_description"] as? [String: Any]) != nil,
+        "app support migration should preserve existing repo-backed generation settings"
+    )
+    try expect(
+        ((repoRootObject?["avatar"] as? [String: Any])?["current_id"] as? String) == "seal",
+        "avatar migration should leave repo-backed settings unchanged"
+    )
+}

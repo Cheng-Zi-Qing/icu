@@ -6,8 +6,8 @@
 >
 > 💡 **I.C.U. = I see u** - 你的专属健康守护者，有个性！
 
-[![Python](https://img.shields.io/badge/Python-3.9+-blue.svg)](https://www.python.org/)
-[![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-green.svg)](https://www.python.org/)
+[![Swift](https://img.shields.io/badge/Swift-6-orange.svg)](https://www.swift.org/)
+[![Platform](https://img.shields.io/badge/Platform-macOS-green.svg)](https://www.apple.com/macos/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ## 🌟 I.C.U. 的特别之处
@@ -89,6 +89,13 @@ cd icu
 ./icu --verify
 ```
 
+打包本地 `.app`：
+
+```bash
+./icu --package-app
+bash tools/check_macos_app_bundle.sh dist/ICU.app
+```
+
 ### 原生 macOS shell 校验
 
 对于 `apps/macos-shell` 下的 Swift/AppKit shell，简短本地校验命令是：
@@ -110,6 +117,12 @@ cd icu
 bash tools/verify_macos_shell.sh
 ```
 
+如果要顺手做一次 `.app` release smoke check，可以运行：
+
+```bash
+VERIFY_MACOS_SHELL_PACKAGE_CHECK=1 ./icu --verify
+```
+
 如果要本地启动原生 shell，运行：
 
 ```bash
@@ -122,6 +135,12 @@ bash tools/verify_macos_shell.sh
 
 ```bash
 bash tools/run_macos_shell.sh
+```
+
+如果要看发布、签名和 notarize 的完整说明，见：
+
+```bash
+docs/macos-shell-release.md
 ```
 
 启动后建议检查：
@@ -137,8 +156,20 @@ bash tools/run_macos_shell.sh
    - 菜单栏 → 个人设置
    - 输入体重和杯子容量
 3. **可选 AI 设置**：
-   - 菜单栏 → AI 配置
+   - 菜单栏 / 右键菜单 → 模型配置
    - 配置本地 Ollama 或远程 AI 模型
+
+当前用户配置会写到：
+
+```bash
+~/Library/Application Support/ICU/config/settings.json
+```
+
+桌宠话术 override 会写到：
+
+```bash
+~/Library/Application Support/ICU/config/copy/active.json
+```
 
 ### 日常使用
 
@@ -163,7 +194,7 @@ bash tools/run_macos_shell.sh
 - **远程文本模型**：OpenAI、Claude 或自定义 API
 - **图像模型**：Stable Diffusion 或 HuggingFace 模型
 
-访问方式：菜单栏 → AI 配置
+访问方式：菜单栏 / 右键菜单 → 模型配置
 
 ## 📚 科学依据
 
@@ -222,7 +253,7 @@ I.C.U. 的健康提醒基于同行评审的研究：
 |------|------|
 | Swift 6 / SwiftPM | 原生 macOS shell |
 | AppKit | 桌宠窗口与菜单交互 |
-| Python 3.9+ | 基于标准库的 bridge 与残留 legacy 工具 |
+| Python 3.9+ | 仅用于形象生成 bridge（非启动链） |
 | Ollama | 本地 AI（可选） |
 | Hugging Face Inference API | 图像生成 |
 | SQLite | 数据持久化 |
@@ -239,6 +270,7 @@ icu/
 │   ├── vision_generator.py # 图像生成
 │   └── persona_forge.py    # 人设创建
 ├── src/                    # 剩余 legacy 非 UI Python 模块
+├── docs/macos-shell-release.md # Swift shell 发布说明
 ├── assets/pets/            # 宠物形象与配置
 └── config/                 # 用户设置
 ```

@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 RUN_SCRIPT="${ICU_RUN_SCRIPT:-$ROOT_DIR/tools/run_macos_shell.sh}"
 VERIFY_SCRIPT="${ICU_VERIFY_SCRIPT:-$ROOT_DIR/tools/verify_macos_shell.sh}"
+PACKAGE_SCRIPT="${ICU_PACKAGE_SCRIPT:-$ROOT_DIR/tools/package_macos_shell.sh}"
 
 case "${1:-}" in
     "")
@@ -12,8 +13,11 @@ case "${1:-}" in
     --verify)
         exec bash "$VERIFY_SCRIPT"
         ;;
+    --package-app)
+        exec bash "$PACKAGE_SCRIPT"
+        ;;
     *)
-        echo "Usage: ./icu [--verify]" >&2
+        echo "Usage: ./icu [--verify|--package-app]" >&2
         exit 1
         ;;
 esac

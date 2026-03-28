@@ -73,9 +73,38 @@ EOF
   chmod +x "$path"
 }
 
+make_stub_package() {
+  local path="$1"
+  local log_file="$2"
+
+  cat >"$path" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'package %s\n' "$*" >>"$VERIFY_LOG_FILE"
+echo "/tmp/ICU.app"
+EOF
+  chmod +x "$path"
+  export VERIFY_LOG_FILE="$log_file"
+}
+
+make_stub_app_check() {
+  local path="$1"
+  local log_file="$2"
+
+  cat >"$path" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'app-check %s\n' "$*" >>"$VERIFY_LOG_FILE"
+echo "bundle verified"
+EOF
+  chmod +x "$path"
+  export VERIFY_LOG_FILE="$log_file"
+}
+
 run_case() {
   local mode="$1"
-  local temp_dir output_file log_file stub_swift stub_check stub_xcodebuild output
+  local package_check_enabled="${2:-0}"
+  local temp_dir output_file log_file stub_swift stub_check stub_xcodebuild stub_package stub_app_check output
 
   temp_dir="$(mktemp -d)"
   output_file="$temp_dir/output.log"
@@ -83,12 +112,16 @@ run_case() {
   stub_swift="$temp_dir/swift"
   stub_check="$temp_dir/check_native_shell.sh"
   stub_xcodebuild="$temp_dir/xcodebuild"
+  stub_package="$temp_dir/package_macos_shell.sh"
+  stub_app_check="$temp_dir/check_macos_app_bundle.sh"
 
   trap 'rm -rf "$temp_dir"' RETURN
 
   make_stub_swift "$stub_swift" "$log_file"
   make_stub_check "$stub_check" "$log_file"
   make_stub_xcodebuild "$stub_xcodebuild" "$mode"
+  make_stub_package "$stub_package" "$log_file"
+  make_stub_app_check "$stub_app_check" "$log_file"
 
   if [[ ! -f "$VERIFIER" ]]; then
     fail "missing verifier script: $VERIFIER"
@@ -97,6 +130,9 @@ run_case() {
   VERIFY_MACOS_SHELL_SWIFT_BIN="$stub_swift" \
     VERIFY_MACOS_SHELL_XCODEBUILD_BIN="$stub_xcodebuild" \
     VERIFY_MACOS_SHELL_CHECK_SCRIPT="$stub_check" \
+    VERIFY_MACOS_SHELL_PACKAGE_SCRIPT="$stub_package" \
+    VERIFY_MACOS_SHELL_APP_CHECK_SCRIPT="$stub_app_check" \
+    VERIFY_MACOS_SHELL_PACKAGE_CHECK="$package_check_enabled" \
     bash "$VERIFIER" >"$output_file" 2>&1
 
   output="$(cat "$output_file")"
@@ -111,9 +147,17 @@ run_case() {
   else
     assert_contains "$output" "[verify_macos_shell] Skipping swift test because Xcode is not active."
   fi
+
+  if [[ "$package_check_enabled" == "1" ]]; then
+    assert_contains "$output" "[verify_macos_shell] Packaging app bundle for release smoke check..."
+    assert_contains "$output" "[verify_macos_shell] Running app bundle structure check..."
+    assert_contains "$(cat "$log_file")" "package "
+    assert_contains "$(cat "$log_file")" "app-check /tmp/ICU.app"
+  fi
 }
 
 run_case "clt-only"
 run_case "xcode-enabled"
+run_case "clt-only" "1"
 
 echo "[test_verify_macos_shell] PASS"

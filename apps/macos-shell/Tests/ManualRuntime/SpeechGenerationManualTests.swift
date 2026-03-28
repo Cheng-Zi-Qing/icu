@@ -35,6 +35,37 @@ func testSpeechGenerationServiceUsesTextCapabilityAndReturnsDraft() throws {
     try expect(transport.requestedPrompts.count == 1, "speech service should make exactly one generation request")
 }
 
+func testSpeechGenerationServiceRejectsUnsupportedTextProviderBeforeNetworkCall() throws {
+    var settings = makeValidGenerationSettings()
+    settings.textDescription = GenerationCapabilityConfig(
+        provider: .huggingFace,
+        baseURL: "https://api-inference.huggingface.co",
+        model: "stabilityai/sdxl",
+        auth: [:],
+        options: [:]
+    )
+
+    let transport = StubGenerationTransport(results: [])
+    let service = SpeechGenerationService(
+        transport: transport,
+        settingsStore: try makeGenerationSettingsStore(settings: settings)
+    )
+
+    do {
+        _ = try service.generateSpeechDraft(from: "像素、冷静、简短")
+        throw ManualTestFailure(message: "speech service should reject unsupported text providers")
+    } catch let error as GenerationRouteError {
+        try expect(
+            error == .unsupportedProviderForCapability("text_description", .huggingFace),
+            "speech generation should surface capability-aware unsupported provider errors"
+        )
+        try expect(
+            transport.requestedProviders.isEmpty,
+            "unsupported capability should fail before making transport calls"
+        )
+    }
+}
+
 func testCopyOverrideStoreAppliesSpeechDraftAndPreservesUnrelatedOverrides() throws {
     let original = TextCatalog.shared
     defer { TextCatalog.installShared(original) }

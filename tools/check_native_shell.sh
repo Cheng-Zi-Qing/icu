@@ -27,6 +27,7 @@ swiftc \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/DesktopPetMenuModel.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Menu/StatusItemMenuModel.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Generation/GenerationCapabilityModels.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Generation/GenerationCapabilityRouter.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Generation/GenerationSettingsStore.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Generation/GenerationHTTPClient.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Generation/SpeechDraft.swift" \
@@ -86,6 +87,7 @@ swiftc -framework AppKit \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/PetMotionEnhancer.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/DesktopPetView.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Generation/GenerationCapabilityModels.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Generation/GenerationCapabilityRouter.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Generation/GenerationSettingsStore.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Generation/GenerationHTTPClient.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Generation/SpeechDraft.swift" \

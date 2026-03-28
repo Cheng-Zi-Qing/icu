@@ -2,7 +2,7 @@ import Foundation
 
 final class SpeechGenerationService {
     private let transport: GenerationTransport
-    private let settingsStore: GenerationSettingsStore
+    private let router: GenerationCapabilityRouter
     private let decoder = JSONDecoder()
 
     init(
@@ -10,7 +10,7 @@ final class SpeechGenerationService {
         settingsStore: GenerationSettingsStore
     ) {
         self.transport = transport
-        self.settingsStore = settingsStore
+        self.router = GenerationCapabilityRouter(settingsStore: settingsStore)
     }
 
     func generateSpeechDraft(from prompt: String) throws -> SpeechDraft {
@@ -19,9 +19,7 @@ final class SpeechGenerationService {
             throw GenerationRouteError.emptyVibe
         }
 
-        let settings = try settingsStore.load()
-        let capability = settings.textDescription
-        try validateCapability(capability)
+        let capability = try router.capability(for: .textDescription)
 
         let responseJSON = try transport.completeJSON(
             prompt: makeSpeechDraftPrompt(prompt: normalizedPrompt),
@@ -32,16 +30,6 @@ final class SpeechGenerationService {
         try draft.validate()
         return draft
     }
-
-    private func validateCapability(_ capability: GenerationCapabilityConfig) throws {
-        guard capability.provider == .ollama || capability.provider == .openAICompatible else {
-            throw GenerationRouteError.unsupportedProviderForTheme(capability.provider)
-        }
-        guard capability.isConfigured else {
-            throw GenerationRouteError.missingCapabilityConfig("text_description")
-        }
-    }
-
     private func makeSpeechDraftPrompt(prompt: String) -> String {
         """
         You are a desktop pet copy generator.

@@ -1,11 +1,7 @@
 import AppKit
 import Foundation
 
-enum GenerationCapabilityKind: String, CaseIterable {
-    case textDescription = "text_description"
-    case animationAvatar = "animation_avatar"
-    case codeGeneration = "code_generation"
-
+extension GenerationCapabilityKind {
     var title: String {
         switch self {
         case .textDescription:

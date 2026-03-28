@@ -29,6 +29,42 @@ func testPetAssetLocatorFallsBackToRepoBaseImage() throws {
     try expect(resolved == repoBase, "locator should fall back to repo base asset")
 }
 
+func testPetAssetLocatorAcceptsBundledRuntimeRootWithoutSwiftPackage() throws {
+    let root = try makeTemporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+
+    try writeFixtureFile(
+        at: root
+            .appendingPathComponent("assets", isDirectory: true)
+            .appendingPathComponent("pets", isDirectory: true)
+            .appendingPathComponent("capybara", isDirectory: true)
+            .appendingPathComponent("base.png", isDirectory: false)
+    )
+    try writeFixtureFile(
+        at: root
+            .appendingPathComponent("config", isDirectory: true)
+            .appendingPathComponent("copy", isDirectory: true)
+            .appendingPathComponent("base.json", isDirectory: false),
+        contents: "{}"
+    )
+    try writeFixtureFile(
+        at: root
+            .appendingPathComponent("tools", isDirectory: true)
+            .appendingPathComponent("avatar_builder_bridge.py", isDirectory: false),
+        contents: "#!/usr/bin/env python3"
+    )
+
+    let inferred = PetAssetLocator.inferredRepoRoot(
+        environment: ["ICU_REPO_ROOT": root.path],
+        fileManager: .default
+    )
+
+    try expect(
+        inferred?.standardizedFileURL == root.standardizedFileURL,
+        "explicit runtime root should be accepted even when it is a bundled resource root without Swift package sources"
+    )
+}
+
 func testPetAssetLocatorPrefersAppSupportAssetOverRepoAsset() throws {
     let root = try makeTemporaryDirectory()
     defer { try? FileManager.default.removeItem(at: root) }

@@ -121,6 +121,49 @@ func makeThemeManager() throws -> ThemeManager {
     try makeThemeManagerWithPixelDefault()
 }
 
+func testGenerationCapabilityRouterReturnsAnimationAvatarCapability() throws {
+    var settings = makeValidGenerationSettings()
+    settings.animationAvatar = GenerationCapabilityConfig(
+        provider: .huggingFace,
+        baseURL: "https://api-inference.huggingface.co",
+        model: "stabilityai/stable-diffusion-xl-base-1.0",
+        auth: [:],
+        options: [:]
+    )
+
+    let router = GenerationCapabilityRouter(settingsStore: try makeGenerationSettingsStore(settings: settings))
+
+    let capability = try router.capability(for: .animationAvatar)
+
+    try expect(
+        capability.provider == .huggingFace,
+        "capability router should return the configured animation avatar provider"
+    )
+}
+
+func testGenerationCapabilityRouterRejectsUnsupportedTextDescriptionProvider() throws {
+    var settings = makeValidGenerationSettings()
+    settings.textDescription = GenerationCapabilityConfig(
+        provider: .huggingFace,
+        baseURL: "https://api-inference.huggingface.co",
+        model: "stabilityai/sdxl",
+        auth: [:],
+        options: [:]
+    )
+
+    let router = GenerationCapabilityRouter(settingsStore: try makeGenerationSettingsStore(settings: settings))
+
+    do {
+        _ = try router.capability(for: .textDescription)
+        throw ManualTestFailure(message: "router should reject unsupported text provider")
+    } catch let error as GenerationRouteError {
+        try expect(
+            error == .unsupportedProviderForCapability("text_description", .huggingFace),
+            "router should describe unsupported provider using the capability name"
+        )
+    }
+}
+
 func testThemeGenerationServiceUsesTextThenCodeCapabilities() throws {
     let environment = try makeGenerationEnvironment()
     let transport = StubGenerationTransport(

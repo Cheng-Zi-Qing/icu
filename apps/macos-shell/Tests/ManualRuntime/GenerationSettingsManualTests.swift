@@ -89,3 +89,85 @@ func testGenerationSettingsStorePersistsCapabilitiesWithoutDroppingAvatarState()
         "active theme should be written"
     )
 }
+
+func testGenerationSettingsStoreFallsBackToRepoSettingsAndMigratesWritesToAppSupport() throws {
+    let repoRoot = try makeTemporaryDirectory()
+    let appRoot = try makeTemporaryDirectory()
+    defer {
+        try? FileManager.default.removeItem(at: repoRoot)
+        try? FileManager.default.removeItem(at: appRoot)
+    }
+
+    try writeText(
+        at: repoRoot.appendingPathComponent("config/settings.json"),
+        contents: #"""
+        {
+          "avatar": {
+            "current_id": "seal",
+            "custom_avatars": []
+          },
+          "generation": {
+            "text_description": {
+              "provider": "ollama",
+              "base_url": "http://localhost:11434",
+              "model": "qwen3.5:35b",
+              "auth": {},
+              "options": {
+                "temperature": 0.7
+              }
+            }
+          }
+        }
+        """#
+    )
+
+    let appPaths = AppPaths(rootURL: appRoot)
+    try appPaths.ensureDirectories()
+    let store = GenerationSettingsStore(appPaths: appPaths, repoRootURL: repoRoot)
+
+    let loaded = try store.load()
+    try expect(
+        loaded.textDescription.model == "qwen3.5:35b",
+        "store should fall back to repo settings when app support settings are missing"
+    )
+
+    try store.save(
+        GenerationSettings(
+            activeThemeID: "pixel_default",
+            textDescription: loaded.textDescription,
+            animationAvatar: GenerationCapabilityConfig(
+                provider: .huggingFace,
+                baseURL: "https://api-inference.huggingface.co",
+                model: "stabilityai/stable-diffusion-xl-base-1.0",
+                auth: ["token": "hf_live"],
+                options: [:]
+            ),
+            codeGeneration: GenerationCapabilityConfig(
+                provider: .openAICompatible,
+                baseURL: "https://example.invalid/v1",
+                model: "gpt-4.1-mini",
+                auth: [:],
+                options: [:]
+            )
+        )
+    )
+
+    let appSettingsURL = appRoot
+        .appendingPathComponent("config", isDirectory: true)
+        .appendingPathComponent("settings.json", isDirectory: false)
+    let migratedRoot = try loadJSONObject(at: appSettingsURL)
+    let repoRootObject = try loadJSONObject(at: repoRoot.appendingPathComponent("config/settings.json"))
+
+    try expect(
+        ((migratedRoot["avatar"] as? [String: Any])?["current_id"] as? String) == "seal",
+        "saving via app support store should preserve repo-backed avatar defaults during migration"
+    )
+    try expect(
+        (((migratedRoot["generation"] as? [String: Any])?["animation_avatar"] as? [String: Any])?["model"] as? String) == "stabilityai/stable-diffusion-xl-base-1.0",
+        "saving via app support store should write migrated settings into Application Support"
+    )
+    try expect(
+        repoRootObject["theme"] == nil,
+        "migration writes should not mutate the repo-backed settings file"
+    )
+}

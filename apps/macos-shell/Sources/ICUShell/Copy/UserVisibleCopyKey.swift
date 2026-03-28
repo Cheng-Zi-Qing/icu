@@ -47,6 +47,7 @@ enum UserVisibleCopyKey: String {
     case errorEmptyVibe = "errors.empty_vibe"
     case errorMissingCapabilityConfig = "errors.missing_capability_config"
     case errorUnsupportedProviderForTheme = "errors.unsupported_provider_for_theme"
+    case errorUnsupportedProviderForCapability = "errors.unsupported_provider_for_capability"
     case errorInvalidBaseURL = "errors.invalid_base_url"
     case errorRequestFailed = "errors.request_failed"
     case errorInvalidResponse = "errors.invalid_response"
@@ -145,6 +146,8 @@ extension UserVisibleCopyKey {
             return "Generation capability '%@' is not configured."
         case .errorUnsupportedProviderForTheme:
             return "Provider '%@' is not supported for theme generation."
+        case .errorUnsupportedProviderForCapability:
+            return "Capability '%@' does not support provider '%@'."
         case .errorInvalidBaseURL:
             return "Invalid generation endpoint URL: %@"
         case .errorRequestFailed:

@@ -23,6 +23,7 @@ trap 'rm -rf "$temp_dir"' EXIT
 
 run_stub="$temp_dir/run_stub.sh"
 verify_stub="$temp_dir/verify_stub.sh"
+package_stub="$temp_dir/package_stub.sh"
 python_stub="$temp_dir/python3"
 pip_stub="$temp_dir/pip3"
 
@@ -39,6 +40,13 @@ set -euo pipefail
 echo "VERIFY_STUB:$*"
 EOF
 chmod +x "$verify_stub"
+
+cat >"$package_stub" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+echo "PACKAGE_STUB:$*"
+EOF
+chmod +x "$package_stub"
 
 cat >"$python_stub" <<'EOF'
 #!/usr/bin/env bash
@@ -76,11 +84,21 @@ verify_output="$(
 )" || true
 assert_contains "$verify_output" "VERIFY_STUB:"
 
+package_output="$(
+  PATH="$temp_dir:$PATH" \
+  ICU_RUN_SCRIPT="$run_stub" \
+  ICU_VERIFY_SCRIPT="$verify_stub" \
+  ICU_PACKAGE_SCRIPT="$package_stub" \
+  bash "$LAUNCHER" --package-app 2>&1
+)" || true
+assert_contains "$package_output" "PACKAGE_STUB:"
+
 set +e
 invalid_output="$(
   PATH="$temp_dir:$PATH" \
   ICU_RUN_SCRIPT="$run_stub" \
   ICU_VERIFY_SCRIPT="$verify_stub" \
+  ICU_PACKAGE_SCRIPT="$package_stub" \
   bash "$LAUNCHER" --unknown 2>&1
 )"
 invalid_status=$?
@@ -90,6 +108,6 @@ if [[ $invalid_status -eq 0 ]]; then
   fail "invalid launcher argument should exit non-zero"
 fi
 
-assert_contains "$invalid_output" "Usage: ./icu [--verify]"
+assert_contains "$invalid_output" "Usage: ./icu [--verify|--package-app]"
 
 echo "[test_icu_launcher] PASS"

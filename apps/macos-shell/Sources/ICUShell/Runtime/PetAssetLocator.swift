@@ -266,6 +266,14 @@ struct PetAssetLocator {
             }
         }
 
+        if
+            let bundledRoot = Bundle.main.resourceURL?
+                .appendingPathComponent("repo", isDirectory: true),
+            looksLikeRepoRoot(bundledRoot, fileManager: fileManager)
+        {
+            return bundledRoot
+        }
+
         let searchStarts = [
             URL(fileURLWithPath: fileManager.currentDirectoryPath, isDirectory: true),
             URL(fileURLWithPath: CommandLine.arguments[0], isDirectory: false).deletingLastPathComponent(),
@@ -300,13 +308,26 @@ struct PetAssetLocator {
         let assetsDirectory = url
             .appendingPathComponent("assets", isDirectory: true)
             .appendingPathComponent("pets", isDirectory: true)
+        let baseCopy = url
+            .appendingPathComponent("config", isDirectory: true)
+            .appendingPathComponent("copy", isDirectory: true)
+            .appendingPathComponent("base.json", isDirectory: false)
+        let bridgeScript = url
+            .appendingPathComponent("tools", isDirectory: true)
+            .appendingPathComponent("avatar_builder_bridge.py", isDirectory: false)
         let shellPackage = url
             .appendingPathComponent("apps", isDirectory: true)
             .appendingPathComponent("macos-shell", isDirectory: true)
             .appendingPathComponent("Package.swift", isDirectory: false)
 
         return fileManager.fileExists(atPath: assetsDirectory.path)
-            && fileManager.fileExists(atPath: shellPackage.path)
+            && (
+                fileManager.fileExists(atPath: shellPackage.path)
+                    || (
+                        fileManager.fileExists(atPath: baseCopy.path)
+                            && fileManager.fileExists(atPath: bridgeScript.path)
+                    )
+            )
     }
 }
 

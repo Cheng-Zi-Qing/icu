@@ -21,8 +21,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let store = try StateStore(paths: paths)
             let sessionController = try WorkSessionController(store: store)
             let assetLocator = PetAssetLocator(appPaths: paths)
+            setenv("ICU_APP_SUPPORT_ROOT", paths.rootURL.path, 1)
             TextCatalog.installShared(try TextCatalog.live(appPaths: paths, repoRootURL: assetLocator.repoRootURL))
-            let generationSettingsStore = GenerationSettingsStore(repoRootURL: assetLocator.repoRootURL)
+            let generationSettingsStore = GenerationSettingsStore(
+                appPaths: paths,
+                repoRootURL: assetLocator.repoRootURL
+            )
             let themeManager = try ThemeManager(appPaths: paths, settingsStore: generationSettingsStore)
             ThemeManager.installShared(themeManager)
             let generationService = ThemeGenerationService(
@@ -43,7 +47,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 speechGenerationService: speechGenerationService,
                 copyOverrideStore: copyOverrideStore
             )
-            let avatarSettingsStore = AvatarSettingsStore(repoRootURL: assetLocator.repoRootURL)
+            let avatarSettingsStore = AvatarSettingsStore(
+                appPaths: paths,
+                repoRootURL: assetLocator.repoRootURL
+            )
             let avatarCatalog = AvatarCatalog(
                 repoRootURL: assetLocator.repoRootURL,
                 appAssetsRootURL: paths.assetsDirectory

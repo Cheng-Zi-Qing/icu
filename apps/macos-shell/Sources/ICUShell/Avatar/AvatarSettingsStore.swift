@@ -1,20 +1,23 @@
 import Foundation
 
 final class AvatarSettingsStore {
+    private let appPaths: AppPaths?
     private let repoRootURL: URL
     private let fileManager: FileManager
 
     init(
+        appPaths: AppPaths? = nil,
         repoRootURL: URL? = PetAssetLocator.inferredRepoRoot(),
         fileManager: FileManager = .default
     ) {
+        self.appPaths = appPaths
         self.repoRootURL = repoRootURL
             ?? URL(fileURLWithPath: fileManager.currentDirectoryPath, isDirectory: true)
         self.fileManager = fileManager
     }
 
     func loadCurrentAvatarID() throws -> String? {
-        guard fileManager.fileExists(atPath: settingsFileURL.path) else {
+        guard let settingsFileURL = resolvedExistingSettingsFileURL() else {
             return nil
         }
 
@@ -43,7 +46,7 @@ final class AvatarSettingsStore {
     }
 
     func loadImageModels() throws -> [BridgeImageModel] {
-        guard fileManager.fileExists(atPath: settingsFileURL.path) else {
+        guard resolvedExistingSettingsFileURL() != nil else {
             return Self.defaultImageModels
         }
 
@@ -70,21 +73,22 @@ final class AvatarSettingsStore {
     }
 
     private func loadRootObject() throws -> [String: Any] {
-        guard fileManager.fileExists(atPath: settingsFileURL.path) else {
+        let candidateURLs = [primarySettingsFileURL, fallbackSettingsFileURL].compactMap { $0 }
+        guard let existingURL = candidateURLs.first(where: { fileManager.fileExists(atPath: $0.path) }) else {
             return [:]
         }
 
-        let data = try Data(contentsOf: settingsFileURL)
+        let data = try Data(contentsOf: existingURL)
         return (try JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
     }
 
     private func saveRootObject(_ rootObject: [String: Any]) throws {
         try fileManager.createDirectory(
-            at: settingsFileURL.deletingLastPathComponent(),
+            at: primarySettingsFileURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
         let data = try JSONSerialization.data(withJSONObject: rootObject, options: [.prettyPrinted, .sortedKeys])
-        try data.write(to: settingsFileURL, options: .atomic)
+        try data.write(to: primarySettingsFileURL, options: .atomic)
     }
 
     private static func makeImageModel(from object: [String: Any]) -> BridgeImageModel? {
@@ -102,9 +106,30 @@ final class AvatarSettingsStore {
         BridgeImageModel(name: "Stable Diffusion XL", url: "stabilityai/stable-diffusion-xl-base-1.0", token: "")
     ]
 
-    private var settingsFileURL: URL {
-        repoRootURL
+    private var primarySettingsFileURL: URL {
+        if let appPaths {
+            return appPaths.configDirectory
+                .appendingPathComponent("settings.json", isDirectory: false)
+        }
+
+        return repoRootURL
             .appendingPathComponent("config", isDirectory: true)
             .appendingPathComponent("settings.json", isDirectory: false)
+    }
+
+    private var fallbackSettingsFileURL: URL? {
+        guard appPaths != nil else {
+            return nil
+        }
+
+        return repoRootURL
+            .appendingPathComponent("config", isDirectory: true)
+            .appendingPathComponent("settings.json", isDirectory: false)
+    }
+
+    private func resolvedExistingSettingsFileURL() -> URL? {
+        [primarySettingsFileURL, fallbackSettingsFileURL]
+            .compactMap { $0 }
+            .first(where: { fileManager.fileExists(atPath: $0.path) })
     }
 }

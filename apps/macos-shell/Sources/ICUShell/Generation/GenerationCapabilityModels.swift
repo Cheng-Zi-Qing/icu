@@ -71,6 +71,7 @@ enum GenerationRouteError: Error, LocalizedError, Equatable {
     case emptyVibe
     case missingCapabilityConfig(String)
     case unsupportedProviderForTheme(GenerationCapabilityProvider)
+    case unsupportedProviderForCapability(String, GenerationCapabilityProvider)
     case invalidBaseURL(String)
     case requestFailed(String)
     case invalidResponse(String)
@@ -85,6 +86,12 @@ enum GenerationRouteError: Error, LocalizedError, Equatable {
             return String(format: TextCatalog.shared.text(.errorMissingCapabilityConfig), capability)
         case let .unsupportedProviderForTheme(provider):
             return String(format: TextCatalog.shared.text(.errorUnsupportedProviderForTheme), provider.rawValue)
+        case let .unsupportedProviderForCapability(capability, provider):
+            return String(
+                format: TextCatalog.shared.text(.errorUnsupportedProviderForCapability),
+                capability,
+                provider.rawValue
+            )
         case let .invalidBaseURL(url):
             return String(format: TextCatalog.shared.text(.errorInvalidBaseURL), url)
         case let .requestFailed(details):

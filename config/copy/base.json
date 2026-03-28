@@ -184,6 +184,7 @@
     "empty_vibe": "Please enter a vibe description before generating a theme.",
     "missing_capability_config": "Generation capability '%@' is not configured.",
     "unsupported_provider_for_theme": "Provider '%@' is not supported for theme generation.",
+    "unsupported_provider_for_capability": "Capability '%@' does not support provider '%@'.",
     "invalid_base_url": "Invalid generation endpoint URL: %@",
     "request_failed": "Generation request failed: %@",
     "invalid_response": "Generation service returned invalid JSON: %@",

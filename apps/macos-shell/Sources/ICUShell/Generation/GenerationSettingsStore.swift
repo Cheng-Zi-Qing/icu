@@ -1,13 +1,16 @@
 import Foundation
 
 final class GenerationSettingsStore {
+    private let appPaths: AppPaths?
     private let repoRootURL: URL
     private let fileManager: FileManager
 
     init(
+        appPaths: AppPaths? = nil,
         repoRootURL: URL? = PetAssetLocator.inferredRepoRoot(),
         fileManager: FileManager = .default
     ) {
+        self.appPaths = appPaths
         self.repoRootURL = repoRootURL
             ?? URL(fileURLWithPath: fileManager.currentDirectoryPath, isDirectory: true)
         self.fileManager = fileManager
@@ -130,25 +133,41 @@ final class GenerationSettingsStore {
     }
 
     private func loadRootObject() throws -> [String: Any] {
-        guard fileManager.fileExists(atPath: settingsFileURL.path) else {
+        let candidateURLs = [primarySettingsFileURL, fallbackSettingsFileURL].compactMap { $0 }
+        guard let existingURL = candidateURLs.first(where: { fileManager.fileExists(atPath: $0.path) }) else {
             return [:]
         }
 
-        let data = try Data(contentsOf: settingsFileURL)
+        let data = try Data(contentsOf: existingURL)
         return (try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any]) ?? [:]
     }
 
     private func saveRootObject(_ rootObject: [String: Any]) throws {
         try fileManager.createDirectory(
-            at: settingsFileURL.deletingLastPathComponent(),
+            at: primarySettingsFileURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
         let data = try JSONSerialization.data(withJSONObject: rootObject, options: [.prettyPrinted, .sortedKeys])
-        try data.write(to: settingsFileURL, options: .atomic)
+        try data.write(to: primarySettingsFileURL, options: .atomic)
     }
 
-    private var settingsFileURL: URL {
-        repoRootURL
+    private var primarySettingsFileURL: URL {
+        if let appPaths {
+            return appPaths.configDirectory
+                .appendingPathComponent("settings.json", isDirectory: false)
+        }
+
+        return repoRootURL
+            .appendingPathComponent("config", isDirectory: true)
+            .appendingPathComponent("settings.json", isDirectory: false)
+    }
+
+    private var fallbackSettingsFileURL: URL? {
+        guard appPaths != nil else {
+            return nil
+        }
+
+        return repoRootURL
             .appendingPathComponent("config", isDirectory: true)
             .appendingPathComponent("settings.json", isDirectory: false)
     }
