@@ -29,13 +29,17 @@ make_stub_app() {
   local binary="$app_root/Contents/MacOS/ICUShell"
 
   mkdir -p "$(dirname "$binary")"
-  cat >"$binary" <<'EOF'
+cat >"$binary" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 mode="${ICU_TEST_STUB_MODE:-success}"
-echo "[app_paths] ICU_APP_SUPPORT_ROOT=${ICU_APP_SUPPORT_ROOT:-}"
 
-if [[ "$mode" == "success" ]]; then
+if [[ "$mode" != "no-evidence" ]]; then
+  echo "[app_paths] ICU_APP_SUPPORT_ROOT=${ICU_APP_SUPPORT_ROOT:-}"
+  echo "[runtime_smoke] launched_binary=$0"
+fi
+
+if [[ "$mode" == "success" || "$mode" == "no-evidence" ]]; then
   mkdir -p "${ICU_APP_SUPPORT_ROOT:-}/logs"
   echo "runtime-ok" >"${ICU_APP_SUPPORT_ROOT:-}/runtime.marker"
 fi
@@ -47,7 +51,7 @@ EOF
 }
 
 run_success_case() {
-  local temp_dir output temp_root app_support_root output_path
+  local temp_dir output temp_root app_support_root output_path stdout_log
 
   temp_dir="$(mktemp -d)"
   trap 'rm -rf "$temp_dir"' RETURN
@@ -66,11 +70,40 @@ run_success_case() {
   bash "$SMOKE_SCRIPT" >"$output_path" 2>&1
 
   output="$(cat "$output_path")"
+  stdout_log="$temp_root/stdout.log"
   assert_contains "$output" "[smoke_test_macos_app_runtime] PASS"
   assert_exists "$temp_root/run/ICU.app/Contents/MacOS/ICUShell"
   assert_exists "$temp_root/stdout.log"
   assert_exists "$temp_root/stderr.log"
   assert_exists "$app_support_root/runtime.marker"
+  assert_contains "$(cat "$stdout_log")" "[app_paths] ICU_APP_SUPPORT_ROOT=$app_support_root"
+  assert_contains "$(cat "$stdout_log")" "[runtime_smoke] launched_binary=$temp_root/run/ICU.app/Contents/MacOS/ICUShell"
+}
+
+run_missing_runtime_evidence_case() {
+  local temp_dir output_path status
+
+  temp_dir="$(mktemp -d)"
+  trap 'rm -rf "$temp_dir"' RETURN
+
+  make_stub_app "$temp_dir/ICU.app" "no-evidence"
+  output_path="$temp_dir/output.log"
+
+  set +e
+  ICU_TEST_STUB_MODE="no-evidence" \
+  ICU_RUNTIME_SMOKE_APP_BUNDLE_PATH="$temp_dir/ICU.app" \
+  ICU_RUNTIME_SMOKE_APP_SUPPORT_ROOT="$temp_dir/app-support" \
+  ICU_RUNTIME_SMOKE_TIMEOUT_SECONDS="1" \
+  ICU_RUNTIME_SMOKE_TEMP_ROOT="$temp_dir/smoke-temp" \
+  ICU_RUNTIME_SMOKE_KEEP_TEMP="1" \
+  bash "$SMOKE_SCRIPT" >"$output_path" 2>&1
+  status=$?
+  set -e
+
+  if [[ "$status" -eq 0 ]]; then
+    fail "expected missing runtime evidence case to fail"
+  fi
+  assert_contains "$(cat "$output_path")" "[smoke_test_macos_app_runtime] FAIL: timeout"
 }
 
 run_timeout_case() {
@@ -138,6 +171,7 @@ if [[ ! -f "$SMOKE_SCRIPT" ]]; then
 fi
 
 run_success_case
+run_missing_runtime_evidence_case
 run_timeout_case
 run_missing_bundle_packages_case
 

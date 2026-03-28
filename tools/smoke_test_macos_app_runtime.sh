@@ -49,11 +49,13 @@ launch_and_wait() {
   local source_app="$1"
   local copied_binary
   local start_time now elapsed
+  local expected_app_paths_line
 
   mkdir -p "$RUN_DIR"
   cp -R "$source_app" "$COPIED_APP"
   copied_binary="$COPIED_APP/Contents/MacOS/ICUShell"
   [[ -x "$copied_binary" ]] || fail "missing executable binary: $copied_binary"
+  expected_app_paths_line="[app_paths] ICU_APP_SUPPORT_ROOT=$APP_SUPPORT_ROOT"
 
   (
     cd "$RUN_DIR"
@@ -66,7 +68,7 @@ launch_and_wait() {
 
   start_time="$(date +%s)"
   while true; do
-    if [[ -d "$APP_SUPPORT_ROOT" ]]; then
+    if [[ -d "$APP_SUPPORT_ROOT" ]] && grep -Fq "$expected_app_paths_line" "$STDOUT_LOG" "$STDERR_LOG" 2>/dev/null; then
       echo "[smoke_test_macos_app_runtime] PASS"
       echo "[smoke_test_macos_app_runtime] logs: stdout=$STDOUT_LOG stderr=$STDERR_LOG"
       return 0
@@ -79,7 +81,7 @@ launch_and_wait() {
     now="$(date +%s)"
     elapsed="$((now - start_time))"
     if (( elapsed >= TIMEOUT_SECONDS )); then
-      fail "timeout waiting for stable state after ${TIMEOUT_SECONDS}s (see logs: $STDOUT_LOG, $STDERR_LOG)"
+      fail "timeout waiting for stable state and runtime log evidence after ${TIMEOUT_SECONDS}s (see logs: $STDOUT_LOG, $STDERR_LOG)"
     fi
 
     sleep "$POLL_INTERVAL_SECONDS"
