@@ -22,8 +22,24 @@ fail() {
 }
 
 cleanup() {
+  local i
+
   if [[ -n "$APP_PID" ]] && kill -0 "$APP_PID" >/dev/null 2>&1; then
     kill "$APP_PID" >/dev/null 2>&1 || true
+
+    i=0
+    while kill -0 "$APP_PID" >/dev/null 2>&1; do
+      if (( i >= 20 )); then
+        break
+      fi
+      sleep 0.1
+      i="$((i + 1))"
+    done
+
+    if kill -0 "$APP_PID" >/dev/null 2>&1; then
+      kill -KILL "$APP_PID" >/dev/null 2>&1 || true
+    fi
+
     wait "$APP_PID" 2>/dev/null || true
   fi
 
@@ -33,7 +49,10 @@ cleanup() {
 }
 
 resolve_source_app() {
-  if [[ -n "$APP_BUNDLE_PATH" && -d "$APP_BUNDLE_PATH" ]]; then
+  if [[ -n "$APP_BUNDLE_PATH" ]]; then
+    if [[ "$APP_BUNDLE_PATH" != *.app || ! -d "$APP_BUNDLE_PATH" ]]; then
+      fail "explicit app bundle path is invalid: $APP_BUNDLE_PATH"
+    fi
     printf '%s\n' "$APP_BUNDLE_PATH"
     return 0
   fi
@@ -49,26 +68,27 @@ launch_and_wait() {
   local source_app="$1"
   local copied_binary
   local start_time now elapsed
+  local expected_mode_line
   local expected_app_paths_line
 
   mkdir -p "$RUN_DIR"
   cp -R "$source_app" "$COPIED_APP"
   copied_binary="$COPIED_APP/Contents/MacOS/ICUShell"
   [[ -x "$copied_binary" ]] || fail "missing executable binary: $copied_binary"
+  expected_mode_line="[app_paths] mode=bundle"
   expected_app_paths_line="[app_paths] app_support_root=$APP_SUPPORT_ROOT"
 
-  (
-    cd "$RUN_DIR"
-    ICU_APP_SUPPORT_ROOT="$APP_SUPPORT_ROOT" \
-      "$copied_binary" >"$STDOUT_LOG" 2>"$STDERR_LOG" &
-    echo "$!" >"$TEMP_ROOT/app.pid"
-  )
-  APP_PID="$(cat "$TEMP_ROOT/app.pid")"
-  rm -f "$TEMP_ROOT/app.pid"
+  pushd "$RUN_DIR" >/dev/null
+  ICU_APP_SUPPORT_ROOT="$APP_SUPPORT_ROOT" \
+    "$copied_binary" >"$STDOUT_LOG" 2>"$STDERR_LOG" &
+  APP_PID="$!"
+  popd >/dev/null
 
   start_time="$(date +%s)"
   while true; do
-    if [[ -d "$APP_SUPPORT_ROOT" ]] && grep -Fq "$expected_app_paths_line" "$STDOUT_LOG" "$STDERR_LOG" 2>/dev/null; then
+    if [[ -d "$APP_SUPPORT_ROOT" ]] \
+      && grep -Fq "$expected_mode_line" "$STDOUT_LOG" "$STDERR_LOG" 2>/dev/null \
+      && grep -Fq "$expected_app_paths_line" "$STDOUT_LOG" "$STDERR_LOG" 2>/dev/null; then
       echo "[smoke_test_macos_app_runtime] PASS"
       echo "[smoke_test_macos_app_runtime] logs: stdout=$STDOUT_LOG stderr=$STDERR_LOG"
       return 0
