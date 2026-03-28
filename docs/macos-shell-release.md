@@ -52,14 +52,29 @@ Optional release smoke check:
 VERIFY_MACOS_SHELL_PACKAGE_CHECK=1 ./icu --verify
 ```
 
+Release verification with detached runtime smoke check:
+
+```bash
+VERIFY_MACOS_SHELL_PACKAGE_CHECK=1 \
+VERIFY_MACOS_SHELL_RUNTIME_SMOKE_CHECK=1 \
+./icu --verify
+```
+
 This runs:
 
 - `swift build`
 - manual runtime checks
 - `swift test` only when full Xcode is active
 - optional `.app` packaging + bundle structure validation
+- optional detached app runtime smoke check
 
 If the machine only has Command Line Tools, `swift test` is skipped explicitly. That is the supported lightweight mode.
+
+Verification boundaries:
+
+- Bundle structure check proves packaging output shape (bundle layout, metadata, resource placement).
+- Detached runtime smoke check proves the copied `.app` can launch from a detached run directory and initialize runtime paths/app-support root.
+- Signing, notarization, and Gatekeeper acceptance are not covered by `./icu --verify`; those remain the next release phase.
 
 ## Signing
 
@@ -96,7 +111,9 @@ Template-driven final release commands:
 set -a
 source tools/macos_shell_release.env
 set +a
-VERIFY_MACOS_SHELL_PACKAGE_CHECK=1 ./icu --verify
+VERIFY_MACOS_SHELL_PACKAGE_CHECK=1 \
+VERIFY_MACOS_SHELL_RUNTIME_SMOKE_CHECK=1 \
+./icu --verify
 ./icu --package-app
 ```
 
