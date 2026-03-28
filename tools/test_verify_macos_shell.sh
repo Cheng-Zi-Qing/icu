@@ -104,11 +104,16 @@ EOF
 make_stub_runtime_smoke() {
   local path="$1"
   local log_file="$2"
+  local mode="${3:-ok}"
 
-  cat >"$path" <<'EOF'
+  cat >"$path" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
-printf 'runtime-smoke %s\n' "$*" >>"$VERIFY_LOG_FILE"
+printf 'runtime-smoke %s\n' "\$*" >>"\$VERIFY_LOG_FILE"
+if [[ "$mode" == "fail" ]]; then
+  echo "runtime smoke failed" >&2
+  exit 23
+fi
 echo "runtime smoke ok"
 EOF
   chmod +x "$path"
@@ -156,7 +161,7 @@ run_case() {
   make_stub_xcodebuild "$stub_xcodebuild" "$mode"
   make_stub_package "$stub_package" "$log_file"
   make_stub_app_check "$stub_app_check" "$log_file"
-  make_stub_runtime_smoke "$stub_runtime_smoke" "$log_file"
+  make_stub_runtime_smoke "$stub_runtime_smoke" "$log_file" "ok"
 
   if [[ ! -f "$VERIFIER" ]]; then
     fail "missing verifier script: $VERIFIER"
@@ -204,9 +209,61 @@ run_case() {
   fi
 }
 
+run_case_expect_failure() {
+  local mode="$1"
+  local package_check_enabled="${2:-0}"
+  local runtime_smoke_enabled="${3:-0}"
+  local temp_dir output_file log_file stub_swift stub_check stub_xcodebuild stub_package stub_app_check stub_runtime_smoke output
+
+  temp_dir="$(mktemp -d)"
+  output_file="$temp_dir/output.log"
+  log_file="$temp_dir/verify.log"
+  stub_swift="$temp_dir/swift"
+  stub_check="$temp_dir/check_native_shell.sh"
+  stub_xcodebuild="$temp_dir/xcodebuild"
+  stub_package="$temp_dir/package_macos_shell.sh"
+  stub_app_check="$temp_dir/check_macos_app_bundle.sh"
+  stub_runtime_smoke="$temp_dir/smoke_test_macos_app_runtime.sh"
+
+  trap 'rm -rf "$temp_dir"' RETURN
+
+  make_stub_swift "$stub_swift" "$log_file"
+  make_stub_check "$stub_check" "$log_file"
+  make_stub_xcodebuild "$stub_xcodebuild" "$mode"
+  make_stub_package "$stub_package" "$log_file"
+  make_stub_app_check "$stub_app_check" "$log_file"
+  make_stub_runtime_smoke "$stub_runtime_smoke" "$log_file" "fail"
+
+  if [[ ! -f "$VERIFIER" ]]; then
+    fail "missing verifier script: $VERIFIER"
+  fi
+
+  if VERIFY_MACOS_SHELL_SWIFT_BIN="$stub_swift" \
+    VERIFY_MACOS_SHELL_XCODEBUILD_BIN="$stub_xcodebuild" \
+    VERIFY_MACOS_SHELL_CHECK_SCRIPT="$stub_check" \
+    VERIFY_MACOS_SHELL_PACKAGE_SCRIPT="$stub_package" \
+    VERIFY_MACOS_SHELL_APP_CHECK_SCRIPT="$stub_app_check" \
+    VERIFY_MACOS_SHELL_RUNTIME_SMOKE_SCRIPT="$stub_runtime_smoke" \
+    VERIFY_MACOS_SHELL_PACKAGE_CHECK="$package_check_enabled" \
+    VERIFY_MACOS_SHELL_RUNTIME_SMOKE_CHECK="$runtime_smoke_enabled" \
+    bash "$VERIFIER" >"$output_file" 2>&1; then
+    fail "expected verifier to fail when runtime smoke check fails"
+  fi
+
+  output="$(cat "$output_file")"
+  assert_contains "$output" "[verify_macos_shell] Running detached app runtime smoke check..."
+  assert_contains "$(cat "$log_file")" "runtime-smoke /tmp/ICU.app"
+  assert_line_order "$log_file" "app-check /tmp/ICU.app" "runtime-smoke /tmp/ICU.app"
+
+  if [[ "$output" == *"[verify_macos_shell] PASS"* ]]; then
+    fail "verifier should not print PASS when runtime smoke check fails"
+  fi
+}
+
 run_case "clt-only"
 run_case "xcode-enabled"
 run_case "clt-only" "1"
 run_case "clt-only" "1" "1"
+run_case_expect_failure "clt-only" "1" "1"
 
 echo "[test_verify_macos_shell] PASS"
