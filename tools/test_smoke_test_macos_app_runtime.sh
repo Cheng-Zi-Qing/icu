@@ -61,9 +61,14 @@ if [[ -n "${ICU_TEST_PID_FILE:-}" ]]; then
   echo "$$" >"$ICU_TEST_PID_FILE"
 fi
 
-if [[ "$mode" == "success" || "$mode" == "no-evidence" || "$mode" == "repo-mode" ]]; then
+if [[ "$mode" == "success" || "$mode" == "no-evidence" || "$mode" == "repo-mode" || "$mode" == "crash-after-evidence" ]]; then
   mkdir -p "${ICU_APP_SUPPORT_ROOT:-}/logs"
   echo "runtime-ok" >"${ICU_APP_SUPPORT_ROOT:-}/runtime.marker"
+fi
+
+if [[ "$mode" == "crash-after-evidence" ]]; then
+  sleep 0.05
+  exit 1
 fi
 
 sleep 30
@@ -256,6 +261,76 @@ EOF
   assert_contains "$(cat "$package_log")" "packager-called"
 }
 
+run_explicit_temp_root_is_preserved_case() {
+  local temp_dir output_path temp_root
+
+  temp_dir="$(mktemp -d)"
+  trap 'rm -rf "$temp_dir"' RETURN
+
+  make_stub_app "$temp_dir/ICU.app" "success"
+  temp_root="$temp_dir/custom-temp-root"
+  output_path="$temp_dir/output.log"
+
+  ICU_TEST_STUB_MODE="success" \
+  ICU_RUNTIME_SMOKE_APP_BUNDLE_PATH="$temp_dir/ICU.app" \
+  ICU_RUNTIME_SMOKE_APP_SUPPORT_ROOT="$temp_dir/app-support" \
+  ICU_RUNTIME_SMOKE_TIMEOUT_SECONDS="2" \
+  ICU_RUNTIME_SMOKE_TEMP_ROOT="$temp_root" \
+  bash "$SMOKE_SCRIPT" >"$output_path" 2>&1
+
+  assert_exists "$temp_root"
+  assert_exists "$temp_root/stdout.log"
+  assert_contains "$(cat "$output_path")" "[smoke_test_macos_app_runtime] PASS"
+}
+
+run_directory_package_script_case() {
+  local temp_dir output_path status
+
+  temp_dir="$(mktemp -d)"
+  trap 'rm -rf "$temp_dir"' RETURN
+  output_path="$temp_dir/output.log"
+
+  set +e
+  ICU_RUNTIME_SMOKE_PACKAGE_SCRIPT="$temp_dir" \
+  ICU_RUNTIME_SMOKE_TIMEOUT_SECONDS="1" \
+  ICU_RUNTIME_SMOKE_TEMP_ROOT="$temp_dir/smoke-temp" \
+  ICU_RUNTIME_SMOKE_KEEP_TEMP="1" \
+  bash "$SMOKE_SCRIPT" >"$output_path" 2>&1
+  status=$?
+  set -e
+
+  if [[ "$status" -eq 0 ]]; then
+    fail "expected directory package script case to fail"
+  fi
+  assert_contains "$(cat "$output_path")" "[smoke_test_macos_app_runtime] FAIL: package script not found"
+}
+
+run_crash_after_evidence_case() {
+  local temp_dir output_path status
+
+  temp_dir="$(mktemp -d)"
+  trap 'rm -rf "$temp_dir"' RETURN
+
+  make_stub_app "$temp_dir/ICU.app" "crash-after-evidence"
+  output_path="$temp_dir/output.log"
+
+  set +e
+  ICU_TEST_STUB_MODE="crash-after-evidence" \
+  ICU_RUNTIME_SMOKE_APP_BUNDLE_PATH="$temp_dir/ICU.app" \
+  ICU_RUNTIME_SMOKE_APP_SUPPORT_ROOT="$temp_dir/app-support" \
+  ICU_RUNTIME_SMOKE_TIMEOUT_SECONDS="2" \
+  ICU_RUNTIME_SMOKE_TEMP_ROOT="$temp_dir/smoke-temp" \
+  ICU_RUNTIME_SMOKE_KEEP_TEMP="1" \
+  bash "$SMOKE_SCRIPT" >"$output_path" 2>&1
+  status=$?
+  set -e
+
+  if [[ "$status" -eq 0 ]]; then
+    fail "expected crash-after-evidence case to fail"
+  fi
+  assert_contains "$(cat "$output_path")" "[smoke_test_macos_app_runtime] FAIL: app exited"
+}
+
 if [[ ! -f "$SMOKE_SCRIPT" ]]; then
   fail "missing smoke script: $SMOKE_SCRIPT"
 fi
@@ -266,5 +341,8 @@ run_repo_mode_case
 run_timeout_case
 run_invalid_explicit_bundle_case
 run_missing_bundle_packages_case
+run_explicit_temp_root_is_preserved_case
+run_directory_package_script_case
+run_crash_after_evidence_case
 
 echo "[test_smoke_test_macos_app_runtime] PASS"

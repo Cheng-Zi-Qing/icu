@@ -6,9 +6,11 @@ APP_BUNDLE_PATH="${1:-${ICU_RUNTIME_SMOKE_APP_BUNDLE_PATH:-}}"
 PACKAGE_SCRIPT="${ICU_RUNTIME_SMOKE_PACKAGE_SCRIPT:-$ROOT_DIR/tools/package_macos_shell.sh}"
 TIMEOUT_SECONDS="${ICU_RUNTIME_SMOKE_TIMEOUT_SECONDS:-10}"
 POLL_INTERVAL_SECONDS="${ICU_RUNTIME_SMOKE_POLL_INTERVAL_SECONDS:-0.1}"
+STABILITY_GRACE_SECONDS="${ICU_RUNTIME_SMOKE_STABILITY_GRACE_SECONDS:-0.2}"
 KEEP_TEMP="${ICU_RUNTIME_SMOKE_KEEP_TEMP:-0}"
-TEMP_ROOT="${ICU_RUNTIME_SMOKE_TEMP_ROOT:-$(mktemp -d)}"
+TEMP_ROOT="${ICU_RUNTIME_SMOKE_TEMP_ROOT:-}"
 APP_SUPPORT_ROOT="${ICU_RUNTIME_SMOKE_APP_SUPPORT_ROOT:-$TEMP_ROOT/app-support}"
+TEMP_ROOT_IS_EPHEMERAL=0
 
 RUN_DIR="$TEMP_ROOT/run"
 COPIED_APP="$RUN_DIR/ICU.app"
@@ -19,6 +21,21 @@ APP_PID=""
 fail() {
   echo "[smoke_test_macos_app_runtime] FAIL: $*" >&2
   exit 1
+}
+
+initialize_temp_root() {
+  if [[ -n "$TEMP_ROOT" ]]; then
+    mkdir -p "$TEMP_ROOT"
+    return 0
+  fi
+
+  TEMP_ROOT="$(mktemp -d)"
+  APP_SUPPORT_ROOT="${ICU_RUNTIME_SMOKE_APP_SUPPORT_ROOT:-$TEMP_ROOT/app-support}"
+  RUN_DIR="$TEMP_ROOT/run"
+  COPIED_APP="$RUN_DIR/ICU.app"
+  STDOUT_LOG="$TEMP_ROOT/stdout.log"
+  STDERR_LOG="$TEMP_ROOT/stderr.log"
+  TEMP_ROOT_IS_EPHEMERAL=1
 }
 
 cleanup() {
@@ -43,7 +60,7 @@ cleanup() {
     wait "$APP_PID" 2>/dev/null || true
   fi
 
-  if [[ "$KEEP_TEMP" != "1" ]]; then
+  if [[ "$KEEP_TEMP" != "1" && "$TEMP_ROOT_IS_EPHEMERAL" == "1" ]]; then
     rm -rf "$TEMP_ROOT"
   fi
 }
@@ -57,11 +74,37 @@ resolve_source_app() {
     return 0
   fi
 
-  [[ -x "$PACKAGE_SCRIPT" || -f "$PACKAGE_SCRIPT" ]] || fail "package script not found: $PACKAGE_SCRIPT"
+  [[ -f "$PACKAGE_SCRIPT" ]] || fail "package script not found: $PACKAGE_SCRIPT"
   echo "[smoke_test_macos_app_runtime] App bundle not provided; invoking package script..." >&2
   APP_BUNDLE_PATH="$(bash "$PACKAGE_SCRIPT")"
   [[ -d "$APP_BUNDLE_PATH" ]] || fail "package script did not produce a valid .app path: $APP_BUNDLE_PATH"
   printf '%s\n' "$APP_BUNDLE_PATH"
+}
+
+has_runtime_evidence() {
+  local expected_mode_line="$1"
+  local expected_app_paths_line="$2"
+
+  [[ -d "$APP_SUPPORT_ROOT" ]] \
+    && grep -Fq "$expected_mode_line" "$STDOUT_LOG" "$STDERR_LOG" 2>/dev/null \
+    && grep -Fq "$expected_app_paths_line" "$STDOUT_LOG" "$STDERR_LOG" 2>/dev/null
+}
+
+confirm_stable_state() {
+  local expected_mode_line="$1"
+  local expected_app_paths_line="$2"
+
+  if ! kill -0 "$APP_PID" >/dev/null 2>&1; then
+    fail "app exited before reaching stable state (see logs: $STDOUT_LOG, $STDERR_LOG)"
+  fi
+
+  sleep "$STABILITY_GRACE_SECONDS"
+
+  if ! kill -0 "$APP_PID" >/dev/null 2>&1; then
+    fail "app exited before reaching stable state (see logs: $STDOUT_LOG, $STDERR_LOG)"
+  fi
+
+  has_runtime_evidence "$expected_mode_line" "$expected_app_paths_line"
 }
 
 launch_and_wait() {
@@ -86,9 +129,8 @@ launch_and_wait() {
 
   start_time="$(date +%s)"
   while true; do
-    if [[ -d "$APP_SUPPORT_ROOT" ]] \
-      && grep -Fq "$expected_mode_line" "$STDOUT_LOG" "$STDERR_LOG" 2>/dev/null \
-      && grep -Fq "$expected_app_paths_line" "$STDOUT_LOG" "$STDERR_LOG" 2>/dev/null; then
+    if has_runtime_evidence "$expected_mode_line" "$expected_app_paths_line" \
+      && confirm_stable_state "$expected_mode_line" "$expected_app_paths_line"; then
       echo "[smoke_test_macos_app_runtime] PASS"
       echo "[smoke_test_macos_app_runtime] logs: stdout=$STDOUT_LOG stderr=$STDERR_LOG"
       return 0
@@ -111,6 +153,7 @@ launch_and_wait() {
 main() {
   local source_app
 
+  initialize_temp_root
   trap cleanup EXIT
   source_app="$(resolve_source_app)"
   launch_and_wait "$source_app"
