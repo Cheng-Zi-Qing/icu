@@ -18,9 +18,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         do {
             let paths = try AppPaths.live()
+            let assetLocator = PetAssetLocator(appPaths: paths)
+            for line in RuntimeLaunchDiagnostics.lines(
+                appPaths: paths,
+                repoRootURL: assetLocator.repoRootURL,
+                bundleResourceURL: Bundle.main.resourceURL
+            ) {
+                print(line)
+            }
+
             let store = try StateStore(paths: paths)
             let sessionController = try WorkSessionController(store: store)
-            let assetLocator = PetAssetLocator(appPaths: paths)
             setenv("ICU_APP_SUPPORT_ROOT", paths.rootURL.path, 1)
             TextCatalog.installShared(try TextCatalog.live(appPaths: paths, repoRootURL: assetLocator.repoRootURL))
             let generationSettingsStore = GenerationSettingsStore(
@@ -102,14 +110,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.petWindowController?.setPetID(avatarID)
             }
             petWindowController?.showWindow(nil)
-
-            for line in RuntimeLaunchDiagnostics.lines(
-                appPaths: paths,
-                repoRootURL: assetLocator.repoRootURL,
-                bundleResourceURL: Bundle.main.resourceURL
-            ) {
-                print(line)
-            }
         } catch {
             NSLog("[ICUShell] failed to bootstrap runtime: \(error.localizedDescription)")
             NSApplication.shared.terminate(nil)
