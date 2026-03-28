@@ -20,6 +20,24 @@ Check the bundle structure:
 bash tools/check_macos_app_bundle.sh dist/ICU.app
 ```
 
+## Release Template
+
+A shell-ready environment template is available at:
+
+```bash
+tools/macos_shell_release.env.example
+```
+
+Recommended setup:
+
+```bash
+cp tools/macos_shell_release.env.example tools/macos_shell_release.env
+$EDITOR tools/macos_shell_release.env
+set -a
+source tools/macos_shell_release.env
+set +a
+```
+
 ## Verification
 
 Development verification:
@@ -52,6 +70,15 @@ ICU_PACKAGE_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
 ./icu --package-app
 ```
 
+Using the template file:
+
+```bash
+set -a
+source tools/macos_shell_release.env
+set +a
+./icu --package-app
+```
+
 ## Notarization
 
 If `notarytool` keychain profile is configured:
@@ -62,6 +89,18 @@ ICU_PACKAGE_NOTARIZE=1 \
 ICU_NOTARYTOOL_PROFILE="icu-notary" \
 ./icu --package-app
 ```
+
+Template-driven final release commands:
+
+```bash
+set -a
+source tools/macos_shell_release.env
+set +a
+VERIFY_MACOS_SHELL_PACKAGE_CHECK=1 ./icu --verify
+./icu --package-app
+```
+
+If notarization is enabled in the env file, the second command will package, sign, submit, wait, and staple in one run.
 
 Notes:
 

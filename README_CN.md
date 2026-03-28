@@ -143,6 +143,12 @@ bash tools/run_macos_shell.sh
 docs/macos-shell-release.md
 ```
 
+发布环境变量模板：
+
+```bash
+tools/macos_shell_release.env.example
+```
+
 启动后建议检查：
 - 右键桌宠，确认至少能看到 `开始工作 / 进入专注 / 暂离 / 回来工作 / 下班 / 更换形象 / 退出`
 - 打开 `菜单栏 -> 更换形象`，确认会出现 Swift 版形象选择器

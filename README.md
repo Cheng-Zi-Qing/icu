@@ -143,6 +143,12 @@ For packaging, signing, and notarization notes, see:
 docs/macos-shell-release.md
 ```
 
+Release env template:
+
+```bash
+tools/macos_shell_release.env.example
+```
+
 Useful local checks after launch:
 - right-click the pet to verify `开始工作 / 进入专注 / 暂离 / 回来工作 / 下班 / 更换形象 / 退出`
 - open `Menu Bar -> Change Avatar` and confirm the Swift selector appears
