@@ -7,7 +7,15 @@ struct AppPaths {
         self.rootURL = rootURL
     }
 
-    static func live(fileManager: FileManager = .default) throws -> AppPaths {
+    static func live(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        fileManager: FileManager = .default
+    ) throws -> AppPaths {
+        if let overrideRoot = environment["ICU_APP_SUPPORT_ROOT"]?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !overrideRoot.isEmpty {
+            return AppPaths(rootURL: URL(fileURLWithPath: overrideRoot, isDirectory: true))
+        }
+
         guard let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
             throw CocoaError(.fileNoSuchFile)
         }

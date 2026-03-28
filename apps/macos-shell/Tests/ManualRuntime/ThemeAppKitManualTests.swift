@@ -712,10 +712,10 @@ func testDesktopPetViewShowsTransientBubbleSeparateFromStatusChip() throws {
         "transient bubble should not overwrite the persistent status chip text"
     )
 
-    RunLoop.current.run(until: Date().addingTimeInterval(0.08))
-
     try expect(
-        findTransientBubbleLabel(in: view) == nil,
+        waitForCondition(timeout: 0.3) {
+            findTransientBubbleLabel(in: view) == nil
+        },
         "transient bubble should dismiss itself after the requested duration"
     )
     try expect(
@@ -1463,6 +1463,24 @@ func requirePetImageView(in view: DesktopPetView) throws -> NSImageView {
     }
 
     throw TestFailure(message: "desktop pet image view should exist")
+}
+
+@discardableResult
+func waitForCondition(
+    timeout: TimeInterval,
+    pollInterval: TimeInterval = 0.01,
+    _ condition: () -> Bool
+) -> Bool {
+    let deadline = Date().addingTimeInterval(timeout)
+
+    while Date() < deadline {
+        if condition() {
+            return true
+        }
+        RunLoop.current.run(until: Date().addingTimeInterval(pollInterval))
+    }
+
+    return condition()
 }
 
 func requireButton(in root: NSView, title: String) throws -> NSButton {

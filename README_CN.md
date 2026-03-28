@@ -123,6 +123,19 @@ bash tools/verify_macos_shell.sh
 VERIFY_MACOS_SHELL_PACKAGE_CHECK=1 ./icu --verify
 ```
 
+如果要同时启用两层 release 校验（bundle 结构 + detached runtime smoke），运行：
+
+```bash
+VERIFY_MACOS_SHELL_PACKAGE_CHECK=1 \
+VERIFY_MACOS_SHELL_RUNTIME_SMOKE_CHECK=1 \
+./icu --verify
+```
+
+校验边界说明：
+- bundle 结构检查用于验证 `.app` 打包结构与资源布局是否正确
+- detached runtime smoke 用于验证复制后的 `.app` 能否在 detached 目录启动并完成 runtime 路径初始化
+- 签名、notarization、Gatekeeper 验证不在 `./icu --verify` 范围内，属于后续发布阶段
+
 如果要本地启动原生 shell，运行：
 
 ```bash

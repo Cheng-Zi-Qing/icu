@@ -123,6 +123,19 @@ To include a release-bundle smoke check in verification:
 VERIFY_MACOS_SHELL_PACKAGE_CHECK=1 ./icu --verify
 ```
 
+To include both release checks (bundle structure + detached runtime smoke):
+
+```bash
+VERIFY_MACOS_SHELL_PACKAGE_CHECK=1 \
+VERIFY_MACOS_SHELL_RUNTIME_SMOKE_CHECK=1 \
+./icu --verify
+```
+
+Check boundaries:
+- bundle structure check validates `.app` packaging layout and expected resources
+- detached runtime smoke check validates copied app launch and runtime path initialization in detached mode
+- signing, notarization, and Gatekeeper validation are a later release phase and are not covered by `./icu --verify`
+
 To launch the native shell locally:
 
 ```bash
