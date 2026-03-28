@@ -17,10 +17,11 @@ func testAppPathsLivePrefersICUAppSupportRootOverride() throws {
 
 func testRuntimeLaunchDiagnosticsIncludeBundleAndAppSupportPaths() throws {
     let appPaths = AppPaths(rootURL: URL(fileURLWithPath: "/tmp/ICU", isDirectory: true))
+    let bundleResourcesURL = URL(fileURLWithPath: "/tmp/ICU.app/Contents/Resources", isDirectory: true)
     let lines = RuntimeLaunchDiagnostics.lines(
         appPaths: appPaths,
-        repoRootURL: URL(fileURLWithPath: "/tmp/repo", isDirectory: true),
-        bundleResourceURL: URL(fileURLWithPath: "/tmp/ICU.app/Contents/Resources", isDirectory: true)
+        repoRootURL: bundleResourcesURL.appendingPathComponent("repo", isDirectory: true),
+        bundleResourceURL: bundleResourcesURL
     )
 
     try expect(
@@ -28,11 +29,25 @@ func testRuntimeLaunchDiagnosticsIncludeBundleAndAppSupportPaths() throws {
         "diagnostics should include app support root"
     )
     try expect(
-        lines.contains { $0.contains("[app_paths] repo_root=/tmp/repo") },
+        lines.contains { $0.contains("[app_paths] repo_root=/tmp/ICU.app/Contents/Resources/repo") },
         "diagnostics should include repo root"
     )
     try expect(
         lines.contains { $0.contains("[app_paths] mode=bundle") },
         "diagnostics should include runtime mode"
+    )
+}
+
+func testRuntimeLaunchDiagnosticsUsesRepoModeWhenRepoRootIsOutsideBundleResources() throws {
+    let appPaths = AppPaths(rootURL: URL(fileURLWithPath: "/tmp/ICU", isDirectory: true))
+    let lines = RuntimeLaunchDiagnostics.lines(
+        appPaths: appPaths,
+        repoRootURL: URL(fileURLWithPath: "/Users/me/work/icu", isDirectory: true),
+        bundleResourceURL: URL(fileURLWithPath: "/tmp/ICU.app/Contents/Resources", isDirectory: true)
+    )
+
+    try expect(
+        lines.contains { $0.contains("[app_paths] mode=repo") },
+        "diagnostics should classify non-bundled repo roots as repo mode"
     )
 }

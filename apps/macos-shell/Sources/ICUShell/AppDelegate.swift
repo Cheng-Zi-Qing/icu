@@ -103,11 +103,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             petWindowController?.showWindow(nil)
 
-            let bundleResourceURL = assetLocator.repoRootURL == nil ? Bundle.main.resourceURL : nil
             for line in RuntimeLaunchDiagnostics.lines(
                 appPaths: paths,
                 repoRootURL: assetLocator.repoRootURL,
-                bundleResourceURL: bundleResourceURL
+                bundleResourceURL: Bundle.main.resourceURL
             ) {
                 print(line)
             }
