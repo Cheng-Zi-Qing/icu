@@ -35,7 +35,7 @@ set -euo pipefail
 mode="${ICU_TEST_STUB_MODE:-success}"
 
 if [[ "$mode" != "no-evidence" ]]; then
-  echo "[app_paths] ICU_APP_SUPPORT_ROOT=${ICU_APP_SUPPORT_ROOT:-}"
+  echo "[app_paths] app_support_root=${ICU_APP_SUPPORT_ROOT:-}"
   echo "[runtime_smoke] launched_binary=$0"
 fi
 
@@ -76,7 +76,7 @@ run_success_case() {
   assert_exists "$temp_root/stdout.log"
   assert_exists "$temp_root/stderr.log"
   assert_exists "$app_support_root/runtime.marker"
-  assert_contains "$(cat "$stdout_log")" "[app_paths] ICU_APP_SUPPORT_ROOT=$app_support_root"
+  assert_contains "$(cat "$stdout_log")" "[app_paths] app_support_root=$app_support_root"
   assert_contains "$(cat "$stdout_log")" "[runtime_smoke] launched_binary=$temp_root/run/ICU.app/Contents/MacOS/ICUShell"
 }
 

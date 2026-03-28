@@ -55,7 +55,7 @@ launch_and_wait() {
   cp -R "$source_app" "$COPIED_APP"
   copied_binary="$COPIED_APP/Contents/MacOS/ICUShell"
   [[ -x "$copied_binary" ]] || fail "missing executable binary: $copied_binary"
-  expected_app_paths_line="[app_paths] ICU_APP_SUPPORT_ROOT=$APP_SUPPORT_ROOT"
+  expected_app_paths_line="[app_paths] app_support_root=$APP_SUPPORT_ROOT"
 
   (
     cd "$RUN_DIR"
