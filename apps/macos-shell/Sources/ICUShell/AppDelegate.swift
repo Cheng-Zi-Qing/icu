@@ -103,7 +103,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             petWindowController?.showWindow(nil)
 
-            print("[ICUShell] launched with state root: \(paths.stateDirectory.path)")
+            let bundleResourceURL = assetLocator.repoRootURL == nil ? Bundle.main.resourceURL : nil
+            for line in RuntimeLaunchDiagnostics.lines(
+                appPaths: paths,
+                repoRootURL: assetLocator.repoRootURL,
+                bundleResourceURL: bundleResourceURL
+            ) {
+                print(line)
+            }
         } catch {
             NSLog("[ICUShell] failed to bootstrap runtime: \(error.localizedDescription)")
             NSApplication.shared.terminate(nil)

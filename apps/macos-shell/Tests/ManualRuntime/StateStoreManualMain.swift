@@ -4,6 +4,8 @@ import Foundation
 struct StateStoreManualMain {
     static func main() throws {
         do {
+            try testAppPathsLivePrefersICUAppSupportRootOverride()
+            try testRuntimeLaunchDiagnosticsIncludeBundleAndAppSupportPaths()
             try testTextCatalogReturnsBaseValueWhenNoOverrideExists()
             try testTextCatalogUsesOverrideWithoutDroppingBaseFallback()
             try testTextCatalogFallsBackToCallerDefaultForUnknownKey()

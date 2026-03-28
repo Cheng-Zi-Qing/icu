@@ -12,6 +12,7 @@ swiftc \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Copy/UserFacingErrorCopy.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Copy/CopyOverrideStore.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/AppPaths.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/RuntimeLaunchDiagnostics.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/ShellState.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/WindowPlacement.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/StateStore.swift" \
@@ -38,6 +39,7 @@ swiftc \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Theme/PixelTheme.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Theme/ThemeManager.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/StateStoreManualTests.swift" \
+  "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/AppPathsManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/WorkSessionManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/MenuModelManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/GenerationSettingsManualTests.swift" \
@@ -63,6 +65,7 @@ swiftc -framework AppKit \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Copy/UserFacingErrorCopy.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Copy/CopyOverrideStore.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/AppPaths.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/RuntimeLaunchDiagnostics.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/ShellState.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/StateStore.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/WorkSessionController.swift" \
