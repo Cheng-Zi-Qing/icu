@@ -1,8 +1,10 @@
 """Ollama API 客户端"""
-import requests
 import json
+import os
 import random
 from pathlib import Path
+from urllib.error import HTTPError, URLError
+from urllib.request import ProxyHandler, Request, build_opener
 
 
 class OllamaClient:
@@ -11,6 +13,9 @@ class OllamaClient:
     def __init__(self, base_url="http://localhost:11434", model="qwen2.5:7b"):
         self.base_url = base_url
         self.model = model
+        self._opener = build_opener(ProxyHandler({}))
+        self.discovery_timeout_seconds = float(os.getenv("ICU_OLLAMA_DISCOVERY_TIMEOUT_SECONDS", "10"))
+        self.chat_timeout_seconds = float(os.getenv("ICU_OLLAMA_CHAT_TIMEOUT_SECONDS", "120"))
 
     def _get_current_persona(self):
         """获取当前形象的人设"""
@@ -31,13 +36,9 @@ class OllamaClient:
     def is_available(self):
         """检测 Ollama 是否可用"""
         try:
-            response = requests.get(
-                f"{self.base_url}/api/tags",
-                timeout=2,
-                proxies={'http': None, 'https': None}
-            )
-            return response.status_code == 200
-        except:
+            self._request_json("/api/tags", timeout=self.discovery_timeout_seconds)
+            return True
+        except Exception:
             return False
 
     def generate_reminder(self, reminder_type, context=None):
@@ -57,9 +58,9 @@ class OllamaClient:
 
                 user_prompt = f"用户需要 {reminder_type} 提醒。请生成1句提醒文案。"
 
-                response = requests.post(
-                    f"{self.base_url}/api/chat",
-                    json={
+                status_code, result = self._request_json(
+                    "/api/chat",
+                    payload={
                         "model": self.model,
                         "messages": [
                             {"role": "system", "content": system_prompt},
@@ -68,12 +69,10 @@ class OllamaClient:
                         "stream": False,
                         "options": {"temperature": 0.7}
                     },
-                    timeout=5,
-                    proxies={'http': None, 'https': None}
+                    timeout=self.chat_timeout_seconds,
                 )
 
-                if response.status_code == 200:
-                    result = response.json()
+                if status_code == 200:
                     return result['message']['content'].strip()
             except Exception as e:
                 print(f"Ollama 调用失败: {e}")
@@ -95,3 +94,29 @@ class OllamaClient:
             'hydration': '💧 记得喝水哦'
         }
         return defaults.get(reminder_type, '该休息了')
+
+    def _request_json(self, path, payload=None, timeout=5):
+        data = None
+        headers = {}
+        method = "GET"
+        if payload is not None:
+            data = json.dumps(payload).encode("utf-8")
+            headers["Content-Type"] = "application/json"
+            method = "POST"
+
+        request = Request(
+            f"{self.base_url}{path}",
+            data=data,
+            headers=headers,
+            method=method,
+        )
+
+        try:
+            with self._opener.open(request, timeout=timeout) as response:
+                body = response.read().decode("utf-8")
+                return response.status, json.loads(body)
+        except HTTPError as error:
+            detail = error.read().decode("utf-8", errors="replace")
+            raise RuntimeError(detail or str(error)) from error
+        except URLError as error:
+            raise RuntimeError(str(error.reason)) from error

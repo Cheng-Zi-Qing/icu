@@ -6,8 +6,8 @@
 >
 > 💡 **I.C.U. = I see u** - Your personal health guardian with personality!
 
-[![Python](https://img.shields.io/badge/Python-3.9+-blue.svg)](https://www.python.org/)
-[![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-green.svg)](https://www.python.org/)
+[![Swift](https://img.shields.io/badge/Swift-6-orange.svg)](https://www.swift.org/)
+[![Platform](https://img.shields.io/badge/Platform-macOS-green.svg)](https://www.apple.com/macos/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ## 🌟 What Makes I.C.U. Special
@@ -81,7 +81,79 @@ cd icu
 ./icu
 ```
 
-Dependencies install automatically on first run.
+This launches the Swift/AppKit shell.
+
+Quick verification:
+
+```bash
+./icu --verify
+```
+
+Package a local `.app` bundle:
+
+```bash
+./icu --package-app
+bash tools/check_macos_app_bundle.sh dist/ICU.app
+```
+
+### Native macOS shell verification
+
+For the Swift/AppKit shell under `apps/macos-shell`, the short local verification command is:
+
+```bash
+./icu --verify
+```
+
+What it does:
+- runs `swift build` for `apps/macos-shell` with an isolated scratch path so stale `.build` caches do not break the package
+- runs the manual runtime verification script
+- runs `swift test` only when Xcode is active, using the same isolated scratch path
+
+If you only have Command Line Tools installed, this command remains valid. In that environment, the script skips `swift test` explicitly instead of failing.
+
+Low-level helper:
+
+```bash
+bash tools/verify_macos_shell.sh
+```
+
+To include a release-bundle smoke check in verification:
+
+```bash
+VERIFY_MACOS_SHELL_PACKAGE_CHECK=1 ./icu --verify
+```
+
+To launch the native shell locally:
+
+```bash
+./icu
+```
+
+The launch script also uses the isolated scratch path automatically, so you should not need to manually clear `apps/macos-shell/.build`.
+
+Low-level helper:
+
+```bash
+bash tools/run_macos_shell.sh
+```
+
+For packaging, signing, and notarization notes, see:
+
+```bash
+docs/macos-shell-release.md
+```
+
+Release env template:
+
+```bash
+tools/macos_shell_release.env.example
+```
+
+Useful local checks after launch:
+- right-click the pet to verify `开始工作 / 进入专注 / 暂离 / 回来工作 / 下班 / 更换形象 / 退出`
+- open `Menu Bar -> Change Avatar` and confirm the Swift selector appears
+- confirm `~/Library/Application Support/ICU/state/current_state.json` is created
+- `ICU_PET_ID=<pet_id>` is now only a fallback for first launch; regular switching should use the Swift UI
 
 ### First Time Setup
 
@@ -90,8 +162,20 @@ Dependencies install automatically on first run.
    - Menu Bar → Personal Settings
    - Enter your body weight and cup volume
 3. **Optional AI Setup**:
-   - Menu Bar → AI Configuration
+   - Menu Bar / right-click menu → Model Configuration
    - Configure local Ollama or remote AI models
+
+User-writeable settings now live at:
+
+```bash
+~/Library/Application Support/ICU/config/settings.json
+```
+
+Speech overrides live at:
+
+```bash
+~/Library/Application Support/ICU/config/copy/active.json
+```
 
 ### Daily Usage
 
@@ -103,7 +187,7 @@ Dependencies install automatically on first run.
 
 ### Create Custom Pet
 
-1. Menu Bar → Change Avatar → Add Custom Avatar
+1. Menu Bar → Change Avatar, or right-click the pet → Change Avatar
 2. **Step 1**: Describe your pet (e.g., "a calm capybara")
 3. **Step 2**: AI optimizes the prompt and generates images
 4. **Step 3**: AI creates personality and messages
@@ -116,7 +200,7 @@ Dependencies install automatically on first run.
 - **Remote Text Models**: OpenAI, Claude, or custom APIs
 - **Image Models**: Stable Diffusion or HuggingFace models
 
-Access via: Menu Bar → AI Configuration
+Access via: Menu Bar / right-click menu → Model Configuration
 
 ## 📚 Scientific Foundation
 
@@ -173,30 +257,26 @@ I.C.U.'s health reminders are based on peer-reviewed research:
 
 | Technology | Purpose |
 |------------|---------|
-| Python 3.9+ | Core language |
-| PySide6 | Pet widget & dialogs |
-| rumps | macOS menu bar |
+| Swift 6 / SwiftPM | Native macOS shell |
+| AppKit | Desktop pet window and menu interactions |
+| Python 3.9+ | Avatar-generation bridge only, not the startup path |
 | Ollama | Local AI (optional) |
-| HuggingFace | Image generation |
+| Hugging Face Inference API | Image generation |
 | SQLite | Data persistence |
 
 ## 📁 Project Structure
 
 ```
 icu/
-├── icu                     # Launch script
-├── src/
-│   ├── pet_widget.py       # Desktop pet UI
-│   ├── menu_bar.py         # Menu bar control
-│   ├── avatar_wizard.py    # Custom pet creator
-│   ├── ai_config_dialog.py # AI model configuration
-│   ├── reminder.py         # Health reminders
-│   ├── daily_stats.py      # Statistics tracking
-│   └── weekly_report.py    # Weekly summaries
+├── icu                     # Swift-first root launcher (`./icu`)
+├── apps/
+│   └── macos-shell/        # Swift/AppKit runtime app
 ├── builder/                # AI generation tools
 │   ├── prompt_optimizer.py # Prompt enhancement
 │   ├── vision_generator.py # Image generation
 │   └── persona_forge.py    # Personality creation
+├── docs/macos-shell-release.md # Release and packaging notes
+├── src/                    # Remaining legacy non-UI Python modules
 ├── assets/pets/            # Pet avatars & configs
 └── config/                 # User settings
 ```

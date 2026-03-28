@@ -1,5 +1,5 @@
 """提示词优化器"""
-import requests
+from ollama_http import get_json, post_json
 
 
 class PromptOptimizer:
@@ -10,8 +10,7 @@ class PromptOptimizer:
     def check_ollama(self):
         """检查并选择模型"""
         try:
-            response = requests.get(f"{self.ollama_url}/api/tags", timeout=2, proxies={'http': None, 'https': None})
-            models = response.json().get('models', [])
+            models = get_json(f"{self.ollama_url}/api/tags").get('models', [])
             model_names = [m['name'] for m in models]
 
             if 'qwen3.5:35b' in model_names:
@@ -44,9 +43,9 @@ class PromptOptimizer:
 
         user_message = f"用户描述：{user_input}\n\n请生成图像提示词："
 
-        response = requests.post(
+        result = post_json(
             f"{self.ollama_url}/api/chat",
-            json={
+            {
                 "model": self.model,
                 "messages": [
                     {"role": "system", "content": system_prompt},
@@ -55,8 +54,5 @@ class PromptOptimizer:
                 "options": {"temperature": 0.7},
                 "stream": False
             },
-            proxies={'http': None, 'https': None}
         )
-
-        result = response.json()
         return result['message']['content']

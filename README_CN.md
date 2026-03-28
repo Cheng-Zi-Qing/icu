@@ -6,8 +6,8 @@
 >
 > 💡 **I.C.U. = I see u** - 你的专属健康守护者，有个性！
 
-[![Python](https://img.shields.io/badge/Python-3.9+-blue.svg)](https://www.python.org/)
-[![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-green.svg)](https://www.python.org/)
+[![Swift](https://img.shields.io/badge/Swift-6-orange.svg)](https://www.swift.org/)
+[![Platform](https://img.shields.io/badge/Platform-macOS-green.svg)](https://www.apple.com/macos/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ## 🌟 I.C.U. 的特别之处
@@ -81,7 +81,79 @@ cd icu
 ./icu
 ```
 
-首次运行会自动安装依赖。
+这会直接启动 Swift/AppKit 原生 shell。
+
+快速校验命令：
+
+```bash
+./icu --verify
+```
+
+打包本地 `.app`：
+
+```bash
+./icu --package-app
+bash tools/check_macos_app_bundle.sh dist/ICU.app
+```
+
+### 原生 macOS shell 校验
+
+对于 `apps/macos-shell` 下的 Swift/AppKit shell，简短本地校验命令是：
+
+```bash
+./icu --verify
+```
+
+这个命令会：
+- 运行针对 `apps/macos-shell` 的 `swift build`，并自动使用隔离 scratch path，避免旧 `.build` 缓存污染
+- 运行手工 runtime 校验脚本
+- 仅在当前环境启用了 Xcode 时才追加 `swift test`，同样走隔离 scratch path
+
+如果机器上只有 `Command Line Tools`，这条命令仍然可用；脚本会明确跳过 `swift test`，而不是直接失败。
+
+底层脚本仍可单独运行：
+
+```bash
+bash tools/verify_macos_shell.sh
+```
+
+如果要顺手做一次 `.app` release smoke check，可以运行：
+
+```bash
+VERIFY_MACOS_SHELL_PACKAGE_CHECK=1 ./icu --verify
+```
+
+如果要本地启动原生 shell，运行：
+
+```bash
+./icu
+```
+
+启动脚本也会自动使用隔离 scratch path，所以不需要再手动清 `apps/macos-shell/.build`。
+
+底层启动脚本仍可单独运行：
+
+```bash
+bash tools/run_macos_shell.sh
+```
+
+如果要看发布、签名和 notarize 的完整说明，见：
+
+```bash
+docs/macos-shell-release.md
+```
+
+发布环境变量模板：
+
+```bash
+tools/macos_shell_release.env.example
+```
+
+启动后建议检查：
+- 右键桌宠，确认至少能看到 `开始工作 / 进入专注 / 暂离 / 回来工作 / 下班 / 更换形象 / 退出`
+- 打开 `菜单栏 -> 更换形象`，确认会出现 Swift 版形象选择器
+- 确认生成了 `~/Library/Application Support/ICU/state/current_state.json`
+- `ICU_PET_ID=<pet_id>` 现在只作为首次启动回退；日常切换应使用 Swift UI
 
 ### 首次设置
 
@@ -90,8 +162,20 @@ cd icu
    - 菜单栏 → 个人设置
    - 输入体重和杯子容量
 3. **可选 AI 设置**：
-   - 菜单栏 → AI 配置
+   - 菜单栏 / 右键菜单 → 模型配置
    - 配置本地 Ollama 或远程 AI 模型
+
+当前用户配置会写到：
+
+```bash
+~/Library/Application Support/ICU/config/settings.json
+```
+
+桌宠话术 override 会写到：
+
+```bash
+~/Library/Application Support/ICU/config/copy/active.json
+```
 
 ### 日常使用
 
@@ -103,7 +187,7 @@ cd icu
 
 ### 创建自定义宠物
 
-1. 菜单栏 → 更换形象 → 新增自定义形象
+1. 菜单栏 → 更换形象，或右键桌宠 → 更换形象
 2. **步骤 1**：描述你的宠物（例如："一只淡定的水豚"）
 3. **步骤 2**：AI 优化提示词并生成图像
 4. **步骤 3**：AI 创建人设和消息
@@ -116,7 +200,7 @@ cd icu
 - **远程文本模型**：OpenAI、Claude 或自定义 API
 - **图像模型**：Stable Diffusion 或 HuggingFace 模型
 
-访问方式：菜单栏 → AI 配置
+访问方式：菜单栏 / 右键菜单 → 模型配置
 
 ## 📚 科学依据
 
@@ -173,30 +257,26 @@ I.C.U. 的健康提醒基于同行评审的研究：
 
 | 技术 | 用途 |
 |------|------|
-| Python 3.9+ | 核心语言 |
-| PySide6 | 桌宠 UI 与对话框 |
-| rumps | macOS 菜单栏 |
+| Swift 6 / SwiftPM | 原生 macOS shell |
+| AppKit | 桌宠窗口与菜单交互 |
+| Python 3.9+ | 仅用于形象生成 bridge（非启动链） |
 | Ollama | 本地 AI（可选） |
-| HuggingFace | 图像生成 |
+| Hugging Face Inference API | 图像生成 |
 | SQLite | 数据持久化 |
 
 ## 📁 项目结构
 
 ```
 icu/
-├── icu                     # 启动脚本
-├── src/
-│   ├── pet_widget.py       # 桌面宠物 UI
-│   ├── menu_bar.py         # 菜单栏控制
-│   ├── avatar_wizard.py    # 自定义宠物创建器
-│   ├── ai_config_dialog.py # AI 模型配置
-│   ├── reminder.py         # 健康提醒
-│   ├── daily_stats.py      # 统计追踪
-│   └── weekly_report.py    # 周报总结
+├── icu                     # Swift-first 根启动脚本 (`./icu`)
+├── apps/
+│   └── macos-shell/        # Swift/AppKit 运行时应用
 ├── builder/                # AI 生成工具
 │   ├── prompt_optimizer.py # 提示词增强
 │   ├── vision_generator.py # 图像生成
 │   └── persona_forge.py    # 人设创建
+├── src/                    # 剩余 legacy 非 UI Python 模块
+├── docs/macos-shell-release.md # Swift shell 发布说明
 ├── assets/pets/            # 宠物形象与配置
 └── config/                 # 用户设置
 ```

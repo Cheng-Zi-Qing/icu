@@ -1,0 +1,364 @@
+import AppKit
+
+func testGenerationConfigWindowUsesInstalledCopyCatalogForVisibleLabels() throws {
+    let original = TextCatalog.shared
+    defer { TextCatalog.installShared(original) }
+
+    _ = try makeInstalledTextCatalog(
+        baseJSON: """
+        {
+          "generation_config": {
+            "window_title": "模型配置",
+            "window_subtitle": "这里只配置模型，不负责生成与应用。",
+            "basic_section_title": "基础配置",
+            "provider_label": "服务商",
+            "text_description_tab_title": "文本描述",
+            "animation_avatar_tab_title": "动画形象",
+            "code_generation_tab_title": "主题代码"
+          }
+        }
+        """,
+        overrideJSON: """
+        {
+          "generation_config": {
+            "window_title": "模型工作台",
+            "window_subtitle": "这里只配模型，生成和预览去创作页。",
+            "basic_section_title": "基础信息",
+            "provider_label": "提供方",
+            "text_description_tab_title": "文字意图",
+            "animation_avatar_tab_title": "形象素材",
+            "code_generation_tab_title": "主题样式代码"
+          }
+        }
+        """
+    )
+
+    let settingsStore = try makeGenerationSettingsStore()
+    let themeManager = try makeThemeManagerWithPixelDefault()
+    let service = ThemeGenerationService(
+        transport: StubGenerationTransport(
+            results: [
+                .success(#"{\"name\":\"Moss Pixel\",\"summary\":\"掌机感、苔藓绿、低饱和\"}"#),
+                .success(validThemePackJSONString(id: "moss_pixel"))
+            ]
+        ),
+        settingsStore: settingsStore,
+        themeManager: themeManager
+    )
+    let coordinator = GenerationCoordinator(
+        settingsStore: settingsStore,
+        themeManager: themeManager,
+        generationService: service
+    )
+
+    let controller = coordinator.openGenerationConfig()
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "generation config window content view should exist")
+    }
+
+    _ = try requireLabel(in: contentView, stringValue: "模型工作台")
+    _ = try requireLabel(in: contentView, stringValue: "这里只配模型，生成和预览去创作页。")
+    _ = try requireButton(in: contentView, title: "文字意图")
+    _ = try requireButton(in: contentView, title: "形象素材")
+    _ = try requireButton(in: contentView, title: "主题样式代码")
+    _ = try requireLabel(in: contentView, stringValue: "基础信息")
+    _ = try requireLabel(in: contentView, stringValue: "提供方")
+}
+
+func testGenerationConfigWindowUsesModelTabsByDefault() throws {
+    let settingsStore = try makeGenerationSettingsStore()
+    let themeManager = try makeThemeManagerWithPixelDefault()
+    let service = ThemeGenerationService(
+        transport: StubGenerationTransport(
+            results: [
+                .success(#"{\"name\":\"Moss Pixel\",\"summary\":\"掌机感、苔藓绿、低饱和\"}"#),
+                .success(validThemePackJSONString(id: "moss_pixel"))
+            ]
+        ),
+        settingsStore: settingsStore,
+        themeManager: themeManager
+    )
+    let coordinator = GenerationCoordinator(
+        settingsStore: settingsStore,
+        themeManager: themeManager,
+        generationService: service
+    )
+
+    let controller = coordinator.openGenerationConfig()
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "generation config window content view should exist")
+    }
+
+    _ = try requireButton(in: contentView, title: "文本描述")
+    _ = try requireButton(in: contentView, title: "动画形象")
+    _ = try requireButton(in: contentView, title: "主题代码")
+    _ = try requireLabel(in: contentView, stringValue: "基础配置")
+    _ = try requireLabel(in: contentView, stringValue: "服务商")
+
+    try expect(
+        findButton(in: contentView, title: "主题生成") == nil,
+        "model config window should not expose the theme-generation tab anymore"
+    )
+    try expect(
+        findButton(in: contentView, title: "生成并应用主题") == nil,
+        "model config window should not expose generate/apply actions"
+    )
+}
+
+func testGenerationConfigWindowCapabilityDetailUsesBasicAndAdvancedSections() throws {
+    let repoRoot = try makeTemporaryDirectory()
+    let appPaths = AppPaths(rootURL: repoRoot)
+    try appPaths.ensureDirectories()
+    let settingsStore = GenerationSettingsStore(repoRootURL: repoRoot)
+    try settingsStore.save(makeValidGenerationSettings())
+    let themeManager = try ThemeManager(appPaths: appPaths, settingsStore: settingsStore)
+    ThemeManager.installShared(themeManager)
+    let service = ThemeGenerationService(
+        transport: StubGenerationTransport(
+            results: [
+                .success(#"{\"name\":\"Moss Pixel\",\"summary\":\"掌机感、苔藓绿、低饱和\"}"#),
+                .success(validThemePackJSONString(id: "moss_pixel"))
+            ]
+        ),
+        settingsStore: settingsStore,
+        themeManager: themeManager
+    )
+    let coordinator = GenerationCoordinator(
+        settingsStore: settingsStore,
+        themeManager: themeManager,
+        generationService: service
+    )
+
+    let controller = coordinator.openGenerationConfig()
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "generation config window content view should exist")
+    }
+
+    try requireButton(in: contentView, title: "文本描述").performClick(nil)
+
+    _ = try requireLabel(in: contentView, stringValue: "基础配置")
+    _ = try requireLabel(in: contentView, stringValue: "服务商")
+    _ = try requireLabel(in: contentView, stringValue: "模型")
+    _ = try requireLabel(in: contentView, stringValue: "接口地址")
+    _ = try requireButton(in: contentView, title: "显示高级设置")
+
+    try expect(
+        findTextField(in: contentView, placeholder: "auth JSON，如 {\"api_key\":\"sk-xxx\"}") == nil,
+        "advanced auth field should stay hidden until expanded"
+    )
+
+    try requireButton(in: contentView, title: "显示高级设置").performClick(nil)
+
+    _ = try requireLabel(in: contentView, stringValue: "高级设置")
+    _ = try requireLabel(in: contentView, stringValue: "认证 JSON")
+    _ = try requireLabel(in: contentView, stringValue: "选项 JSON")
+}
+
+func testGenerationConfigWindowPreservesDraftAcrossNavigationSwitches() throws {
+    let settingsStore = try makeGenerationSettingsStore()
+    let themeManager = try makeThemeManagerWithPixelDefault()
+    let service = ThemeGenerationService(
+        transport: StubGenerationTransport(
+            results: [
+                .success(#"{\"name\":\"Moss Pixel\",\"summary\":\"掌机感、苔藓绿、低饱和\"}"#),
+                .success(validThemePackJSONString(id: "moss_pixel"))
+            ]
+        ),
+        settingsStore: settingsStore,
+        themeManager: themeManager
+    )
+    let coordinator = GenerationCoordinator(
+        settingsStore: settingsStore,
+        themeManager: themeManager,
+        generationService: service
+    )
+
+    let controller = coordinator.openGenerationConfig()
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "generation config window content view should exist")
+    }
+
+    try requireButton(in: contentView, title: "文本描述").performClick(nil)
+    let modelField = try requireTextField(in: contentView, placeholder: "model")
+    modelField.stringValue = "qwen3.5:32b"
+
+    try requireButton(in: contentView, title: "主题代码").performClick(nil)
+    try requireButton(in: contentView, title: "文本描述").performClick(nil)
+
+    let restoredModelField = try requireTextField(in: contentView, placeholder: "model")
+    try expect(
+        restoredModelField.stringValue == "qwen3.5:32b",
+        "draft capability edits should survive navigation between config sections"
+    )
+}
+
+func testGenerationConfigWindowUsesCompactFrame() throws {
+    let settingsStore = try makeGenerationSettingsStore()
+    let themeManager = try makeThemeManagerWithPixelDefault()
+    let service = ThemeGenerationService(
+        transport: StubGenerationTransport(
+            results: [
+                .success(#"{\"name\":\"Moss Pixel\",\"summary\":\"掌机感、苔藓绿、低饱和\"}"#),
+                .success(validThemePackJSONString(id: "moss_pixel"))
+            ]
+        ),
+        settingsStore: settingsStore,
+        themeManager: themeManager
+    )
+    let coordinator = GenerationCoordinator(
+        settingsStore: settingsStore,
+        themeManager: themeManager,
+        generationService: service
+    )
+
+    let controller = coordinator.openGenerationConfig()
+    guard let contentSize = controller.window?.contentView?.frame.size else {
+        throw TestFailure(message: "generation config window content view should exist")
+    }
+
+    try expect(
+        contentSize == NSSize(width: 760, height: 640),
+        "generation config window should use a more compact default content size"
+    )
+}
+
+func testGenerationCoordinatorReusesConfigWindowController() throws {
+    let settingsStore = try makeGenerationSettingsStore()
+    let themeManager = try makeThemeManagerWithPixelDefault()
+    let service = ThemeGenerationService(
+        transport: StubGenerationTransport(
+            results: [
+                .success(#"{\"name\":\"Moss Pixel\",\"summary\":\"掌机感、苔藓绿、低饱和\"}"#),
+                .success(validThemePackJSONString(id: "moss_pixel"))
+            ]
+        ),
+        settingsStore: settingsStore,
+        themeManager: themeManager
+    )
+    let coordinator = GenerationCoordinator(
+        settingsStore: settingsStore,
+        themeManager: themeManager,
+        generationService: service
+    )
+
+    let first = coordinator.openGenerationConfig()
+    let second = coordinator.openGenerationConfig()
+
+    try expect(first === second, "generation coordinator should reuse a shared config window controller instance")
+}
+
+func testGenerationConfigWindowLoadsSavedSettingsAndRestylesOnThemeChange() throws {
+    var settings = makeValidGenerationSettings()
+    settings.textDescription.model = "qwen3.5:35b"
+    settings.codeGeneration.model = "gpt-4.1-mini"
+
+    let repoRoot = try makeTemporaryDirectory()
+    let appPaths = AppPaths(rootURL: repoRoot)
+    try appPaths.ensureDirectories()
+    let settingsStore = GenerationSettingsStore(repoRootURL: repoRoot)
+    try settingsStore.save(settings)
+    let themeManager = try ThemeManager(appPaths: appPaths, settingsStore: settingsStore)
+    ThemeManager.installShared(themeManager)
+
+    let service = ThemeGenerationService(
+        transport: StubGenerationTransport(
+            results: [
+                .success(#"{\"name\":\"Moss Pixel\",\"summary\":\"掌机感、苔藓绿、低饱和\"}"#),
+                .success(validThemePackJSONString(id: "moss_pixel"))
+            ]
+        ),
+        settingsStore: settingsStore,
+        themeManager: themeManager
+    )
+    let coordinator = GenerationCoordinator(
+        settingsStore: settingsStore,
+        themeManager: themeManager,
+        generationService: service
+    )
+
+    let controller = coordinator.openGenerationConfig()
+
+    try expect(
+        controller.formState.textDescription.model == "qwen3.5:35b",
+        "generation config window should load persisted text-description model"
+    )
+    try expect(
+        controller.formState.codeGeneration.model == "gpt-4.1-mini",
+        "generation config window should load persisted code-generation model"
+    )
+
+    var pack = PixelTheme.pack
+    pack.meta.id = "sunset"
+    pack.tokens.colors.windowBackgroundHex = "#351B31"
+    try themeManager.apply(pack)
+
+    try expect(
+        hexString(controller.window?.backgroundColor) == "#351B31",
+        "generation config window should restyle itself when the active theme changes"
+    )
+}
+
+func testGenerationConfigWindowDoesNotRenderThemeGenerationControls() throws {
+    let repoRoot = try makeTemporaryDirectory()
+    let appPaths = AppPaths(rootURL: repoRoot)
+    try appPaths.ensureDirectories()
+    let settingsStore = GenerationSettingsStore(repoRootURL: repoRoot)
+    try settingsStore.save(makeValidGenerationSettings())
+    let themeManager = try ThemeManager(appPaths: appPaths, settingsStore: settingsStore)
+    ThemeManager.installShared(themeManager)
+
+    let service = ThemeGenerationService(
+        transport: StubGenerationTransport(
+            results: [
+                .success(#"{\"name\":\"Moss Pixel\",\"summary\":\"掌机感、苔藓绿、低饱和\"}"#),
+                .success(validThemePackJSONString(id: "moss_pixel"))
+            ]
+        ),
+        settingsStore: settingsStore,
+        themeManager: themeManager
+    )
+    let coordinator = GenerationCoordinator(
+        settingsStore: settingsStore,
+        themeManager: themeManager,
+        generationService: service
+    )
+    let controller = coordinator.openGenerationConfig()
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "generation config window content view should exist")
+    }
+
+    try expect(
+        findButton(in: contentView, title: "生成并应用主题") == nil,
+        "pure model config window should not expose a generate button"
+    )
+    try expect(
+        findButton(in: contentView, title: "恢复默认像素风") == nil,
+        "pure model config window should not expose theme reset controls"
+    )
+    try expect(
+        findLabel(in: contentView, stringValue: "当前主题") == nil,
+        "pure model config window should not render theme summary cards"
+    )
+}
+
+func findTextField(in root: NSView, placeholder: String) -> NSTextField? {
+    allSubviews(in: root)
+        .compactMap { $0 as? NSTextField }
+        .first { $0.placeholderString == placeholder }
+}
+
+func requireTextField(in root: NSView, placeholder: String) throws -> NSTextField {
+    if let field = findTextField(in: root, placeholder: placeholder) {
+        return field
+    }
+
+    throw TestFailure(message: "expected text field with placeholder '\(placeholder)' to exist")
+}
+
+func findButton(in root: NSView, title: String) -> NSButton? {
+    allSubviews(in: root).compactMap { $0 as? NSButton }.first { $0.title == title }
+}
+
+func findLabel(in root: NSView, stringValue: String) -> NSTextField? {
+    allSubviews(in: root).compactMap { $0 as? NSTextField }.first { $0.stringValue == stringValue }
+}
