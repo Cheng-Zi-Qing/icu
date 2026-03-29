@@ -85,10 +85,22 @@ func testAvatarSelectorWindowUsesStudioTabsAndThemeBubblePreviewByDefault() thro
     _ = try requireButton(in: contentView, title: "桌宠形象动画")
     _ = try requireButton(in: contentView, title: "话术")
     _ = try requireLabel(in: contentView, stringValue: "当前已应用主题")
+    _ = try requireLabel(in: contentView, stringValue: "prompt")
+    _ = try requireLabel(in: contentView, stringValue: "优化后 prompt")
+    _ = try requireLabel(in: contentView, stringValue: "样式草稿")
     _ = try requireLabel(in: contentView, stringValue: "桌宠气泡预览")
-    _ = try requireButton(in: contentView, title: "生成预览")
-    _ = try requireButton(in: contentView, title: "重新生成")
-    _ = try requireButton(in: contentView, title: "应用")
+    _ = try requireButton(in: contentView, title: "优化 prompt")
+    _ = try requireButton(in: contentView, title: "重新优化")
+    _ = try requireButton(in: contentView, title: "预览效果")
+    _ = try requireButton(in: contentView, title: "应用主题")
+    try expect(
+        findButton(in: contentView, title: "生成预览") == nil,
+        "theme tab should not reuse the generic preview button"
+    )
+    try expect(
+        findButton(in: contentView, title: "重新生成") == nil,
+        "theme tab should not reuse the generic regenerate button"
+    )
 }
 
 func testAvatarSelectorThemeTabOmitsModelSummaryAndCrossDomainPanels() throws {
@@ -134,6 +146,7 @@ func testAvatarSelectorThemeTabGeneratesDraftBeforeApplyingTheme() throws {
 
     let previewURL = try makeTinyPNG()
     let generatedPack = makeAppKitTestThemePack(id: "generated_preview_theme")
+    var optimizedPrompts: [String] = []
     var generatedPrompts: [String] = []
     var appliedPackIDs: [String] = []
 
@@ -149,6 +162,10 @@ func testAvatarSelectorThemeTabGeneratesDraftBeforeApplyingTheme() throws {
             )
         ],
         currentAvatarID: "capybara",
+        themePromptOptimizer: { prompt in
+            optimizedPrompts.append(prompt)
+            return "optimized::\(prompt)"
+        },
         themeDraftGenerator: { prompt in
             generatedPrompts.append(prompt)
             return generatedPack
@@ -166,12 +183,35 @@ func testAvatarSelectorThemeTabGeneratesDraftBeforeApplyingTheme() throws {
         throw TestFailure(message: "selector content view should exist")
     }
 
-    try requireActionButton(in: contentView, title: "生成预览").performClick(nil)
+    let rawPromptView = try requireTextView(in: contentView, identifier: "themeRawPrompt")
+    let optimizedPromptView = try requireTextView(in: contentView, identifier: "themeOptimizedPrompt")
+    rawPromptView.string = "raw cozy pixel vibe"
+    controller.textDidChange(Notification(name: NSText.didChangeNotification, object: rawPromptView))
+
+    try requireActionButton(in: contentView, title: "优化 prompt").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    try requireActionButton(in: contentView, title: "预览效果").performClick(nil)
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
 
     try expect(
+        optimizedPrompts == ["raw cozy pixel vibe"],
+        "theme optimizer should receive the raw prompt"
+    )
+    try expect(
+        optimizedPromptView.string == "optimized::raw cozy pixel vibe",
+        "optimized prompt should be shown separately without overwriting the raw prompt"
+    )
+    try expect(
+        rawPromptView.string == "raw cozy pixel vibe",
+        "raw prompt should remain unchanged after optimization"
+    )
+    try expect(
         generatedPrompts.count == 1,
         "theme preview should call the draft generator exactly once"
+    )
+    try expect(
+        generatedPrompts == ["optimized::raw cozy pixel vibe"],
+        "theme preview should use the optimized prompt instead of the raw prompt"
     )
     try expect(
         environment.themeManager.currentTheme.id == "pixel_default",
@@ -183,7 +223,7 @@ func testAvatarSelectorThemeTabGeneratesDraftBeforeApplyingTheme() throws {
         "theme preview must not persist an active theme before apply"
     )
 
-    try requireActionButton(in: contentView, title: "应用").performClick(nil)
+    try requireActionButton(in: contentView, title: "应用主题").performClick(nil)
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
 
     try expect(
@@ -206,6 +246,8 @@ func testAvatarSelectorThemeTabRequiresPreviewBeforeApply() throws {
     ThemeManager.installShared(environment.themeManager)
 
     let previewURL = try makeTinyPNG()
+    var optimizedPrompts: [String] = []
+    var generatedPrompts: [String] = []
     var appliedPackIDs: [String] = []
 
     let controller = AvatarSelectorWindowController(
@@ -220,8 +262,13 @@ func testAvatarSelectorThemeTabRequiresPreviewBeforeApply() throws {
             )
         ],
         currentAvatarID: "capybara",
-        themeDraftGenerator: { _ in
-            makeAppKitTestThemePack(id: "should_not_generate_here")
+        themePromptOptimizer: { prompt in
+            optimizedPrompts.append(prompt)
+            return "optimized::\(prompt)"
+        },
+        themeDraftGenerator: { prompt in
+            generatedPrompts.append(prompt)
+            return makeAppKitTestThemePack(id: "should_not_generate_here")
         },
         themeDraftApplier: { pack in
             appliedPackIDs.append(pack.meta.id)
@@ -236,9 +283,24 @@ func testAvatarSelectorThemeTabRequiresPreviewBeforeApply() throws {
         throw TestFailure(message: "selector content view should exist")
     }
 
-    try requireActionButton(in: contentView, title: "应用").performClick(nil)
+    let rawPromptView = try requireTextView(in: contentView, identifier: "themeRawPrompt")
+    rawPromptView.string = "raw apply without preview"
+    controller.textDidChange(Notification(name: NSText.didChangeNotification, object: rawPromptView))
+
+    try requireActionButton(in: contentView, title: "优化 prompt").performClick(nil)
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
 
+    try requireActionButton(in: contentView, title: "应用主题").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    try expect(
+        optimizedPrompts == ["raw apply without preview"],
+        "theme optimizer should still run on the raw prompt before apply"
+    )
+    try expect(
+        generatedPrompts.isEmpty,
+        "theme apply should not generate a preview draft on its own"
+    )
     try expect(
         appliedPackIDs.isEmpty,
         "theme apply should not call the applier before a preview is generated"
@@ -255,6 +317,81 @@ func testAvatarSelectorThemeTabRequiresPreviewBeforeApply() throws {
     try expect(
         findLabel(in: contentView, stringValue: "主题草稿已应用。") == nil,
         "theme apply should not report success before a preview exists"
+    )
+}
+
+func testAvatarSelectorThemeTabInvalidatesApplyWhenOptimizedPromptChanges() throws {
+    let environment = try makeGenerationEnvironment()
+    ThemeManager.installShared(environment.themeManager)
+
+    let previewURL = try makeTinyPNG()
+    let generatedPack = makeAppKitTestThemePack(id: "generated_preview_theme_after_edit")
+    var generatedPrompts: [String] = []
+    var appliedPackIDs: [String] = []
+
+    let controller = AvatarSelectorWindowController(
+        avatars: [
+            AvatarSummary(
+                id: "capybara",
+                name: "水豚",
+                style: "像素",
+                previewURL: previewURL,
+                traits: "稳重",
+                tone: "冷静"
+            )
+        ],
+        currentAvatarID: "capybara",
+        themePromptOptimizer: { prompt in
+            "optimized::\(prompt)"
+        },
+        themeDraftGenerator: { prompt in
+            generatedPrompts.append(prompt)
+            return generatedPack
+        },
+        themeDraftApplier: { pack in
+            appliedPackIDs.append(pack.meta.id)
+            try environment.themeManager.apply(pack)
+        },
+        onChoose: { _ in },
+        onAddCustom: {},
+        onClose: {}
+    )
+
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "selector content view should exist")
+    }
+
+    let rawPromptView = try requireTextView(in: contentView, identifier: "themeRawPrompt")
+    let optimizedPromptView = try requireTextView(in: contentView, identifier: "themeOptimizedPrompt")
+    rawPromptView.string = "raw theme prompt"
+    controller.textDidChange(Notification(name: NSText.didChangeNotification, object: rawPromptView))
+
+    try requireActionButton(in: contentView, title: "优化 prompt").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    try requireActionButton(in: contentView, title: "预览效果").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    optimizedPromptView.string = "optimized::raw theme prompt edited"
+    controller.textDidChange(Notification(name: NSText.didChangeNotification, object: optimizedPromptView))
+
+    try requireActionButton(in: contentView, title: "应用主题").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    try expect(
+        generatedPrompts == ["optimized::raw theme prompt"],
+        "theme preview should lock to the last previewed optimized prompt"
+    )
+    try expect(
+        appliedPackIDs.isEmpty,
+        "theme apply should be invalidated after the optimized prompt changes"
+    )
+    try expect(
+        environment.themeManager.currentTheme.id == "pixel_default",
+        "theme apply should keep the current theme unchanged after the optimized prompt changes"
+    )
+    try expect(
+        findLabel(in: contentView, stringValue: "主题草稿已应用。") == nil,
+        "theme apply should not report success after preview invalidation"
     )
 }
 
@@ -1499,6 +1636,15 @@ func requireActionButton(in root: NSView, title: String) throws -> NSButton {
     }
 
     throw TestFailure(message: "expected actionable button '\(title)' to exist")
+}
+
+func requireTextView(in root: NSView, identifier: String) throws -> NSTextView {
+    if let textView = allSubviews(in: root)
+        .compactMap({ $0 as? NSTextView })
+        .first(where: { $0.identifier?.rawValue == identifier }) {
+        return textView
+    }
+    throw TestFailure(message: "missing text view: \(identifier)")
 }
 
 func allSubviews(in root: NSView) -> [NSView] {

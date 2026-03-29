@@ -34,6 +34,9 @@ final class AvatarCoordinator {
             let controller = AvatarSelectorWindowController(
                 avatars: avatars,
                 currentAvatarID: try settingsStore.loadCurrentAvatarID(),
+                themePromptOptimizer: { [bridge] prompt in
+                    try bridge.optimizePrompt(prompt)
+                },
                 themeDraftGenerator: generationCoordinator.map { coordinator in
                     { prompt in
                         try coordinator.generateThemeDraft(from: prompt)

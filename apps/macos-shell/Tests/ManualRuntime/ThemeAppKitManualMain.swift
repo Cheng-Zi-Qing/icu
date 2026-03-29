@@ -14,6 +14,7 @@ struct ThemeAppKitManualMain {
             try testAvatarSelectorThemeTabOmitsModelSummaryAndCrossDomainPanels()
             try testAvatarSelectorThemeTabGeneratesDraftBeforeApplyingTheme()
             try testAvatarSelectorThemeTabRequiresPreviewBeforeApply()
+            try testAvatarSelectorThemeTabInvalidatesApplyWhenOptimizedPromptChanges()
             try testAvatarWizardWindowRestylesWhenThemeChanges()
             try testAvatarWizardUsesInstalledCopyCatalogForVisibleLabels()
             try testAvatarSelectorWindowSpeechTabShowsBubblePreviewAndApplyActions()

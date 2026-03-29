@@ -19,6 +19,7 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
     }
 
     private let avatars: [AvatarSummary]
+    private let themePromptOptimizer: ((String) throws -> String)?
     private let themeDraftGenerator: ((String) throws -> ThemePack)?
     private let themeDraftApplier: ((ThemePack) throws -> Void)?
     private let speechDraftGenerator: ((String) throws -> SpeechDraft)?
@@ -31,6 +32,7 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
     private var selectedAvatarID: String?
     private var pendingThemePack: ThemePack?
     private var pendingSpeechDraft: SpeechDraft?
+    private var lastPreviewedThemePrompt: String?
 
     private var tableView = NSTableView()
     private var previewImageView = NSImageView()
@@ -46,11 +48,13 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
     private var themeObserver: NSObjectProtocol?
     private var didFinish = false
 
-    private let themePromptView = NSTextView()
+    private let themeRawPromptView = NSTextView()
+    private let themeOptimizedPromptView = NSTextView()
     private let avatarPromptView = NSTextView()
     private let speechPromptView = NSTextView()
 
-    private var themePrompt = ""
+    private var themeRawPrompt = ""
+    private var themeOptimizedPrompt = ""
     private var avatarPrompt = ""
     private var speechPrompt = ""
 
@@ -90,6 +94,7 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
     init(
         avatars: [AvatarSummary],
         currentAvatarID: String?,
+        themePromptOptimizer: ((String) throws -> String)? = nil,
         themeDraftGenerator: ((String) throws -> ThemePack)? = nil,
         themeDraftApplier: ((ThemePack) throws -> Void)? = nil,
         speechDraftGenerator: ((String) throws -> SpeechDraft)? = nil,
@@ -100,6 +105,7 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
     ) {
         self.avatars = avatars
         self.selectedAvatarID = currentAvatarID ?? avatars.first?.id
+        self.themePromptOptimizer = themePromptOptimizer
         self.themeDraftGenerator = themeDraftGenerator
         self.themeDraftApplier = themeDraftApplier
         self.speechDraftGenerator = speechDraftGenerator
@@ -185,8 +191,11 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         }
 
         switch textView.identifier?.rawValue {
-        case "themePrompt":
-            themePrompt = textView.string
+        case "themeRawPrompt":
+            themeRawPrompt = textView.string
+        case "themeOptimizedPrompt":
+            themeOptimizedPrompt = textView.string
+            invalidateThemePreview()
         case "avatarPrompt":
             avatarPrompt = textView.string
         case "speechPrompt":
@@ -211,7 +220,8 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
     }
 
     private func configureTextViews() {
-        configureTextView(themePromptView, identifier: "themePrompt", text: themePrompt)
+        configureTextView(themeRawPromptView, identifier: "themeRawPrompt", text: themeRawPrompt)
+        configureTextView(themeOptimizedPromptView, identifier: "themeOptimizedPrompt", text: themeOptimizedPrompt)
         configureTextView(avatarPromptView, identifier: "avatarPrompt", text: avatarPrompt)
         configureTextView(speechPromptView, identifier: "speechPrompt", text: speechPrompt)
     }
@@ -337,12 +347,20 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         view.orientation = .vertical
         view.spacing = 14
 
-        let promptSection = makePromptSection(
-            title: copy("common.prompt_label", fallback: "prompt"),
+        let rawPromptSection = makePromptSection(
+            title: copy("theme_studio.raw_prompt_title", fallback: "prompt"),
             hint: copy("theme_studio.prompt_hint", fallback: "用 prompt 描述你想要的 GUI 气质，包括右键菜单、配置页和状态气泡。"),
-            textView: themePromptView,
-            storedText: themePrompt,
-            minHeight: 104
+            textView: themeRawPromptView,
+            storedText: themeRawPrompt,
+            minHeight: 96
+        )
+
+        let optimizedPromptSection = makePromptSection(
+            title: copy("theme_studio.optimized_prompt_title", fallback: "优化后 prompt"),
+            hint: copy("theme_studio.optimized_prompt_hint", fallback: "优化后的 prompt 会用于主题预览和应用，你可以继续手动编辑。"),
+            textView: themeOptimizedPromptView,
+            storedText: themeOptimizedPrompt,
+            minHeight: 96
         )
 
         let previewRow = NSStackView(views: [
@@ -363,7 +381,8 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
                 lines: [appliedThemeSummary]
             )
         )
-        view.addArrangedSubview(promptSection)
+        view.addArrangedSubview(rawPromptSection)
+        view.addArrangedSubview(optimizedPromptSection)
         view.addArrangedSubview(
             makeInfoCard(
                 title: copy("theme_studio.draft_title", fallback: "样式草稿"),
@@ -371,7 +390,7 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
             )
         )
         view.addArrangedSubview(previewRow)
-        view.addArrangedSubview(makeActionBar(includeAddCustom: false))
+        view.addArrangedSubview(makeThemeActionBar())
         return view
     }
 
@@ -606,8 +625,8 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         sampleField.isEditable = false
         AvatarPanelTheme.styleEditableTextField(sampleField)
 
-        let primaryButton = NSButton(title: TextCatalog.shared.text(.commonPreviewButton), target: nil, action: nil)
-        let secondaryButton = NSButton(title: TextCatalog.shared.text(.commonApplyButton), target: nil, action: nil)
+        let primaryButton = NSButton(title: copy("theme_studio.preview_button", fallback: "预览效果"), target: nil, action: nil)
+        let secondaryButton = NSButton(title: copy("theme_studio.apply_button", fallback: "应用主题"), target: nil, action: nil)
         AvatarPanelTheme.stylePrimaryButton(primaryButton)
         AvatarPanelTheme.styleSecondaryButton(secondaryButton)
 
@@ -634,6 +653,32 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
             secondaryButton.widthAnchor.constraint(equalToConstant: 88),
         ])
         return card
+    }
+
+    private func makeThemeActionBar() -> NSView {
+        let optimizeButton = NSButton(title: copy("theme_studio.optimize_button", fallback: "优化 prompt"), target: self, action: #selector(handleOptimizeThemePrompt))
+        let reoptimizeButton = NSButton(title: copy("theme_studio.reoptimize_button", fallback: "重新优化"), target: self, action: #selector(handleReoptimizeThemePrompt))
+        let previewButton = NSButton(title: copy("theme_studio.preview_button", fallback: "预览效果"), target: self, action: #selector(handlePreviewTheme))
+        let applyButton = NSButton(title: copy("theme_studio.apply_button", fallback: "应用主题"), target: self, action: #selector(handleApplyTheme))
+        AvatarPanelTheme.styleSecondaryButton(optimizeButton)
+        AvatarPanelTheme.styleSecondaryButton(reoptimizeButton)
+        AvatarPanelTheme.styleSecondaryButton(previewButton)
+        AvatarPanelTheme.stylePrimaryButton(applyButton)
+
+        let stack = NSStackView()
+        stack.orientation = .horizontal
+        stack.spacing = 12
+        stack.addArrangedSubview(NSView())
+        stack.addArrangedSubview(optimizeButton)
+        stack.addArrangedSubview(reoptimizeButton)
+        stack.addArrangedSubview(previewButton)
+        stack.addArrangedSubview(applyButton)
+
+        optimizeButton.widthAnchor.constraint(equalToConstant: 110).isActive = true
+        reoptimizeButton.widthAnchor.constraint(equalToConstant: 110).isActive = true
+        previewButton.widthAnchor.constraint(equalToConstant: 110).isActive = true
+        applyButton.widthAnchor.constraint(equalToConstant: 88).isActive = true
+        return stack
     }
 
     private func makeActionBar(includeAddCustom: Bool) -> NSView {
@@ -815,15 +860,46 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         }
     }
 
-    private func renderThemePreview(regenerated: Bool) throws {
+    private func invalidateThemePreview() {
+        pendingThemePack = nil
+        lastPreviewedThemePrompt = nil
+    }
+
+    private func renderOptimizedThemePrompt(regenerated: Bool) throws {
         let prompt = normalizedPrompt(
-            themePrompt,
+            themeRawPrompt,
             fallback: copy("theme_studio.fallback_prompt", fallback: "深绿像素主题，右键菜单更紧凑，气泡更清晰")
         )
+        let optimized = if let themePromptOptimizer {
+            try themePromptOptimizer(prompt)
+        } else {
+            prompt
+        }
+
+        themeOptimizedPrompt = optimized
+        themeOptimizedPromptView.string = optimized
+        invalidateThemePreview()
+        statusLabel.stringValue = regenerated
+            ? copy("theme_studio.reoptimized_status", fallback: "prompt 已重新优化。")
+            : copy("theme_studio.optimized_status", fallback: "prompt 优化完成。")
+        statusLabel.textColor = AvatarPanelTheme.accent
+    }
+
+    private func renderThemePreview(regenerated: Bool) throws {
+        let prompt = normalizedPrompt(
+            themeOptimizedPrompt,
+            fallback: ""
+        )
+        guard !prompt.isEmpty else {
+            statusLabel.stringValue = copy("theme_studio.preview_requires_optimized_status", fallback: "请先优化 prompt，再预览效果。")
+            statusLabel.textColor = AvatarPanelTheme.muted
+            return
+        }
 
         if let themeDraftGenerator {
             let pack = try themeDraftGenerator(prompt)
             pendingThemePack = pack
+            lastPreviewedThemePrompt = prompt
             previewRevision += 1
             draftThemeSummary = formatCopy(
                 "theme_studio.draft_format",
@@ -833,6 +909,7 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
             )
         } else {
             pendingThemePack = nil
+            lastPreviewedThemePrompt = prompt
             previewRevision += 1
             draftThemeSummary = formatCopy("theme_studio.draft_format", fallback: "草稿 %d：%@", previewRevision, prompt)
         }
@@ -852,7 +929,11 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
     }
 
     private func showGenerationError(_ error: Error) {
-        statusLabel.stringValue = error.localizedDescription
+        if error is AvatarBuilderBridgeError {
+            statusLabel.stringValue = UserFacingErrorCopy.avatarMessage(for: error)
+        } else {
+            statusLabel.stringValue = error.localizedDescription
+        }
         statusLabel.textColor = AvatarPanelTheme.danger
     }
 
@@ -913,12 +994,7 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
     @objc private func handleGeneratePreview() {
         switch selectedTab {
         case .theme:
-            do {
-                try renderThemePreview(regenerated: false)
-            } catch {
-                showGenerationError(error)
-                return
-            }
+            return
         case .avatar:
             renderAvatarPreview(regenerated: false)
         case .speech:
@@ -935,12 +1011,7 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
     @objc private func handleRegeneratePreview() {
         switch selectedTab {
         case .theme:
-            do {
-                try renderThemePreview(regenerated: true)
-            } catch {
-                showGenerationError(error)
-                return
-            }
+            return
         case .avatar:
             renderAvatarPreview(regenerated: true)
         case .speech:
@@ -957,29 +1028,7 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
     @objc private func handleApply() {
         switch selectedTab {
         case .theme:
-            if let themeDraftApplier {
-                guard let pendingThemePack else {
-                    statusLabel.stringValue = copy("avatar_studio.status_ready", fallback: "先生成预览，确认满意后再应用。")
-                    statusLabel.textColor = AvatarPanelTheme.muted
-                    return
-                }
-
-                do {
-                    try themeDraftApplier(pendingThemePack)
-                    appliedThemeSummary = draftThemeSummary
-                    self.pendingThemePack = nil
-                    statusLabel.stringValue = copy("theme_studio.apply_status", fallback: "主题草稿已应用。")
-                    statusLabel.textColor = AvatarPanelTheme.text
-                    renderSelectedTab()
-                } catch {
-                    showGenerationError(error)
-                }
-            } else {
-                appliedThemeSummary = draftThemeSummary
-                statusLabel.stringValue = copy("theme_studio.apply_status", fallback: "主题草稿已应用。")
-                statusLabel.textColor = AvatarPanelTheme.text
-                renderSelectedTab()
-            }
+            return
         case .avatar:
             guard let avatarID = selectedAvatarID else {
                 return
@@ -1012,6 +1061,66 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
                 statusLabel.textColor = AvatarPanelTheme.text
                 renderSelectedTab()
             }
+        }
+    }
+
+    @objc private func handleOptimizeThemePrompt() {
+        do {
+            try renderOptimizedThemePrompt(regenerated: false)
+            renderSelectedTab()
+        } catch {
+            showGenerationError(error)
+        }
+    }
+
+    @objc private func handleReoptimizeThemePrompt() {
+        do {
+            try renderOptimizedThemePrompt(regenerated: true)
+            renderSelectedTab()
+        } catch {
+            showGenerationError(error)
+        }
+    }
+
+    @objc private func handlePreviewTheme() {
+        do {
+            try renderThemePreview(regenerated: false)
+            renderSelectedTab()
+        } catch {
+            showGenerationError(error)
+        }
+    }
+
+    @objc private func handleApplyTheme() {
+        let currentPrompt = normalizedPrompt(themeOptimizedPrompt, fallback: "")
+        guard
+            let pendingThemePack,
+            let lastPreviewedThemePrompt,
+            !currentPrompt.isEmpty,
+            currentPrompt == lastPreviewedThemePrompt
+        else {
+            statusLabel.stringValue = copy("avatar_studio.status_ready", fallback: "先生成预览，确认满意后再应用。")
+            statusLabel.textColor = AvatarPanelTheme.muted
+            return
+        }
+
+        if let themeDraftApplier {
+            do {
+                try themeDraftApplier(pendingThemePack)
+                appliedThemeSummary = draftThemeSummary
+                invalidateThemePreview()
+                statusLabel.stringValue = copy("theme_studio.apply_status", fallback: "主题草稿已应用。")
+                statusLabel.textColor = AvatarPanelTheme.text
+                renderSelectedTab()
+            } catch {
+                showGenerationError(error)
+            }
+        } else {
+            appliedThemeSummary = draftThemeSummary
+            invalidateThemePreview()
+            statusLabel.stringValue = copy("theme_studio.apply_status", fallback: "主题草稿已应用。")
+            statusLabel.textColor = AvatarPanelTheme.text
+            renderSelectedTab()
         }
     }
 
