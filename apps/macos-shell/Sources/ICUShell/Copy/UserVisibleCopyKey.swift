@@ -93,7 +93,7 @@ extension UserVisibleCopyKey {
         case .generationConfigWindowTitle:
             return "模型工作台"
         case .generationConfigWindowSubtitle:
-            return "这里只配模型；生成、预览、应用在更换形象页。"
+            return "这里只配模型；生成、预览、应用都在更换形象页。"
         case .generationConfigStatusText:
             return "这里只配置模型，不负责生成与应用。"
         case .generationConfigTextDescriptionTabTitle:

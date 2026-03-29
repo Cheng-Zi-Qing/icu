@@ -22,7 +22,7 @@ func testGenerationConfigWindowUsesInstalledCopyCatalogForVisibleLabels() throws
         {
           "generation_config": {
             "window_title": "模型工作台",
-            "window_subtitle": "这里只配模型；生成、预览、应用在更换形象页。",
+            "window_subtitle": "这里只配模型；生成、预览、应用都在更换形象页。",
             "basic_section_title": "基础信息",
             "provider_label": "提供方",
             "text_description_tab_title": "文字意图",
@@ -57,7 +57,7 @@ func testGenerationConfigWindowUsesInstalledCopyCatalogForVisibleLabels() throws
     }
 
     _ = try requireLabel(in: contentView, stringValue: "模型工作台")
-    _ = try requireLabel(in: contentView, stringValue: "这里只配模型；生成、预览、应用在更换形象页。")
+    _ = try requireLabel(in: contentView, stringValue: "这里只配模型；生成、预览、应用都在更换形象页。")
     _ = try requireButton(in: contentView, title: "文字意图")
     _ = try requireButton(in: contentView, title: "形象素材")
     _ = try requireButton(in: contentView, title: "主题样式代码")

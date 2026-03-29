@@ -20,7 +20,7 @@
   },
   "generation_config": {
     "window_title": "模型工作台",
-    "window_subtitle": "这里只配模型；生成、预览、应用在更换形象页。",
+    "window_subtitle": "这里只配模型；生成、预览、应用都在更换形象页。",
     "status_text": "这里只配置模型，不负责生成与应用。",
     "text_description_tab_title": "文本描述",
     "animation_avatar_tab_title": "动画形象",
