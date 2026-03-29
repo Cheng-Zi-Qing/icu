@@ -146,6 +146,18 @@ func testGenerationConfigWindowCapabilityDetailUsesBasicAndAdvancedSections() th
         findTextField(in: contentView, placeholder: "auth JSON，如 {\"api_key\":\"sk-xxx\"}") == nil,
         "advanced auth field should stay hidden until expanded"
     )
+    try expect(
+        findLabel(in: contentView, stringValue: "高级设置") == nil,
+        "advanced section title should stay hidden until expanded"
+    )
+    try expect(
+        findLabel(in: contentView, stringValue: "认证 JSON") == nil,
+        "advanced auth label should stay hidden until expanded"
+    )
+    try expect(
+        findLabel(in: contentView, stringValue: "选项 JSON") == nil,
+        "advanced options label should stay hidden until expanded"
+    )
 
     try requireButton(in: contentView, title: "显示高级设置").performClick(nil)
 
@@ -217,8 +229,58 @@ func testGenerationConfigWindowUsesCompactFrame() throws {
     }
 
     try expect(
-        contentSize == NSSize(width: 760, height: 640),
-        "generation config window should use a more compact default content size"
+        contentSize == NSSize(width: 804, height: 520),
+        "generation config window should use a tighter default content size"
+    )
+}
+
+func testGenerationConfigWindowUsesThickerFieldDensity() throws {
+    let settingsStore = try makeGenerationSettingsStore()
+    let themeManager = try makeThemeManagerWithPixelDefault()
+    let service = ThemeGenerationService(
+        transport: StubGenerationTransport(
+            results: [
+                .success(#"{\"name\":\"Moss Pixel\",\"summary\":\"掌机感、苔藓绿、低饱和\"}"#),
+                .success(validThemePackJSONString(id: "moss_pixel"))
+            ]
+        ),
+        settingsStore: settingsStore,
+        themeManager: themeManager
+    )
+    let coordinator = GenerationCoordinator(
+        settingsStore: settingsStore,
+        themeManager: themeManager,
+        generationService: service
+    )
+
+    let controller = coordinator.openGenerationConfig()
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "generation config window content view should exist")
+    }
+
+    let modelField = try requireTextField(in: contentView, placeholder: "model")
+    guard let rowStack = modelField.superview as? NSStackView else {
+        throw TestFailure(message: "model field should live inside a stack that controls label spacing")
+    }
+    guard let groupStack = rowStack.superview as? NSStackView else {
+        throw TestFailure(message: "model field rows should be grouped inside a stack that controls row spacing")
+    }
+
+    let heightConstraint = modelField.constraints.first { constraint in
+        constraint.firstAttribute == .height && constraint.firstItem === modelField
+    }
+
+    try expect(
+        heightConstraint?.constant == 42,
+        "model field should use the thicker field height"
+    )
+    try expect(
+        rowStack.spacing == 5,
+        "labels and fields should sit with the thicker label spacing"
+    )
+    try expect(
+        groupStack.spacing == 10,
+        "field rows should respect the tighter vertical rhythm spacing"
     )
 }
 
