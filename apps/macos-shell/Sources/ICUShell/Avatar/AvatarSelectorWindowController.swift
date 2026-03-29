@@ -18,6 +18,11 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         }
     }
 
+    private enum AvatarTabMode {
+        case browse
+        case create
+    }
+
     private let avatars: [AvatarSummary]
     private let themePromptOptimizer: ((String) throws -> String)?
     private let themeDraftGenerator: ((String) throws -> ThemePack)?
@@ -25,10 +30,10 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
     private let speechDraftGenerator: ((String) throws -> SpeechDraft)?
     private let speechDraftApplier: ((SpeechDraft) throws -> Void)?
     private let onChoose: (String) -> Void
-    private let onAddCustom: () -> Void
     private let onClose: () -> Void
 
     private var selectedTab: StudioTab = .theme
+    private var avatarTabMode: AvatarTabMode = .browse
     private var selectedAvatarID: String?
     private var pendingThemePack: ThemePack?
     private var pendingSpeechDraft: SpeechDraft?
@@ -104,7 +109,6 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         speechDraftGenerator: ((String) throws -> SpeechDraft)? = nil,
         speechDraftApplier: ((SpeechDraft) throws -> Void)? = nil,
         onChoose: @escaping (String) -> Void,
-        onAddCustom: @escaping () -> Void,
         onClose: @escaping () -> Void
     ) {
         self.avatars = avatars
@@ -115,7 +119,6 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         self.speechDraftGenerator = speechDraftGenerator
         self.speechDraftApplier = speechDraftApplier
         self.onChoose = onChoose
-        self.onAddCustom = onAddCustom
         self.onClose = onClose
 
         let window = NSWindow(
@@ -131,6 +134,32 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         configureTextViews()
         buildUI()
         subscribeToThemeChanges()
+    }
+
+    convenience init(
+        avatars: [AvatarSummary],
+        currentAvatarID: String?,
+        themePromptOptimizer: ((String) throws -> String)? = nil,
+        themeDraftGenerator: ((String) throws -> ThemePack)? = nil,
+        themeDraftApplier: ((ThemePack) throws -> Void)? = nil,
+        speechDraftGenerator: ((String) throws -> SpeechDraft)? = nil,
+        speechDraftApplier: ((SpeechDraft) throws -> Void)? = nil,
+        onChoose: @escaping (String) -> Void,
+        onAddCustom: @escaping () -> Void,
+        onClose: @escaping () -> Void
+    ) {
+        _ = onAddCustom
+        self.init(
+            avatars: avatars,
+            currentAvatarID: currentAvatarID,
+            themePromptOptimizer: themePromptOptimizer,
+            themeDraftGenerator: themeDraftGenerator,
+            themeDraftApplier: themeDraftApplier,
+            speechDraftGenerator: speechDraftGenerator,
+            speechDraftApplier: speechDraftApplier,
+            onChoose: onChoose,
+            onClose: onClose
+        )
     }
 
     @available(*, unavailable)
@@ -434,22 +463,34 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         )
 
         let listCard = AvatarPanelTheme.makeCard()
-        let detailCard = AvatarPanelTheme.makeCard()
+        let rightCard = AvatarPanelTheme.makeCard()
         listCard.translatesAutoresizingMaskIntoConstraints = false
-        detailCard.translatesAutoresizingMaskIntoConstraints = false
+        rightCard.translatesAutoresizingMaskIntoConstraints = false
         buildAvatarListCard(in: listCard)
-        buildAvatarDetailCard(in: detailCard)
+        switch avatarTabMode {
+        case .browse:
+            buildAvatarDetailCard(in: rightCard)
+        case .create:
+            buildAvatarCreateCard(in: rightCard)
+        }
 
-        let previews = NSStackView(views: [listCard, detailCard])
+        let previews = NSStackView(views: [listCard, rightCard])
         previews.orientation = .horizontal
         previews.spacing = 16
         previews.distribution = .fillEqually
         previews.heightAnchor.constraint(greaterThanOrEqualToConstant: 250).isActive = true
 
         view.addArrangedSubview(summaryRow)
-        view.addArrangedSubview(promptSection)
+        if avatarTabMode == .browse {
+            view.addArrangedSubview(promptSection)
+        }
         view.addArrangedSubview(previews)
-        view.addArrangedSubview(makeActionBar(includeAddCustom: true))
+        switch avatarTabMode {
+        case .browse:
+            view.addArrangedSubview(makeActionBar(includeAddCustom: true))
+        case .create:
+            view.addArrangedSubview(makeAvatarCreateActionBar())
+        }
         return view
     }
 
@@ -729,6 +770,32 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         return stack
     }
 
+    private func makeAvatarCreateActionBar() -> NSView {
+        let returnButton = NSButton(
+            title: copy("avatar_studio.return_to_library_button", fallback: "返回现有形象"),
+            target: self,
+            action: #selector(handleReturnToAvatarLibrary)
+        )
+        let saveAndApplyButton = NSButton(
+            title: copy("avatar_studio.save_and_apply_button", fallback: "保存并应用"),
+            target: self,
+            action: #selector(handleSaveAndApplyInlineAvatar)
+        )
+        AvatarPanelTheme.styleSecondaryButton(returnButton)
+        AvatarPanelTheme.stylePrimaryButton(saveAndApplyButton)
+
+        let stack = NSStackView()
+        stack.orientation = .horizontal
+        stack.spacing = 12
+        stack.addArrangedSubview(NSView())
+        stack.addArrangedSubview(returnButton)
+        stack.addArrangedSubview(saveAndApplyButton)
+
+        returnButton.widthAnchor.constraint(equalToConstant: 132).isActive = true
+        saveAndApplyButton.widthAnchor.constraint(equalToConstant: 110).isActive = true
+        return stack
+    }
+
     private func buildAvatarListCard(in card: NSView) {
         let title = AvatarPanelTheme.makeLabel(copy("avatar_studio.list_title", fallback: "形象列表"), color: AvatarPanelTheme.accent)
         title.translatesAutoresizingMaskIntoConstraints = false
@@ -810,6 +877,65 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         ])
 
         updateAvatarDetailPanel()
+    }
+
+    private func buildAvatarCreateCard(in card: NSView) {
+        let stack = NSStackView()
+        stack.orientation = .vertical
+        stack.spacing = 12
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(stack)
+
+        let modeLabel = AvatarPanelTheme.makeLabel(
+            copy("avatar_studio.create_mode_title", fallback: "当前模式：新建形象"),
+            color: AvatarPanelTheme.accent
+        )
+        let promptTitle = AvatarPanelTheme.makeLabel(
+            copy("avatar_studio.create_prompt_title", fallback: "原始 prompt"),
+            color: AvatarPanelTheme.accent
+        )
+        let optimizedPromptTitle = AvatarPanelTheme.makeLabel(
+            copy("avatar_studio.create_optimized_prompt_title", fallback: "优化后 prompt"),
+            color: AvatarPanelTheme.accent
+        )
+        let actionsTitle = AvatarPanelTheme.makeLabel(
+            copy("avatar_studio.create_actions_title", fallback: "动作生成"),
+            color: AvatarPanelTheme.accent
+        )
+        let saveInfoTitle = AvatarPanelTheme.makeLabel(
+            copy("avatar_studio.create_save_info_title", fallback: "保存后将自动应用这个新形象。"),
+            color: AvatarPanelTheme.muted,
+            font: AvatarPanelTheme.smallFont
+        )
+
+        stack.addArrangedSubview(modeLabel)
+        stack.addArrangedSubview(promptTitle)
+        stack.addArrangedSubview(
+            AvatarPanelTheme.makeLabel(
+                copy("avatar_studio.prompt_hint", fallback: "描述你想生成的形象、动作和动画关键词。"),
+                color: AvatarPanelTheme.muted,
+                font: AvatarPanelTheme.smallFont
+            )
+        )
+        stack.addArrangedSubview(makeTextScrollView(textView: avatarPromptView, minHeight: 96))
+        stack.addArrangedSubview(optimizedPromptTitle)
+        stack.addArrangedSubview(
+            AvatarPanelTheme.makeLabel(
+                copy("avatar_studio.prompt_hint", fallback: "描述你想生成的形象、动作和动画关键词。"),
+                color: AvatarPanelTheme.muted,
+                font: AvatarPanelTheme.smallFont
+            )
+        )
+        stack.addArrangedSubview(actionsTitle)
+        stack.addArrangedSubview(saveInfoTitle)
+        stack.addArrangedSubview(NSView())
+
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: card.topAnchor, constant: 16),
+            stack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 16),
+            stack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
+            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -16),
+        ])
     }
 
     private func updateAvatarDetailPanel() {
@@ -1179,9 +1305,25 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
     }
 
     @objc private func handleAddCustom() {
-        didFinish = true
-        onAddCustom()
-        close()
+        guard selectedTab == .avatar else {
+            return
+        }
+
+        avatarTabMode = .create
+        renderSelectedTab()
+    }
+
+    @objc private func handleReturnToAvatarLibrary() {
+        avatarTabMode = .browse
+        renderSelectedTab()
+    }
+
+    @objc private func handleSaveAndApplyInlineAvatar() {
+        statusLabel.stringValue = copy(
+            "avatar_studio.create_save_info_title",
+            fallback: "保存后将自动应用这个新形象。"
+        )
+        statusLabel.textColor = AvatarPanelTheme.accent
     }
 
     @objc private func handleCancel() {

@@ -140,6 +140,94 @@ func testAvatarSelectorThemeTabOmitsModelSummaryAndCrossDomainPanels() throws {
     )
 }
 
+func testAvatarSelectorAvatarTabEntersInlineCreateMode() throws {
+    let previewURL = try makeTinyPNG()
+    var addCustomCalls = 0
+    let controller = AvatarSelectorWindowController(
+        avatars: [
+            AvatarSummary(
+                id: "capybara",
+                name: "水豚",
+                style: "像素",
+                previewURL: previewURL,
+                traits: "稳重",
+                tone: "冷静"
+            )
+        ],
+        currentAvatarID: "capybara",
+        onChoose: { _ in },
+        onAddCustom: { addCustomCalls += 1 },
+        onClose: {}
+    )
+
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "selector content view should exist")
+    }
+
+    try requireButton(in: contentView, title: "桌宠形象动画").performClick(nil)
+    try requireButton(in: contentView, title: "新增自定义形象").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    try expect(
+        addCustomCalls == 0,
+        "avatar tab should enter inline create mode instead of triggering the legacy add-custom callback"
+    )
+    _ = try requireLabel(in: contentView, stringValue: "当前模式：新建形象")
+    _ = try requireButton(in: contentView, title: "返回现有形象")
+    _ = try requireButton(in: contentView, title: "保存并应用")
+    _ = try requireLabel(in: contentView, stringValue: "形象列表")
+    try expect(
+        controller.window != nil,
+        "selector window should stay open when entering inline create mode"
+    )
+}
+
+func testAvatarSelectorInlineCreateModeReturnsToBrowseModeWithoutClosing() throws {
+    let previewURL = try makeTinyPNG()
+    let controller = AvatarSelectorWindowController(
+        avatars: [
+            AvatarSummary(
+                id: "capybara",
+                name: "水豚",
+                style: "像素",
+                previewURL: previewURL,
+                traits: "稳重",
+                tone: "冷静"
+            )
+        ],
+        currentAvatarID: "capybara",
+        onChoose: { _ in },
+        onAddCustom: {},
+        onClose: {}
+    )
+
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "selector content view should exist")
+    }
+
+    try requireButton(in: contentView, title: "桌宠形象动画").performClick(nil)
+    try requireButton(in: contentView, title: "新增自定义形象").performClick(nil)
+    _ = try requireLabel(in: contentView, stringValue: "当前模式：新建形象")
+
+    try requireButton(in: contentView, title: "返回现有形象").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    try expect(
+        findLabel(in: contentView, stringValue: "当前模式：新建形象") == nil,
+        "returning to browse mode should hide the create mode title"
+    )
+    _ = try requireLabel(in: contentView, stringValue: "预览与说明")
+    _ = try requireButton(in: contentView, title: "新增自定义形象")
+    try expect(
+        findButton(in: contentView, title: "返回现有形象") == nil,
+        "browse mode should hide the return-to-library button"
+    )
+    try expect(
+        controller.window != nil,
+        "selector window should remain open after returning to browse mode"
+    )
+}
+
 func testAvatarSelectorThemeTabGeneratesDraftBeforeApplyingTheme() throws {
     let environment = try makeGenerationEnvironment()
     ThemeManager.installShared(environment.themeManager)
