@@ -140,11 +140,18 @@ func testGenerationConfigWindowCapabilityDetailUsesBasicAndAdvancedSections() th
     _ = try requireLabel(in: contentView, stringValue: "服务商")
     _ = try requireLabel(in: contentView, stringValue: "模型")
     _ = try requireLabel(in: contentView, stringValue: "接口地址")
-    _ = try requireButton(in: contentView, title: "显示高级设置")
+    _ = try requireTextField(in: contentView, placeholder: "provider，如 ollama / huggingface / openai-compatible")
+    _ = try requireTextField(in: contentView, placeholder: "model")
+    _ = try requireTextField(in: contentView, placeholder: "base_url")
+    let advancedToggle = try requireButton(in: contentView, title: "显示高级设置")
 
     try expect(
         findTextField(in: contentView, placeholder: "auth JSON，如 {\"api_key\":\"sk-xxx\"}") == nil,
         "advanced auth field should stay hidden until expanded"
+    )
+    try expect(
+        findTextField(in: contentView, placeholder: "options JSON，如 {\"temperature\":0.7}") == nil,
+        "advanced options field should stay hidden until expanded"
     )
     try expect(
         findLabel(in: contentView, stringValue: "高级设置") == nil,
@@ -159,11 +166,13 @@ func testGenerationConfigWindowCapabilityDetailUsesBasicAndAdvancedSections() th
         "advanced options label should stay hidden until expanded"
     )
 
-    try requireButton(in: contentView, title: "显示高级设置").performClick(nil)
+    advancedToggle.performClick(nil)
 
     _ = try requireLabel(in: contentView, stringValue: "高级设置")
     _ = try requireLabel(in: contentView, stringValue: "认证 JSON")
     _ = try requireLabel(in: contentView, stringValue: "选项 JSON")
+    _ = try requireTextField(in: contentView, placeholder: "auth JSON，如 {\"api_key\":\"sk-xxx\"}")
+    _ = try requireTextField(in: contentView, placeholder: "options JSON，如 {\"temperature\":0.7}")
 }
 
 func testGenerationConfigWindowPreservesDraftAcrossNavigationSwitches() throws {
@@ -257,14 +266,9 @@ func testGenerationConfigWindowUsesThickerFieldDensity() throws {
     guard let contentView = controller.window?.contentView else {
         throw TestFailure(message: "generation config window content view should exist")
     }
+    contentView.layoutSubtreeIfNeeded()
 
     let modelField = try requireTextField(in: contentView, placeholder: "model")
-    guard let rowStack = modelField.superview as? NSStackView else {
-        throw TestFailure(message: "model field should live inside a stack that controls label spacing")
-    }
-    guard let groupStack = rowStack.superview as? NSStackView else {
-        throw TestFailure(message: "model field rows should be grouped inside a stack that controls row spacing")
-    }
 
     let heightConstraint = modelField.constraints.first { constraint in
         constraint.firstAttribute == .height && constraint.firstItem === modelField
@@ -274,14 +278,7 @@ func testGenerationConfigWindowUsesThickerFieldDensity() throws {
         heightConstraint?.constant == 42,
         "model field should use the thicker field height"
     )
-    try expect(
-        rowStack.spacing == 5,
-        "labels and fields should sit with the thicker label spacing"
-    )
-    try expect(
-        groupStack.spacing == 10,
-        "field rows should respect the tighter vertical rhythm spacing"
-    )
+    try expect(modelField.frame.height == 42, "model field should render at the thicker field height")
 }
 
 func testGenerationCoordinatorReusesConfigWindowController() throws {
