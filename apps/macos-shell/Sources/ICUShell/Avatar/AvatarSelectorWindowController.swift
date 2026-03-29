@@ -45,6 +45,10 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         color: AvatarPanelTheme.muted
     )
     private var tabButtons: [StudioTab: NSButton] = [:]
+    private weak var themeOptimizeButton: NSButton?
+    private weak var themeReoptimizeButton: NSButton?
+    private weak var themePreviewButton: NSButton?
+    private weak var themeApplyButton: NSButton?
     private var themeObserver: NSObjectProtocol?
     private var didFinish = false
 
@@ -322,6 +326,10 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
 
     private func renderSelectedTab() {
         contentCard.subviews.forEach { $0.removeFromSuperview() }
+        themeOptimizeButton = nil
+        themeReoptimizeButton = nil
+        themePreviewButton = nil
+        themeApplyButton = nil
 
         let activeView: NSView
         switch selectedTab {
@@ -342,6 +350,7 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
             activeView.bottomAnchor.constraint(equalTo: contentCard.bottomAnchor, constant: -16),
         ])
 
+        updateThemeActionButtonStates()
         updateTabStyles()
     }
 
@@ -677,6 +686,12 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         stack.addArrangedSubview(previewButton)
         stack.addArrangedSubview(applyButton)
 
+        themeOptimizeButton = optimizeButton
+        themeReoptimizeButton = reoptimizeButton
+        themePreviewButton = previewButton
+        themeApplyButton = applyButton
+        updateThemeActionButtonStates()
+
         optimizeButton.widthAnchor.constraint(equalToConstant: 110).isActive = true
         reoptimizeButton.widthAnchor.constraint(equalToConstant: 110).isActive = true
         previewButton.widthAnchor.constraint(equalToConstant: 110).isActive = true
@@ -872,6 +887,32 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         invalidateThemePreview()
         draftThemeSummary = copy("theme_studio.draft_placeholder", fallback: "尚未生成新的主题草稿。")
         themeBubblePreviewText = copy("theme_studio.preview_invalidated_bubble", fallback: "优化后 prompt 已变更，请重新预览效果。")
+        updateThemeActionButtonStates()
+    }
+
+    private func hasNonEmptyOptimizedThemePrompt() -> Bool {
+        !normalizedPrompt(themeOptimizedPrompt, fallback: "").isEmpty
+    }
+
+    private func hasValidThemePreviewDraft() -> Bool {
+        let currentPrompt = normalizedPrompt(themeOptimizedPrompt, fallback: "")
+        guard
+            let pendingThemePack,
+            let lastPreviewedThemePrompt,
+            !currentPrompt.isEmpty
+        else {
+            return false
+        }
+
+        _ = pendingThemePack
+        return currentPrompt == lastPreviewedThemePrompt
+    }
+
+    private func updateThemeActionButtonStates() {
+        themeOptimizeButton?.isEnabled = true
+        themeReoptimizeButton?.isEnabled = true
+        themePreviewButton?.isEnabled = hasNonEmptyOptimizedThemePrompt()
+        themeApplyButton?.isEnabled = hasValidThemePreviewDraft()
     }
 
     private func renderOptimizedThemePrompt(regenerated: Bool) throws {
@@ -1074,6 +1115,8 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
     }
 
     @objc private func handleOptimizeThemePrompt() {
+        invalidateThemePreviewPresentation()
+        renderSelectedTab()
         do {
             try renderOptimizedThemePrompt(regenerated: false)
             renderSelectedTab()
@@ -1083,6 +1126,8 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
     }
 
     @objc private func handleReoptimizeThemePrompt() {
+        invalidateThemePreviewPresentation()
+        renderSelectedTab()
         do {
             try renderOptimizedThemePrompt(regenerated: true)
             renderSelectedTab()

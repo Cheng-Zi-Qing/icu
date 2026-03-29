@@ -408,6 +408,141 @@ func testAvatarSelectorThemeTabInvalidatesApplyWhenOptimizedPromptChanges() thro
     )
 }
 
+func testAvatarSelectorThemeTabBlocksApplyAfterFailedReoptimize() throws {
+    let environment = try makeGenerationEnvironment()
+    ThemeManager.installShared(environment.themeManager)
+
+    let previewURL = try makeTinyPNG()
+    let generatedPack = makeAppKitTestThemePack(id: "generated_preview_theme_reoptimize_failure")
+    var optimizeCalls = 0
+    var appliedPackIDs: [String] = []
+
+    let controller = AvatarSelectorWindowController(
+        avatars: [
+            AvatarSummary(
+                id: "capybara",
+                name: "水豚",
+                style: "像素",
+                previewURL: previewURL,
+                traits: "稳重",
+                tone: "冷静"
+            )
+        ],
+        currentAvatarID: "capybara",
+        themePromptOptimizer: { prompt in
+            optimizeCalls += 1
+            if optimizeCalls == 1 {
+                return "optimized::\(prompt)"
+            }
+            throw AvatarBuilderBridgeError.executionFailed(command: "optimize-prompt", details: "bridge down")
+        },
+        themeDraftGenerator: { _ in
+            generatedPack
+        },
+        themeDraftApplier: { pack in
+            appliedPackIDs.append(pack.meta.id)
+            try environment.themeManager.apply(pack)
+        },
+        onChoose: { _ in },
+        onAddCustom: {},
+        onClose: {}
+    )
+
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "selector content view should exist")
+    }
+
+    let rawPromptView = try requireTextView(in: contentView, identifier: "themeRawPrompt")
+    rawPromptView.string = "raw theme prompt"
+    controller.textDidChange(Notification(name: NSText.didChangeNotification, object: rawPromptView))
+
+    try requireActionButton(in: contentView, title: "优化 prompt").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    try requireActionButton(in: contentView, title: "预览效果").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    try requireActionButton(in: contentView, title: "重新优化").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    try requireActionButton(in: contentView, title: "应用主题").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    try expect(
+        appliedPackIDs.isEmpty,
+        "theme apply should stay blocked when reoptimize fails after a previous preview"
+    )
+    try expect(
+        environment.themeManager.currentTheme.id == "pixel_default",
+        "theme apply should not activate a stale preview after reoptimize fails"
+    )
+    _ = try requireLabel(in: contentView, stringValue: "尚未生成新的主题草稿。")
+    _ = try requireLabel(in: contentView, stringValue: "优化后 prompt 已变更，请重新预览效果。")
+}
+
+func testAvatarSelectorThemeTabUpdatesActionButtonStatesAcrossReviewFlow() throws {
+    let previewURL = try makeTinyPNG()
+
+    let controller = AvatarSelectorWindowController(
+        avatars: [
+            AvatarSummary(
+                id: "capybara",
+                name: "水豚",
+                style: "像素",
+                previewURL: previewURL,
+                traits: "稳重",
+                tone: "冷静"
+            )
+        ],
+        currentAvatarID: "capybara",
+        themePromptOptimizer: { prompt in
+            "optimized::\(prompt)"
+        },
+        themeDraftGenerator: { _ in
+            makeAppKitTestThemePack(id: "generated_preview_theme_button_states")
+        },
+        onChoose: { _ in },
+        onAddCustom: {},
+        onClose: {}
+    )
+
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "selector content view should exist")
+    }
+
+    let initialPreviewButton = try requireActionButton(in: contentView, title: "预览效果")
+    let initialApplyButton = try requireActionButton(in: contentView, title: "应用主题")
+    try expect(initialPreviewButton.isEnabled == false, "theme preview button should start disabled before an optimized prompt exists")
+    try expect(initialApplyButton.isEnabled == false, "theme apply button should start disabled before a preview exists")
+
+    let rawPromptView = try requireTextView(in: contentView, identifier: "themeRawPrompt")
+    let optimizedPromptView = try requireTextView(in: contentView, identifier: "themeOptimizedPrompt")
+    rawPromptView.string = "raw button state prompt"
+    controller.textDidChange(Notification(name: NSText.didChangeNotification, object: rawPromptView))
+
+    try requireActionButton(in: contentView, title: "优化 prompt").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    let previewButtonAfterOptimize = try requireActionButton(in: contentView, title: "预览效果")
+    let applyButtonAfterOptimize = try requireActionButton(in: contentView, title: "应用主题")
+    try expect(previewButtonAfterOptimize.isEnabled == true, "theme preview button should enable once an optimized prompt exists")
+    try expect(applyButtonAfterOptimize.isEnabled == false, "theme apply button should stay disabled until preview succeeds")
+
+    try requireActionButton(in: contentView, title: "预览效果").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    let previewButtonAfterPreview = try requireActionButton(in: contentView, title: "预览效果")
+    let applyButtonAfterPreview = try requireActionButton(in: contentView, title: "应用主题")
+    try expect(previewButtonAfterPreview.isEnabled == true, "theme preview button should remain enabled after preview")
+    try expect(applyButtonAfterPreview.isEnabled == true, "theme apply button should enable after a valid preview exists")
+
+    optimizedPromptView.string = "optimized::raw button state prompt edited"
+    controller.textDidChange(Notification(name: NSText.didChangeNotification, object: optimizedPromptView))
+
+    let previewButtonAfterEdit = try requireActionButton(in: contentView, title: "预览效果")
+    let applyButtonAfterEdit = try requireActionButton(in: contentView, title: "应用主题")
+    try expect(previewButtonAfterEdit.isEnabled == true, "theme preview button should stay enabled when the edited optimized prompt is still non-empty")
+    try expect(applyButtonAfterEdit.isEnabled == false, "theme apply button should disable when the optimized prompt invalidates the last preview")
+}
+
 func testAvatarWizardWindowRestylesWhenThemeChanges() throws {
     let manager = try makeInstalledThemeManager()
     let repoRoot = try makeTemporaryDirectory()
