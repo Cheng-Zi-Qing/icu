@@ -85,7 +85,7 @@ func testAvatarSelectorWindowUsesStudioTabsAndThemeBubblePreviewByDefault() thro
     _ = try requireButton(in: contentView, title: "桌宠形象动画")
     _ = try requireButton(in: contentView, title: "话术")
     _ = try requireLabel(in: contentView, stringValue: "当前已应用主题")
-    _ = try requireLabel(in: contentView, stringValue: "prompt")
+    _ = try requireLabel(in: contentView, stringValue: "原始 prompt")
     _ = try requireLabel(in: contentView, stringValue: "优化后 prompt")
     _ = try requireLabel(in: contentView, stringValue: "样式草稿")
     _ = try requireLabel(in: contentView, stringValue: "桌宠气泡预览")
@@ -719,7 +719,9 @@ func testAvatarSelectorWindowUsesInstalledCopyCatalogForStudioLabels() throws {
         {
           "theme_studio": {
             "tab_title": "主题风格",
-            "applied_summary_title": "当前已应用主题"
+            "applied_summary_title": "当前已应用主题",
+            "raw_prompt_title": "原始 prompt",
+            "optimized_prompt_title": "优化后 prompt"
           },
           "avatar_studio": {
             "tab_title": "桌宠形象动画"
@@ -734,7 +736,9 @@ func testAvatarSelectorWindowUsesInstalledCopyCatalogForStudioLabels() throws {
         {
           "theme_studio": {
             "tab_title": "界面样式",
-            "applied_summary_title": "已应用样式"
+            "applied_summary_title": "已应用样式",
+            "raw_prompt_title": "原始描述",
+            "optimized_prompt_title": "整理后描述"
           },
           "avatar_studio": {
             "tab_title": "角色动作"
@@ -773,6 +777,8 @@ func testAvatarSelectorWindowUsesInstalledCopyCatalogForStudioLabels() throws {
     _ = try requireButton(in: contentView, title: "角色动作")
     _ = try requireButton(in: contentView, title: "对话文本")
     _ = try requireLabel(in: contentView, stringValue: "已应用样式")
+    _ = try requireLabel(in: contentView, stringValue: "原始描述")
+    _ = try requireLabel(in: contentView, stringValue: "整理后描述")
 }
 
 func testAvatarSelectorPreservesSelectedStudioTabWhenThemeChanges() throws {

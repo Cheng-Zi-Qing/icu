@@ -49,7 +49,7 @@
     "applied_summary_default": "默认 PixelTheme 已应用到菜单、配置面板和桌宠状态条。",
     "draft_title": "样式草稿",
     "draft_placeholder": "尚未生成新的主题草稿。",
-    "raw_prompt_title": "prompt",
+    "raw_prompt_title": "原始 prompt",
     "optimized_prompt_title": "优化后 prompt",
     "prompt_hint": "用 prompt 描述你想要的 GUI 气质，包括右键菜单、配置页和状态气泡。",
     "optimized_prompt_hint": "优化后的 prompt 会用于主题预览和应用，你可以继续手动编辑。",

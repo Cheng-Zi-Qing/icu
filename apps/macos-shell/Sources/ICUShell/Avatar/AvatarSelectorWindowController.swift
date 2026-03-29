@@ -360,7 +360,7 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         view.spacing = 14
 
         let rawPromptSection = makePromptSection(
-            title: copy("theme_studio.raw_prompt_title", fallback: "prompt"),
+            title: copy("theme_studio.raw_prompt_title", fallback: "原始 prompt"),
             hint: copy("theme_studio.prompt_hint", fallback: "用 prompt 描述你想要的 GUI 气质，包括右键菜单、配置页和状态气泡。"),
             textView: themeRawPromptView,
             storedText: themeRawPrompt,
