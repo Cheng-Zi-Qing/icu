@@ -48,15 +48,20 @@ enum GenerationConfigFormError: Error, LocalizedError {
 }
 
 final class GenerationConfigWindowController: NSWindowController, NSWindowDelegate {
+    private final class FlippedView: NSView {
+        override var isFlipped: Bool { true }
+    }
+
     private enum Layout {
         static let windowSize = NSSize(width: 804, height: 520)
-        static let contentInset: CGFloat = 16
-        static let rootSpacing: CGFloat = 8
-        static let contentSpacing: CGFloat = 8
+        static let contentInset: CGFloat = 12
+        static let cardContentInset: CGFloat = 10
+        static let rootSpacing: CGFloat = 4
+        static let contentSpacing: CGFloat = 4
         static let tabSpacing: CGFloat = 8
         static let tabHeight: CGFloat = 30
         static let fieldRowSpacing: CGFloat = 10
-        static let labelSpacing: CGFloat = 5
+        static let labelSpacing: CGFloat = 2
         static let fieldHeight: CGFloat = 42
     }
 
@@ -149,15 +154,21 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
         root.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(root)
 
-        let titleLabel = AvatarPanelTheme.makeTitleLabel(TextCatalog.shared.text(.generationConfigWindowTitle))
+        let titleLabel = AvatarPanelTheme.makeLabel(
+            TextCatalog.shared.text(.generationConfigWindowTitle),
+            color: AvatarPanelTheme.accent,
+            font: AvatarPanelTheme.bodyFont
+        )
         let subtitleLabel = AvatarPanelTheme.makeLabel(
             TextCatalog.shared.text(.generationConfigWindowSubtitle),
             color: AvatarPanelTheme.muted,
             font: AvatarPanelTheme.smallFont
         )
+        subtitleLabel.lineBreakMode = .byTruncatingTail
+        subtitleLabel.maximumNumberOfLines = 1
         let header = NSStackView(views: [titleLabel, subtitleLabel])
         header.orientation = .vertical
-        header.spacing = 2
+        header.spacing = 0
 
         statusLabel.font = AvatarPanelTheme.smallFont
         statusLabel.lineBreakMode = .byTruncatingTail
@@ -214,17 +225,17 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
         let detailView = buildCapabilityDetail(for: selectedCapability)
         detailView.translatesAutoresizingMaskIntoConstraints = false
 
-        let documentView = NSView()
+        let documentView = FlippedView()
         documentView.translatesAutoresizingMaskIntoConstraints = false
         documentView.addSubview(detailView)
         scrollView.documentView = documentView
         card.addSubview(scrollView)
 
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: card.topAnchor, constant: Layout.contentInset),
-            scrollView.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: Layout.contentInset),
-            scrollView.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -Layout.contentInset),
-            scrollView.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -Layout.contentInset),
+            scrollView.topAnchor.constraint(equalTo: card.topAnchor, constant: Layout.cardContentInset),
+            scrollView.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: Layout.cardContentInset),
+            scrollView.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -Layout.cardContentInset),
+            scrollView.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -Layout.cardContentInset),
             detailView.topAnchor.constraint(equalTo: documentView.topAnchor),
             detailView.leadingAnchor.constraint(equalTo: documentView.leadingAnchor),
             detailView.trailingAnchor.constraint(equalTo: documentView.trailingAnchor),
@@ -237,7 +248,7 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
     }
 
     private func buildCapabilityDetail(for kind: GenerationCapabilityKind) -> NSView {
-        let contentView = NSView()
+        let contentView = FlippedView()
         contentView.translatesAutoresizingMaskIntoConstraints = false
 
         let stack = NSStackView()
@@ -246,17 +257,23 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
         stack.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(stack)
 
-        let titleLabel = AvatarPanelTheme.makeTitleLabel(kind.title)
+        let titleLabel = AvatarPanelTheme.makeLabel(kind.title, color: AvatarPanelTheme.accent, font: AvatarPanelTheme.smallFont)
         let descriptionLabel = AvatarPanelTheme.makeLabel(
             kind.detailDescription,
             color: AvatarPanelTheme.muted,
             font: AvatarPanelTheme.smallFont
         )
+        descriptionLabel.lineBreakMode = .byTruncatingTail
+        descriptionLabel.maximumNumberOfLines = 1
         let detailHeader = NSStackView(views: [titleLabel, descriptionLabel])
         detailHeader.orientation = .vertical
-        detailHeader.spacing = 2
+        detailHeader.spacing = 1
 
-        let basicLabel = AvatarPanelTheme.makeLabel(TextCatalog.shared.text(.generationConfigBasicSectionTitle), color: AvatarPanelTheme.accent)
+        let basicLabel = AvatarPanelTheme.makeLabel(
+            TextCatalog.shared.text(.generationConfigBasicSectionTitle),
+            color: AvatarPanelTheme.accent,
+            font: AvatarPanelTheme.smallFont
+        )
 
         let providerField = makeField(placeholder: TextCatalog.shared.text(.generationConfigProviderPlaceholder))
         let modelField = makeField(placeholder: TextCatalog.shared.text(.generationConfigModelPlaceholder))

@@ -50,6 +50,7 @@ struct ThemeAppKitManualMain {
             try testGenerationConfigWindowPreservesDraftAcrossNavigationSwitches()
             try testGenerationConfigWindowUsesCompactFrame()
             try testGenerationConfigWindowUsesThickerFieldDensity()
+            try testGenerationConfigWindowKeepsCoreFieldsInUpperViewportBand()
             try testGenerationCoordinatorReusesConfigWindowController()
             try testGenerationConfigWindowLoadsSavedSettingsAndRestylesOnThemeChange()
             try testGenerationConfigWindowDoesNotRenderThemeGenerationControls()

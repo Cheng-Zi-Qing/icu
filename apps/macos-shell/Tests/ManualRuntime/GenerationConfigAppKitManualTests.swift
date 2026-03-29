@@ -22,7 +22,7 @@ func testGenerationConfigWindowUsesInstalledCopyCatalogForVisibleLabels() throws
         {
           "generation_config": {
             "window_title": "模型工作台",
-            "window_subtitle": "这里只配模型，生成和预览去创作页。",
+            "window_subtitle": "这里只配模型；生成、预览、应用在更换形象页。",
             "basic_section_title": "基础信息",
             "provider_label": "提供方",
             "text_description_tab_title": "文字意图",
@@ -57,7 +57,7 @@ func testGenerationConfigWindowUsesInstalledCopyCatalogForVisibleLabels() throws
     }
 
     _ = try requireLabel(in: contentView, stringValue: "模型工作台")
-    _ = try requireLabel(in: contentView, stringValue: "这里只配模型，生成和预览去创作页。")
+    _ = try requireLabel(in: contentView, stringValue: "这里只配模型；生成、预览、应用在更换形象页。")
     _ = try requireButton(in: contentView, title: "文字意图")
     _ = try requireButton(in: contentView, title: "形象素材")
     _ = try requireButton(in: contentView, title: "主题样式代码")
@@ -279,6 +279,44 @@ func testGenerationConfigWindowUsesThickerFieldDensity() throws {
         "model field should use the thicker field height"
     )
     try expect(modelField.frame.height == 42, "model field should render at the thicker field height")
+}
+
+func testGenerationConfigWindowKeepsCoreFieldsInUpperViewportBand() throws {
+    let settingsStore = try makeGenerationSettingsStore()
+    let themeManager = try makeThemeManagerWithPixelDefault()
+    let service = ThemeGenerationService(
+        transport: StubGenerationTransport(
+            results: [
+                .success(#"{\"name\":\"Moss Pixel\",\"summary\":\"掌机感、苔藓绿、低饱和\"}"#),
+                .success(validThemePackJSONString(id: "moss_pixel"))
+            ]
+        ),
+        settingsStore: settingsStore,
+        themeManager: themeManager
+    )
+    let coordinator = GenerationCoordinator(
+        settingsStore: settingsStore,
+        themeManager: themeManager,
+        generationService: service
+    )
+
+    let controller = coordinator.openGenerationConfig()
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "generation config window content view should exist")
+    }
+    contentView.layoutSubtreeIfNeeded()
+
+    let providerField = try requireTextField(
+        in: contentView,
+        placeholder: "provider，如 ollama / huggingface / openai-compatible"
+    )
+    let providerFrameInContent = providerField.convert(providerField.bounds, to: contentView)
+    let topGap = contentView.bounds.maxY - providerFrameInContent.maxY
+
+    try expect(
+        topGap <= 170,
+        "provider field should stay within the upper viewport band for field-first density"
+    )
 }
 
 func testGenerationCoordinatorReusesConfigWindowController() throws {
