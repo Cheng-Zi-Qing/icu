@@ -371,6 +371,9 @@ func testAvatarSelectorThemeTabInvalidatesApplyWhenOptimizedPromptChanges() thro
     try requireActionButton(in: contentView, title: "预览效果").performClick(nil)
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
 
+    _ = try requireLabel(in: contentView, stringValue: "草稿 1：AppKit Test Theme / optimized::raw theme prompt")
+    _ = try requireLabel(in: contentView, stringValue: "待命中，点击我可展开菜单。")
+
     optimizedPromptView.string = "optimized::raw theme prompt edited"
     controller.textDidChange(Notification(name: NSText.didChangeNotification, object: optimizedPromptView))
 
@@ -388,6 +391,16 @@ func testAvatarSelectorThemeTabInvalidatesApplyWhenOptimizedPromptChanges() thro
     try expect(
         environment.themeManager.currentTheme.id == "pixel_default",
         "theme apply should keep the current theme unchanged after the optimized prompt changes"
+    )
+    _ = try requireLabel(in: contentView, stringValue: "尚未生成新的主题草稿。")
+    _ = try requireLabel(in: contentView, stringValue: "优化后 prompt 已变更，请重新预览效果。")
+    try expect(
+        findLabel(in: contentView, stringValue: "草稿 1：AppKit Test Theme / optimized::raw theme prompt") == nil,
+        "theme draft summary should stop presenting the stale preview as current after optimized prompt changes"
+    )
+    try expect(
+        findLabel(in: contentView, stringValue: "待命中，点击我可展开菜单。") == nil,
+        "theme preview bubble should stop presenting the stale preview as current after optimized prompt changes"
     )
     try expect(
         findLabel(in: contentView, stringValue: "主题草稿已应用。") == nil,

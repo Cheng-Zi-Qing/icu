@@ -195,7 +195,10 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
             themeRawPrompt = textView.string
         case "themeOptimizedPrompt":
             themeOptimizedPrompt = textView.string
-            invalidateThemePreview()
+            invalidateThemePreviewPresentation()
+            if selectedTab == .theme {
+                renderSelectedTab()
+            }
         case "avatarPrompt":
             avatarPrompt = textView.string
         case "speechPrompt":
@@ -865,6 +868,12 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         lastPreviewedThemePrompt = nil
     }
 
+    private func invalidateThemePreviewPresentation() {
+        invalidateThemePreview()
+        draftThemeSummary = copy("theme_studio.draft_placeholder", fallback: "尚未生成新的主题草稿。")
+        themeBubblePreviewText = copy("theme_studio.preview_invalidated_bubble", fallback: "优化后 prompt 已变更，请重新预览效果。")
+    }
+
     private func renderOptimizedThemePrompt(regenerated: Bool) throws {
         let prompt = normalizedPrompt(
             themeRawPrompt,
@@ -878,7 +887,7 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
 
         themeOptimizedPrompt = optimized
         themeOptimizedPromptView.string = optimized
-        invalidateThemePreview()
+        invalidateThemePreviewPresentation()
         statusLabel.stringValue = regenerated
             ? copy("theme_studio.reoptimized_status", fallback: "prompt 已重新优化。")
             : copy("theme_studio.optimized_status", fallback: "prompt 优化完成。")

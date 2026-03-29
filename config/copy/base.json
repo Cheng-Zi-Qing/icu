@@ -57,6 +57,7 @@
     "bubble_preview_note": "主题生成必须覆盖桌宠 transient/status bubble。",
     "bubble_default": "待命中，点击我可展开菜单。",
     "bubble_regenerated": "新的像素气泡已生成，试试这版菜单边框。",
+    "preview_invalidated_bubble": "优化后 prompt 已变更，请重新预览效果。",
     "chrome_preview_title": "右键菜单与表单预览",
     "chrome_preview_hint": "主题会统一覆盖右键弹出栏、配置输入框和主要按钮。",
     "chrome_preview_change_avatar": "更换形象",
