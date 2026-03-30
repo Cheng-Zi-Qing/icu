@@ -29,7 +29,7 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
     private let themeDraftApplier: ((ThemePack) throws -> Void)?
     private let avatarPromptOptimizer: ((String) throws -> String)?
     private let avatarPreviewGenerator: ((String) throws -> InlineAvatarPreviewDraft)?
-    private let avatarSaveHandler: ((InlineAvatarSaveRequest) throws -> Void)?
+    private let avatarSaveHandler: ((InlineAvatarSaveRequest) throws -> String)?
     private let speechDraftGenerator: ((String) throws -> SpeechDraft)?
     private let speechDraftApplier: ((SpeechDraft) throws -> Void)?
     private let onChoose: (String) -> Void
@@ -81,6 +81,7 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
     private var creationPreviewDraft: InlineAvatarPreviewDraft?
     private var creationDraftName = ""
     private var creationDraftPersona = ""
+    private var previousSuggestedPersona = ""
     private var creationStage: InlineAvatarCreationStage = .empty
     private var speechPrompt = ""
 
@@ -125,7 +126,7 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         themeDraftApplier: ((ThemePack) throws -> Void)? = nil,
         avatarPromptOptimizer: ((String) throws -> String)? = nil,
         avatarPreviewGenerator: ((String) throws -> InlineAvatarPreviewDraft)? = nil,
-        avatarSaveHandler: ((InlineAvatarSaveRequest) throws -> Void)? = nil,
+        avatarSaveHandler: ((InlineAvatarSaveRequest) throws -> String)? = nil,
         speechDraftGenerator: ((String) throws -> SpeechDraft)? = nil,
         speechDraftApplier: ((SpeechDraft) throws -> Void)? = nil,
         onChoose: @escaping (String) -> Void,
@@ -1219,7 +1220,7 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
 
     private func inlineAvatarActionStatusLines() -> [String] {
         let availableActions = creationPreviewDraft?.actionImageURLs ?? [:]
-        return ["idle", "working", "alert"].map { action in
+        return InlineAvatarCreation.requiredActions.map { action in
             let suffix = availableActions[action] == nil
                 ? copy("avatar_wizard.action_pending", fallback: "未生成")
                 : copy("avatar_wizard.generated_status", fallback: "已生成")
@@ -1232,11 +1233,7 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
     }
 
     private func hasCompleteInlineAvatarPreviewDraft() -> Bool {
-        guard let actionImageURLs = creationPreviewDraft?.actionImageURLs else {
-            return false
-        }
-
-        return ["idle", "working", "alert"].allSatisfy { actionImageURLs[$0] != nil }
+        creationPreviewDraft?.hasRequiredActionImages == true
     }
 
     private func syncInlineAvatarStage() {
@@ -1310,9 +1307,15 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
             makeFallbackInlineAvatarPreviewDraft()
         }
 
+        let shouldReplacePersonaSuggestion = normalizedPrompt(creationDraftPersona, fallback: "").isEmpty
+            || creationDraftPersona == previousSuggestedPersona
+
         creationPreviewDraft = draft
-        creationDraftPersona = draft.suggestedPersona
-        avatarCreatePersonaField.stringValue = creationDraftPersona
+        if shouldReplacePersonaSuggestion {
+            creationDraftPersona = draft.suggestedPersona
+            avatarCreatePersonaField.stringValue = creationDraftPersona
+        }
+        previousSuggestedPersona = draft.suggestedPersona
         syncInlineAvatarStage()
         previewRevision += 1
         avatarDraftSummary = formatCopy(
@@ -1356,6 +1359,7 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         creationPreviewDraft = nil
         creationDraftName = ""
         creationDraftPersona = ""
+        previousSuggestedPersona = ""
         creationStage = .empty
         avatarCreateRawPromptView.string = ""
         avatarCreateOptimizedPromptView.string = ""
@@ -1632,12 +1636,15 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         }
 
         do {
-            try avatarSaveHandler(request)
+            let avatarID = try avatarSaveHandler(request)
             statusLabel.stringValue = copy(
                 "avatar_studio.save_success_status",
-                fallback: "形象草稿已保存，可继续调整或返回现有形象。"
+                fallback: "新形象已保存并应用。"
             )
             statusLabel.textColor = AvatarPanelTheme.accent
+            didFinish = true
+            onChoose(avatarID)
+            close()
         } catch {
             showGenerationError(error)
         }

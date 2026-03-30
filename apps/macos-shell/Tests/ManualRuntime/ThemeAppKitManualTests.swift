@@ -462,6 +462,7 @@ func testAvatarSelectorInlineCreateModeCancelKeepsDraftUnsaved() throws {
         },
         avatarSaveHandler: { request in
             savedRequests.append(request)
+            return "should_not_apply"
         },
         onChoose: { avatarID in
             chosenAvatarIDs.append(avatarID)
@@ -604,6 +605,123 @@ func testAvatarSelectorInlineCreateModeSaveWithoutHandlerStaysEditable() throws 
         saveButtonAfterEdit.isEnabled == true,
         "avatar save should stay retryable after an unavailable save attempt"
     )
+}
+
+func testAvatarSelectorInlineCreateModeSavesAndAppliesGeneratedAvatar() throws {
+    let previewURL = try makeTinyPNG()
+    let idleURL = try makeTinyPNG()
+    let workingURL = try makeTinyPNG()
+    let alertURL = try makeTinyPNG()
+    var optimizedPrompts: [String] = []
+    var previewPrompts: [String] = []
+    var savedRequests: [InlineAvatarSaveRequest] = []
+    var chosenAvatarIDs: [String] = []
+    var closeCount = 0
+
+    let controller = AvatarSelectorWindowController(
+        avatars: [
+            AvatarSummary(
+                id: "capybara",
+                name: "水豚",
+                style: "像素",
+                previewURL: previewURL,
+                traits: "稳重",
+                tone: "冷静"
+            )
+        ],
+        currentAvatarID: "capybara",
+        avatarPromptOptimizer: { prompt in
+            optimizedPrompts.append(prompt)
+            return "optimized::\(prompt)"
+        },
+        avatarPreviewGenerator: { prompt in
+            previewPrompts.append(prompt)
+            return InlineAvatarPreviewDraft(
+                actionImageURLs: [
+                    "idle": idleURL,
+                    "working": workingURL,
+                    "alert": alertURL,
+                ],
+                suggestedPersona: "稳重、冷静、慢半拍"
+            )
+        },
+        avatarSaveHandler: { request in
+            savedRequests.append(request)
+            return "custom_capybara"
+        },
+        onChoose: { avatarID in
+            chosenAvatarIDs.append(avatarID)
+        },
+        onClose: {
+            closeCount += 1
+        }
+    )
+
+    controller.present()
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "selector content view should exist")
+    }
+
+    try requireButton(in: contentView, title: "桌宠形象动画").performClick(nil)
+    try requireButton(in: contentView, title: "新增自定义形象").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    let rawPromptView = try requireTextView(in: contentView, identifier: "avatarCreateRawPrompt")
+    rawPromptView.string = "raw capybara save/apply prompt"
+    controller.textDidChange(Notification(name: NSText.didChangeNotification, object: rawPromptView))
+
+    try requireActionButton(in: contentView, title: "优化 prompt").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    try requireActionButton(in: contentView, title: "生成预览").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    let nameField = try requireTextField(in: contentView, identifier: "avatarCreateNameField")
+    let personaField = try requireTextField(in: contentView, identifier: "avatarCreatePersonaField")
+    try expect(
+        personaField.stringValue == "稳重、冷静、慢半拍",
+        "avatar preview should seed the editable persona before save"
+    )
+
+    nameField.stringValue = "淡定水豚"
+    nameField.sendAction(nameField.action, to: nameField.target)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    try requireActionButton(in: contentView, title: "保存并应用").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    try expect(
+        optimizedPrompts == ["raw capybara save/apply prompt"],
+        "save/apply flow should optimize the raw prompt exactly once"
+    )
+    try expect(
+        previewPrompts == ["optimized::raw capybara save/apply prompt"],
+        "save/apply flow should preview using the optimized prompt"
+    )
+    try expect(savedRequests.count == 1, "save should run exactly once")
+    try expect(
+        savedRequests[0].name == "淡定水豚",
+        "save should receive the edited avatar name"
+    )
+    try expect(
+        savedRequests[0].persona == "稳重、冷静、慢半拍",
+        "save should receive the current persona draft"
+    )
+    try expect(
+        savedRequests[0].actionImageURLs == [
+            "idle": idleURL,
+            "working": workingURL,
+            "alert": alertURL,
+        ],
+        "save should receive all generated action image URLs"
+    )
+    try expect(
+        chosenAvatarIDs == ["custom_capybara"],
+        "saved avatar should be applied through the existing choose path"
+    )
+    try expect(closeCount == 0, "successful save/apply should finish without calling onClose")
+    try expect(controller.window?.isVisible == false, "selector should close after a successful save/apply")
 }
 
 func testAvatarSelectorThemeTabGeneratesDraftBeforeApplyingTheme() throws {

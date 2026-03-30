@@ -1,5 +1,9 @@
 import Foundation
 
+enum InlineAvatarCreation {
+    static let requiredActions = ["idle", "working", "alert"]
+}
+
 enum InlineAvatarCreationStage: Equatable {
     case empty
     case drafted
@@ -10,6 +14,10 @@ enum InlineAvatarCreationStage: Equatable {
 struct InlineAvatarPreviewDraft: Equatable {
     var actionImageURLs: [String: URL]
     var suggestedPersona: String
+
+    var hasRequiredActionImages: Bool {
+        InlineAvatarCreation.requiredActions.allSatisfy { actionImageURLs[$0] != nil }
+    }
 }
 
 struct InlineAvatarSaveRequest: Equatable {
