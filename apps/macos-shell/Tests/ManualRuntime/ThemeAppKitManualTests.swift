@@ -1,23 +1,5 @@
 import AppKit
 
-enum InlineAvatarCreationStage: Equatable {
-    case empty
-    case drafted
-    case previewReady
-    case saving
-}
-
-struct InlineAvatarPreviewDraft: Equatable {
-    var actionImageURLs: [String: URL]
-    var suggestedPersona: String
-}
-
-struct InlineAvatarSaveRequest: Equatable {
-    var name: String
-    var persona: String
-    var actionImageURLs: [String: URL]
-}
-
 func testAvatarPanelThemeReflectsSharedThemeColors() throws {
     let manager = try makeInstalledThemeManager()
     let pack = makeAppKitTestThemePack(id: "wrapper_refresh")
@@ -185,7 +167,7 @@ func testAvatarSelectorAvatarTabEntersInlineCreateMode() throws {
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
 
     _ = try requireLabel(in: contentView, stringValue: "当前模式：新建形象")
-    _ = try requireButton(in: contentView, title: "取消")
+    _ = try requireButton(in: contentView, title: "返回现有形象")
     _ = try requireButton(in: contentView, title: "保存并应用")
     _ = try requireLabel(in: contentView, stringValue: "形象列表")
     try expect(
@@ -223,7 +205,7 @@ func testAvatarSelectorInlineCreateModeReturnsToBrowseModeWithoutClosing() throw
     try requireButton(in: contentView, title: "新增自定义形象").performClick(nil)
     _ = try requireLabel(in: contentView, stringValue: "当前模式：新建形象")
 
-    try requireButton(in: contentView, title: "取消").performClick(nil)
+    try requireButton(in: contentView, title: "返回现有形象").performClick(nil)
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
 
     try expect(
@@ -233,8 +215,8 @@ func testAvatarSelectorInlineCreateModeReturnsToBrowseModeWithoutClosing() throw
     _ = try requireLabel(in: contentView, stringValue: "预览与说明")
     _ = try requireButton(in: contentView, title: "新增自定义形象")
     try expect(
-        findButton(in: contentView, title: "取消") == nil,
-        "browse mode should hide the inline create cancel button"
+        findButton(in: contentView, title: "返回现有形象") == nil,
+        "browse mode should hide the return-to-library button"
     )
     try expect(
         controller.window?.isVisible == true,
@@ -519,7 +501,7 @@ func testAvatarSelectorInlineCreateModeCancelKeepsDraftUnsaved() throws {
         "avatar save button should be enabled before testing cancel"
     )
 
-    try requireActionButton(in: contentView, title: "取消").performClick(nil)
+    try requireActionButton(in: contentView, title: "返回现有形象").performClick(nil)
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
 
     try expect(savedRequests.isEmpty, "avatar cancel should leave create mode without calling save")

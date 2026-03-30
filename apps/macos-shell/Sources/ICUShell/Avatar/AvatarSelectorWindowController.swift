@@ -820,10 +820,10 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
             target: self,
             action: #selector(handleRegeneratePreview)
         )
-        let cancelButton = NSButton(
-            title: copy("common.cancel_button", fallback: "取消"),
+        let returnButton = NSButton(
+            title: copy("avatar_studio.return_to_library_button", fallback: "返回现有形象"),
             target: self,
-            action: #selector(handleCancelInlineAvatarCreation)
+            action: #selector(handleReturnToAvatarLibrary)
         )
         let saveAndApplyButton = NSButton(
             title: copy("avatar_studio.save_and_apply_button", fallback: "保存并应用"),
@@ -833,7 +833,7 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         AvatarPanelTheme.styleSecondaryButton(optimizeButton)
         AvatarPanelTheme.styleSecondaryButton(previewButton)
         AvatarPanelTheme.styleSecondaryButton(regenerateButton)
-        AvatarPanelTheme.styleSecondaryButton(cancelButton)
+        AvatarPanelTheme.styleSecondaryButton(returnButton)
         AvatarPanelTheme.stylePrimaryButton(saveAndApplyButton)
 
         let stack = NSStackView()
@@ -843,7 +843,7 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         stack.addArrangedSubview(optimizeButton)
         stack.addArrangedSubview(previewButton)
         stack.addArrangedSubview(regenerateButton)
-        stack.addArrangedSubview(cancelButton)
+        stack.addArrangedSubview(returnButton)
         stack.addArrangedSubview(saveAndApplyButton)
 
         avatarCreateOptimizeButton = optimizeButton
@@ -855,7 +855,7 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         optimizeButton.widthAnchor.constraint(equalToConstant: 110).isActive = true
         previewButton.widthAnchor.constraint(equalToConstant: 110).isActive = true
         regenerateButton.widthAnchor.constraint(equalToConstant: 110).isActive = true
-        cancelButton.widthAnchor.constraint(equalToConstant: 88).isActive = true
+        returnButton.widthAnchor.constraint(equalToConstant: 132).isActive = true
         saveAndApplyButton.widthAnchor.constraint(equalToConstant: 110).isActive = true
         return stack
     }
@@ -1629,11 +1629,6 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
             showGenerationError(error)
         }
     }
-
-    @objc private func handleCancelInlineAvatarCreation() {
-        handleReturnToAvatarLibrary()
-    }
-
     @objc private func handleCancel() {
         didFinish = true
         onClose()
