@@ -1,6 +1,7 @@
 {
   "common": {
     "apply_button": "应用",
+    "cancel_button": "取消",
     "close_button": "关闭",
     "preview_button": "生成预览",
     "regenerate_button": "重新生成",
@@ -91,9 +92,16 @@
     "create_mode_title": "当前模式：新建形象",
     "return_to_library_button": "返回现有形象",
     "save_and_apply_button": "保存并应用",
+    "create_optimize_button": "优化 prompt",
     "create_prompt_title": "原始 prompt",
     "create_optimized_prompt_title": "优化后 prompt",
     "create_actions_title": "动作生成",
+    "create_name_title": "形象名称",
+    "create_persona_title": "人设描述",
+    "create_name_placeholder": "例如：淡定水豚",
+    "create_persona_placeholder": "预览后会自动填入建议人设，可继续编辑。",
+    "create_prompt_hint": "描述你想生成的形象、动作和动画关键词。",
+    "create_optimized_prompt_hint": "优化后的 prompt 会用于生成 idle / working / alert 三组预览。",
     "create_save_info_title": "保存后将自动应用这个新形象。",
     "list_title": "形象列表",
     "detail_title": "预览与说明",
@@ -108,6 +116,8 @@
     "no_persona": "这个形象还没有 persona 摘要。",
     "fallback_prompt": "保留当前形象，但增加 idle / working / alert 三组动作",
     "draft_format": "草稿 %d：%@ / %@",
+    "optimized_status": "prompt 优化完成。",
+    "preview_requires_optimized_status": "请先优化 prompt，再生成预览。",
     "preview_generated_status": "形象动画草稿已生成。",
     "preview_regenerated_status": "形象动画草稿已重新生成。"
   },

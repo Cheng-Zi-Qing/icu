@@ -1,6 +1,6 @@
 import AppKit
 
-final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate, NSTableViewDataSource, NSTableViewDelegate, NSTextViewDelegate {
+final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate, NSTableViewDataSource, NSTableViewDelegate, NSTextViewDelegate, NSTextFieldDelegate {
     private enum StudioTab: CaseIterable {
         case theme
         case avatar
@@ -27,6 +27,9 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
     private let themePromptOptimizer: ((String) throws -> String)?
     private let themeDraftGenerator: ((String) throws -> ThemePack)?
     private let themeDraftApplier: ((ThemePack) throws -> Void)?
+    private let avatarPromptOptimizer: ((String) throws -> String)?
+    private let avatarPreviewGenerator: ((String) throws -> InlineAvatarPreviewDraft)?
+    private let avatarSaveHandler: ((InlineAvatarSaveRequest) throws -> Void)?
     private let speechDraftGenerator: ((String) throws -> SpeechDraft)?
     private let speechDraftApplier: ((SpeechDraft) throws -> Void)?
     private let onChoose: (String) -> Void
@@ -54,17 +57,31 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
     private weak var themeReoptimizeButton: NSButton?
     private weak var themePreviewButton: NSButton?
     private weak var themeApplyButton: NSButton?
+    private weak var avatarCreateOptimizeButton: NSButton?
+    private weak var avatarCreatePreviewButton: NSButton?
+    private weak var avatarCreateRegenerateButton: NSButton?
+    private weak var avatarCreateSaveButton: NSButton?
     private var themeObserver: NSObjectProtocol?
     private var didFinish = false
 
     private let themeRawPromptView = NSTextView()
     private let themeOptimizedPromptView = NSTextView()
     private let avatarPromptView = NSTextView()
+    private let avatarCreateRawPromptView = NSTextView()
+    private let avatarCreateOptimizedPromptView = NSTextView()
+    private let avatarCreateNameField = NSTextField(string: "")
+    private let avatarCreatePersonaField = NSTextField(string: "")
     private let speechPromptView = NSTextView()
 
     private var themeRawPrompt = ""
     private var themeOptimizedPrompt = ""
     private var avatarPrompt = ""
+    private var creationRawPrompt = ""
+    private var creationOptimizedPrompt = ""
+    private var creationPreviewDraft: InlineAvatarPreviewDraft?
+    private var creationDraftName = ""
+    private var creationDraftPersona = ""
+    private var creationStage: InlineAvatarCreationStage = .empty
     private var speechPrompt = ""
 
     private var appliedThemeSummary = TextCatalog.shared.text(
@@ -106,6 +123,9 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         themePromptOptimizer: ((String) throws -> String)? = nil,
         themeDraftGenerator: ((String) throws -> ThemePack)? = nil,
         themeDraftApplier: ((ThemePack) throws -> Void)? = nil,
+        avatarPromptOptimizer: ((String) throws -> String)? = nil,
+        avatarPreviewGenerator: ((String) throws -> InlineAvatarPreviewDraft)? = nil,
+        avatarSaveHandler: ((InlineAvatarSaveRequest) throws -> Void)? = nil,
         speechDraftGenerator: ((String) throws -> SpeechDraft)? = nil,
         speechDraftApplier: ((SpeechDraft) throws -> Void)? = nil,
         onChoose: @escaping (String) -> Void,
@@ -116,6 +136,9 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         self.themePromptOptimizer = themePromptOptimizer
         self.themeDraftGenerator = themeDraftGenerator
         self.themeDraftApplier = themeDraftApplier
+        self.avatarPromptOptimizer = avatarPromptOptimizer
+        self.avatarPreviewGenerator = avatarPreviewGenerator
+        self.avatarSaveHandler = avatarSaveHandler
         self.speechDraftGenerator = speechDraftGenerator
         self.speechDraftApplier = speechDraftApplier
         self.onChoose = onChoose
@@ -208,11 +231,30 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
             }
         case "avatarPrompt":
             avatarPrompt = textView.string
+        case "avatarCreateRawPrompt":
+            creationRawPrompt = textView.string
+            if creationStage == .empty && !normalizedPrompt(creationRawPrompt, fallback: "").isEmpty {
+                creationStage = .drafted
+            }
+        case "avatarCreateOptimizedPrompt":
+            creationOptimizedPrompt = textView.string
+            invalidateInlineAvatarPreview()
+            if selectedTab == .avatar, avatarTabMode == .create {
+                renderSelectedTab()
+            }
         case "speechPrompt":
             speechPrompt = textView.string
         default:
             break
         }
+    }
+
+    func controlTextDidChange(_ notification: Notification) {
+        guard let textField = notification.object as? NSTextField else {
+            return
+        }
+
+        updateInlineAvatarField(textField)
     }
 
     func windowWillClose(_ notification: Notification) {
@@ -233,6 +275,10 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         configureTextView(themeRawPromptView, identifier: "themeRawPrompt", text: themeRawPrompt)
         configureTextView(themeOptimizedPromptView, identifier: "themeOptimizedPrompt", text: themeOptimizedPrompt)
         configureTextView(avatarPromptView, identifier: "avatarPrompt", text: avatarPrompt)
+        configureTextView(avatarCreateRawPromptView, identifier: "avatarCreateRawPrompt", text: creationRawPrompt)
+        configureTextView(avatarCreateOptimizedPromptView, identifier: "avatarCreateOptimizedPrompt", text: creationOptimizedPrompt)
+        configureTextField(avatarCreateNameField, identifier: "avatarCreateNameField", text: creationDraftName)
+        configureTextField(avatarCreatePersonaField, identifier: "avatarCreatePersonaField", text: creationDraftPersona)
         configureTextView(speechPromptView, identifier: "speechPrompt", text: speechPrompt)
     }
 
@@ -241,6 +287,15 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         textView.identifier = NSUserInterfaceItemIdentifier(identifier)
         textView.delegate = self
         textView.string = text
+    }
+
+    private func configureTextField(_ textField: NSTextField, identifier: String, text: String) {
+        AvatarPanelTheme.styleEditableTextField(textField)
+        textField.identifier = NSUserInterfaceItemIdentifier(identifier)
+        textField.delegate = self
+        textField.target = self
+        textField.action = #selector(handleInlineAvatarFieldAction(_:))
+        textField.stringValue = text
     }
 
     private func buildUI() {
@@ -333,6 +388,10 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         themeReoptimizeButton = nil
         themePreviewButton = nil
         themeApplyButton = nil
+        avatarCreateOptimizeButton = nil
+        avatarCreatePreviewButton = nil
+        avatarCreateRegenerateButton = nil
+        avatarCreateSaveButton = nil
 
         let activeView: NSView
         switch selectedTab {
@@ -354,6 +413,7 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         ])
 
         updateThemeActionButtonStates()
+        updateAvatarCreateActionButtonStates()
         updateTabStyles()
     }
 
@@ -745,27 +805,57 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
     }
 
     private func makeAvatarCreateActionBar() -> NSView {
-        let returnButton = NSButton(
-            title: copy("avatar_studio.return_to_library_button", fallback: "返回现有形象"),
+        let optimizeButton = NSButton(
+            title: copy("avatar_studio.create_optimize_button", fallback: "优化 prompt"),
             target: self,
-            action: #selector(handleReturnToAvatarLibrary)
+            action: #selector(handleOptimizeInlineAvatarPrompt)
+        )
+        let previewButton = NSButton(
+            title: TextCatalog.shared.text(.commonPreviewButton),
+            target: self,
+            action: #selector(handleGeneratePreview)
+        )
+        let regenerateButton = NSButton(
+            title: TextCatalog.shared.text(.commonRegenerateButton),
+            target: self,
+            action: #selector(handleRegeneratePreview)
+        )
+        let cancelButton = NSButton(
+            title: copy("common.cancel_button", fallback: "取消"),
+            target: self,
+            action: #selector(handleCancelInlineAvatarCreation)
         )
         let saveAndApplyButton = NSButton(
             title: copy("avatar_studio.save_and_apply_button", fallback: "保存并应用"),
             target: self,
             action: #selector(handleSaveAndApplyInlineAvatar)
         )
-        AvatarPanelTheme.styleSecondaryButton(returnButton)
+        AvatarPanelTheme.styleSecondaryButton(optimizeButton)
+        AvatarPanelTheme.styleSecondaryButton(previewButton)
+        AvatarPanelTheme.styleSecondaryButton(regenerateButton)
+        AvatarPanelTheme.styleSecondaryButton(cancelButton)
         AvatarPanelTheme.stylePrimaryButton(saveAndApplyButton)
 
         let stack = NSStackView()
         stack.orientation = .horizontal
         stack.spacing = 12
         stack.addArrangedSubview(NSView())
-        stack.addArrangedSubview(returnButton)
+        stack.addArrangedSubview(optimizeButton)
+        stack.addArrangedSubview(previewButton)
+        stack.addArrangedSubview(regenerateButton)
+        stack.addArrangedSubview(cancelButton)
         stack.addArrangedSubview(saveAndApplyButton)
 
-        returnButton.widthAnchor.constraint(equalToConstant: 132).isActive = true
+        avatarCreateOptimizeButton = optimizeButton
+        avatarCreatePreviewButton = previewButton
+        avatarCreateRegenerateButton = regenerateButton
+        avatarCreateSaveButton = saveAndApplyButton
+        updateAvatarCreateActionButtonStates()
+
+        optimizeButton.widthAnchor.constraint(equalToConstant: 110).isActive = true
+        previewButton.widthAnchor.constraint(equalToConstant: 110).isActive = true
+        regenerateButton.widthAnchor.constraint(equalToConstant: 110).isActive = true
+        cancelButton.widthAnchor.constraint(equalToConstant: 88).isActive = true
         saveAndApplyButton.widthAnchor.constraint(equalToConstant: 110).isActive = true
         return stack
     }
@@ -854,6 +944,11 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
     }
 
     private func buildAvatarCreateCard(in card: NSView) {
+        avatarCreateRawPromptView.string = creationRawPrompt
+        avatarCreateOptimizedPromptView.string = creationOptimizedPrompt
+        avatarCreateNameField.stringValue = creationDraftName
+        avatarCreatePersonaField.stringValue = creationDraftPersona
+
         let stack = NSStackView()
         stack.orientation = .vertical
         stack.spacing = 12
@@ -876,31 +971,53 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
             copy("avatar_studio.create_actions_title", fallback: "动作生成"),
             color: AvatarPanelTheme.accent
         )
+        let nameTitle = AvatarPanelTheme.makeLabel(
+            copy("avatar_studio.create_name_title", fallback: "形象名称"),
+            color: AvatarPanelTheme.accent
+        )
+        let personaTitle = AvatarPanelTheme.makeLabel(
+            copy("avatar_studio.create_persona_title", fallback: "人设描述"),
+            color: AvatarPanelTheme.accent
+        )
         let saveInfoTitle = AvatarPanelTheme.makeLabel(
             copy("avatar_studio.create_save_info_title", fallback: "保存后将自动应用这个新形象。"),
             color: AvatarPanelTheme.muted,
             font: AvatarPanelTheme.smallFont
         )
 
+        avatarCreateNameField.placeholderString = copy("avatar_studio.create_name_placeholder", fallback: "例如：淡定水豚")
+        avatarCreatePersonaField.placeholderString = copy("avatar_studio.create_persona_placeholder", fallback: "预览后会自动填入建议人设，可继续编辑。")
+
         stack.addArrangedSubview(modeLabel)
         stack.addArrangedSubview(promptTitle)
         stack.addArrangedSubview(
             AvatarPanelTheme.makeLabel(
-                copy("avatar_studio.prompt_hint", fallback: "描述你想生成的形象、动作和动画关键词。"),
+                copy("avatar_studio.create_prompt_hint", fallback: "描述你想生成的形象、动作和动画关键词。"),
                 color: AvatarPanelTheme.muted,
                 font: AvatarPanelTheme.smallFont
             )
         )
-        stack.addArrangedSubview(makeTextScrollView(textView: avatarPromptView, minHeight: 96))
+        stack.addArrangedSubview(makeTextScrollView(textView: avatarCreateRawPromptView, minHeight: 96))
         stack.addArrangedSubview(optimizedPromptTitle)
         stack.addArrangedSubview(
             AvatarPanelTheme.makeLabel(
-                copy("avatar_studio.prompt_hint", fallback: "描述你想生成的形象、动作和动画关键词。"),
+                copy("avatar_studio.create_optimized_prompt_hint", fallback: "优化后的 prompt 会用于生成 idle / working / alert 三组预览。"),
                 color: AvatarPanelTheme.muted,
                 font: AvatarPanelTheme.smallFont
             )
         )
+        stack.addArrangedSubview(makeTextScrollView(textView: avatarCreateOptimizedPromptView, minHeight: 96))
         stack.addArrangedSubview(actionsTitle)
+        stack.addArrangedSubview(
+            makeInfoCard(
+                title: copy("avatar_studio.create_actions_title", fallback: "动作生成"),
+                lines: inlineAvatarActionStatusLines()
+            )
+        )
+        stack.addArrangedSubview(nameTitle)
+        stack.addArrangedSubview(avatarCreateNameField)
+        stack.addArrangedSubview(personaTitle)
+        stack.addArrangedSubview(avatarCreatePersonaField)
         stack.addArrangedSubview(saveInfoTitle)
         stack.addArrangedSubview(NSView())
 
@@ -1100,6 +1217,166 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         statusLabel.textColor = AvatarPanelTheme.accent
     }
 
+    private func inlineAvatarActionStatusLines() -> [String] {
+        let availableActions = creationPreviewDraft?.actionImageURLs ?? [:]
+        return ["idle", "working", "alert"].map { action in
+            let suffix = availableActions[action] == nil
+                ? copy("avatar_wizard.action_pending", fallback: "未生成")
+                : copy("avatar_wizard.generated_status", fallback: "已生成")
+            return "\(action): \(suffix)"
+        }
+    }
+
+    private func hasNonEmptyInlineAvatarOptimizedPrompt() -> Bool {
+        !normalizedPrompt(creationOptimizedPrompt, fallback: "").isEmpty
+    }
+
+    private func hasCompleteInlineAvatarPreviewDraft() -> Bool {
+        guard let actionImageURLs = creationPreviewDraft?.actionImageURLs else {
+            return false
+        }
+
+        return ["idle", "working", "alert"].allSatisfy { actionImageURLs[$0] != nil }
+    }
+
+    private func syncInlineAvatarStage() {
+        if hasCompleteInlineAvatarPreviewDraft() {
+            creationStage = .previewReady
+        } else if hasNonEmptyInlineAvatarOptimizedPrompt() || !normalizedPrompt(creationRawPrompt, fallback: "").isEmpty {
+            creationStage = .drafted
+        } else {
+            creationStage = .empty
+        }
+    }
+
+    private func invalidateInlineAvatarPreview() {
+        creationPreviewDraft = nil
+        syncInlineAvatarStage()
+        updateAvatarCreateActionButtonStates()
+    }
+
+    private func updateAvatarCreateActionButtonStates() {
+        let hasName = !normalizedPrompt(creationDraftName, fallback: "").isEmpty
+        avatarCreateOptimizeButton?.isEnabled = avatarTabMode == .create
+        avatarCreatePreviewButton?.isEnabled = avatarTabMode == .create && hasNonEmptyInlineAvatarOptimizedPrompt()
+        avatarCreateRegenerateButton?.isEnabled = avatarTabMode == .create && creationPreviewDraft != nil
+        avatarCreateSaveButton?.isEnabled = avatarTabMode == .create && creationStage == .previewReady && hasName
+    }
+
+    private func renderOptimizedInlineAvatarPrompt() throws {
+        let prompt = normalizedPrompt(
+            creationRawPrompt,
+            fallback: copy("avatar_studio.fallback_prompt", fallback: "保留当前形象，但增加 idle / working / alert 三组动作")
+        )
+        let optimized = if let avatarPromptOptimizer {
+            try avatarPromptOptimizer(prompt)
+        } else {
+            prompt
+        }
+
+        creationOptimizedPrompt = optimized
+        avatarCreateOptimizedPromptView.string = optimized
+        invalidateInlineAvatarPreview()
+        statusLabel.stringValue = copy("avatar_studio.optimized_status", fallback: "prompt 优化完成。")
+        statusLabel.textColor = AvatarPanelTheme.accent
+    }
+
+    private func makeFallbackInlineAvatarPreviewDraft() -> InlineAvatarPreviewDraft {
+        let previewURL = currentAvatarSummary()?.previewURL ?? URL(fileURLWithPath: "/tmp/inline-avatar-preview-fallback.png")
+        let suggestedPersona = currentAvatarSummary()?.traits.isEmpty == false
+            ? currentAvatarSummary()?.traits ?? ""
+            : copy("avatar_studio.no_persona", fallback: "这个形象还没有 persona 摘要。")
+        return InlineAvatarPreviewDraft(
+            actionImageURLs: [
+                "idle": previewURL,
+                "working": previewURL,
+                "alert": previewURL,
+            ],
+            suggestedPersona: suggestedPersona
+        )
+    }
+
+    private func renderInlineAvatarPreview(regenerated: Bool) throws {
+        let prompt = normalizedPrompt(creationOptimizedPrompt, fallback: "")
+        guard !prompt.isEmpty else {
+            statusLabel.stringValue = copy("avatar_studio.preview_requires_optimized_status", fallback: "请先优化 prompt，再生成预览。")
+            statusLabel.textColor = AvatarPanelTheme.muted
+            return
+        }
+
+        let draft = if let avatarPreviewGenerator {
+            try avatarPreviewGenerator(prompt)
+        } else {
+            makeFallbackInlineAvatarPreviewDraft()
+        }
+
+        creationPreviewDraft = draft
+        creationDraftPersona = draft.suggestedPersona
+        avatarCreatePersonaField.stringValue = creationDraftPersona
+        syncInlineAvatarStage()
+        previewRevision += 1
+        avatarDraftSummary = formatCopy(
+            "avatar_studio.draft_format",
+            fallback: "草稿 %d：%@ / %@",
+            previewRevision,
+            normalizedPrompt(creationDraftName, fallback: currentAvatarSummaryText()),
+            prompt
+        )
+        statusLabel.stringValue = regenerated
+            ? copy("avatar_studio.preview_regenerated_status", fallback: "形象动画草稿已重新生成。")
+            : copy("avatar_studio.preview_generated_status", fallback: "形象动画草稿已生成。")
+        statusLabel.textColor = AvatarPanelTheme.accent
+        updateAvatarCreateActionButtonStates()
+    }
+
+    private func currentInlineAvatarSaveRequest() -> InlineAvatarSaveRequest? {
+        guard
+            creationStage == .previewReady,
+            let previewDraft = creationPreviewDraft
+        else {
+            return nil
+        }
+
+        let name = normalizedPrompt(creationDraftName, fallback: "")
+        guard !name.isEmpty else {
+            return nil
+        }
+
+        let persona = normalizedPrompt(creationDraftPersona, fallback: previewDraft.suggestedPersona)
+        return InlineAvatarSaveRequest(
+            name: name,
+            persona: persona,
+            actionImageURLs: previewDraft.actionImageURLs
+        )
+    }
+
+    private func resetInlineAvatarCreationDraft() {
+        creationRawPrompt = ""
+        creationOptimizedPrompt = ""
+        creationPreviewDraft = nil
+        creationDraftName = ""
+        creationDraftPersona = ""
+        creationStage = .empty
+        avatarCreateRawPromptView.string = ""
+        avatarCreateOptimizedPromptView.string = ""
+        avatarCreateNameField.stringValue = ""
+        avatarCreatePersonaField.stringValue = ""
+        avatarDraftSummary = copy("avatar_studio.draft_placeholder", fallback: "尚未生成新的形象草稿。")
+        updateAvatarCreateActionButtonStates()
+    }
+
+    private func updateInlineAvatarField(_ textField: NSTextField) {
+        switch textField.identifier?.rawValue {
+        case "avatarCreateNameField":
+            creationDraftName = textField.stringValue
+            updateAvatarCreateActionButtonStates()
+        case "avatarCreatePersonaField":
+            creationDraftPersona = textField.stringValue
+        default:
+            break
+        }
+    }
+
     private func renderSpeechPreview(regenerated: Bool) throws {
         let prompt = normalizedPrompt(
             speechPrompt,
@@ -1146,7 +1423,16 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         case .theme:
             return
         case .avatar:
-            renderAvatarPreview(regenerated: false)
+            if avatarTabMode == .create {
+                do {
+                    try renderInlineAvatarPreview(regenerated: false)
+                } catch {
+                    showGenerationError(error)
+                    return
+                }
+            } else {
+                renderAvatarPreview(regenerated: false)
+            }
         case .speech:
             do {
                 try renderSpeechPreview(regenerated: false)
@@ -1163,7 +1449,16 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         case .theme:
             return
         case .avatar:
-            renderAvatarPreview(regenerated: true)
+            if avatarTabMode == .create {
+                do {
+                    try renderInlineAvatarPreview(regenerated: true)
+                } catch {
+                    showGenerationError(error)
+                    return
+                }
+            } else {
+                renderAvatarPreview(regenerated: true)
+            }
         case .speech:
             do {
                 try renderSpeechPreview(regenerated: true)
@@ -1283,21 +1578,60 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
             return
         }
 
+        resetInlineAvatarCreationDraft()
+        statusLabel.stringValue = copy("avatar_studio.status_ready", fallback: "先生成预览，确认满意后再应用。")
+        statusLabel.textColor = AvatarPanelTheme.muted
         avatarTabMode = .create
         renderSelectedTab()
     }
 
     @objc private func handleReturnToAvatarLibrary() {
+        resetInlineAvatarCreationDraft()
+        statusLabel.stringValue = copy("avatar_studio.status_ready", fallback: "先生成预览，确认满意后再应用。")
+        statusLabel.textColor = AvatarPanelTheme.muted
         avatarTabMode = .browse
         renderSelectedTab()
     }
 
+    @objc private func handleOptimizeInlineAvatarPrompt() {
+        do {
+            try renderOptimizedInlineAvatarPrompt()
+            renderSelectedTab()
+        } catch {
+            showGenerationError(error)
+        }
+    }
+
+    @objc private func handleInlineAvatarFieldAction(_ sender: NSTextField) {
+        updateInlineAvatarField(sender)
+    }
+
     @objc private func handleSaveAndApplyInlineAvatar() {
-        statusLabel.stringValue = copy(
-            "avatar_studio.create_save_info_title",
-            fallback: "保存后将自动应用这个新形象。"
-        )
-        statusLabel.textColor = AvatarPanelTheme.accent
+        guard let request = currentInlineAvatarSaveRequest() else {
+            statusLabel.stringValue = copy("avatar_studio.status_ready", fallback: "先生成预览，确认满意后再应用。")
+            statusLabel.textColor = AvatarPanelTheme.muted
+            return
+        }
+
+        creationStage = .saving
+        updateAvatarCreateActionButtonStates()
+
+        do {
+            try avatarSaveHandler?(request)
+            statusLabel.stringValue = copy(
+                "avatar_studio.create_save_info_title",
+                fallback: "保存后将自动应用这个新形象。"
+            )
+            statusLabel.textColor = AvatarPanelTheme.accent
+        } catch {
+            syncInlineAvatarStage()
+            updateAvatarCreateActionButtonStates()
+            showGenerationError(error)
+        }
+    }
+
+    @objc private func handleCancelInlineAvatarCreation() {
+        handleReturnToAvatarLibrary()
     }
 
     @objc private func handleCancel() {
