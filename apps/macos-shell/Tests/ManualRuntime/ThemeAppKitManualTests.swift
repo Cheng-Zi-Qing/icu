@@ -32,7 +32,6 @@ func testAvatarSelectorWindowRestylesWhenThemeChanges() throws {
         ],
         currentAvatarID: "capybara",
         onChoose: { _ in },
-        onAddCustom: {},
         onClose: {}
     )
 
@@ -73,7 +72,6 @@ func testAvatarSelectorWindowUsesStudioTabsAndThemeBubblePreviewByDefault() thro
         ],
         currentAvatarID: "capybara",
         onChoose: { _ in },
-        onAddCustom: {},
         onClose: {}
     )
 
@@ -118,7 +116,6 @@ func testAvatarSelectorThemeTabOmitsModelSummaryAndCrossDomainPanels() throws {
         ],
         currentAvatarID: "capybara",
         onChoose: { _ in },
-        onAddCustom: {},
         onClose: {}
     )
 
@@ -142,7 +139,6 @@ func testAvatarSelectorThemeTabOmitsModelSummaryAndCrossDomainPanels() throws {
 
 func testAvatarSelectorAvatarTabEntersInlineCreateMode() throws {
     let previewURL = try makeTinyPNG()
-    var addCustomCalls = 0
     let controller = AvatarSelectorWindowController(
         avatars: [
             AvatarSummary(
@@ -156,9 +152,11 @@ func testAvatarSelectorAvatarTabEntersInlineCreateMode() throws {
         ],
         currentAvatarID: "capybara",
         onChoose: { _ in },
-        onAddCustom: { addCustomCalls += 1 },
         onClose: {}
     )
+
+    controller.present()
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
 
     guard let contentView = controller.window?.contentView else {
         throw TestFailure(message: "selector content view should exist")
@@ -168,16 +166,12 @@ func testAvatarSelectorAvatarTabEntersInlineCreateMode() throws {
     try requireButton(in: contentView, title: "新增自定义形象").performClick(nil)
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
 
-    try expect(
-        addCustomCalls == 0,
-        "avatar tab should enter inline create mode instead of triggering the legacy add-custom callback"
-    )
     _ = try requireLabel(in: contentView, stringValue: "当前模式：新建形象")
     _ = try requireButton(in: contentView, title: "返回现有形象")
     _ = try requireButton(in: contentView, title: "保存并应用")
     _ = try requireLabel(in: contentView, stringValue: "形象列表")
     try expect(
-        controller.window != nil,
+        controller.window?.isVisible == true,
         "selector window should stay open when entering inline create mode"
     )
 }
@@ -197,9 +191,11 @@ func testAvatarSelectorInlineCreateModeReturnsToBrowseModeWithoutClosing() throw
         ],
         currentAvatarID: "capybara",
         onChoose: { _ in },
-        onAddCustom: {},
         onClose: {}
     )
+
+    controller.present()
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
 
     guard let contentView = controller.window?.contentView else {
         throw TestFailure(message: "selector content view should exist")
@@ -223,7 +219,7 @@ func testAvatarSelectorInlineCreateModeReturnsToBrowseModeWithoutClosing() throw
         "browse mode should hide the return-to-library button"
     )
     try expect(
-        controller.window != nil,
+        controller.window?.isVisible == true,
         "selector window should remain open after returning to browse mode"
     )
 }
@@ -263,7 +259,6 @@ func testAvatarSelectorThemeTabGeneratesDraftBeforeApplyingTheme() throws {
             try environment.themeManager.apply(pack)
         },
         onChoose: { _ in },
-        onAddCustom: {},
         onClose: {}
     )
 
@@ -363,7 +358,6 @@ func testAvatarSelectorThemeTabRequiresPreviewBeforeApply() throws {
             try environment.themeManager.apply(pack)
         },
         onChoose: { _ in },
-        onAddCustom: {},
         onClose: {}
     )
 
@@ -441,7 +435,6 @@ func testAvatarSelectorThemeTabInvalidatesApplyWhenOptimizedPromptChanges() thro
             try environment.themeManager.apply(pack)
         },
         onChoose: { _ in },
-        onAddCustom: {},
         onClose: {}
     )
 
@@ -532,7 +525,6 @@ func testAvatarSelectorThemeTabBlocksApplyAfterFailedReoptimize() throws {
             try environment.themeManager.apply(pack)
         },
         onChoose: { _ in },
-        onAddCustom: {},
         onClose: {}
     )
 
@@ -588,7 +580,6 @@ func testAvatarSelectorThemeTabUpdatesActionButtonStatesAcrossReviewFlow() throw
             makeAppKitTestThemePack(id: "generated_preview_theme_button_states")
         },
         onChoose: { _ in },
-        onAddCustom: {},
         onClose: {}
     )
 
@@ -740,7 +731,6 @@ func testAvatarSelectorWindowSpeechTabShowsBubblePreviewAndApplyActions() throws
         ],
         currentAvatarID: "capybara",
         onChoose: { _ in },
-        onAddCustom: {},
         onClose: {}
     )
 
@@ -773,7 +763,6 @@ func testAvatarSelectorSpeechTabOmitsStyleChromeAndModelSummary() throws {
         ],
         currentAvatarID: "capybara",
         onChoose: { _ in },
-        onAddCustom: {},
         onClose: {}
     )
 
@@ -853,7 +842,6 @@ func testAvatarSelectorWindowUsesInstalledCopyCatalogForStudioLabels() throws {
         ],
         currentAvatarID: "capybara",
         onChoose: { _ in },
-        onAddCustom: {},
         onClose: {}
     )
 
@@ -885,7 +873,6 @@ func testAvatarSelectorPreservesSelectedStudioTabWhenThemeChanges() throws {
         ],
         currentAvatarID: "capybara",
         onChoose: { _ in },
-        onAddCustom: {},
         onClose: {}
     )
 
@@ -1738,7 +1725,6 @@ func testAvatarSelectorSpeechTabAppliesGeneratedCopyToDesktopPetRuntime() throws
             try store.applySpeechDraft(appliedDraft)
         },
         onChoose: { _ in },
-        onAddCustom: {},
         onClose: {}
     )
 

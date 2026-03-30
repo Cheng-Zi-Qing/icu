@@ -61,10 +61,6 @@ final class AvatarCoordinator {
                     try? self?.applyAvatarSelection(avatarID)
                     self?.selectorController = nil
                 },
-                onAddCustom: { [weak self] in
-                    self?.selectorController = nil
-                    self?.presentAvatarWizard()
-                },
                 onClose: { [weak self] in
                     self?.selectorController = nil
                 }

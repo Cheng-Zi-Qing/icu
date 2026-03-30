@@ -136,32 +136,6 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         subscribeToThemeChanges()
     }
 
-    convenience init(
-        avatars: [AvatarSummary],
-        currentAvatarID: String?,
-        themePromptOptimizer: ((String) throws -> String)? = nil,
-        themeDraftGenerator: ((String) throws -> ThemePack)? = nil,
-        themeDraftApplier: ((ThemePack) throws -> Void)? = nil,
-        speechDraftGenerator: ((String) throws -> SpeechDraft)? = nil,
-        speechDraftApplier: ((SpeechDraft) throws -> Void)? = nil,
-        onChoose: @escaping (String) -> Void,
-        onAddCustom: @escaping () -> Void,
-        onClose: @escaping () -> Void
-    ) {
-        _ = onAddCustom
-        self.init(
-            avatars: avatars,
-            currentAvatarID: currentAvatarID,
-            themePromptOptimizer: themePromptOptimizer,
-            themeDraftGenerator: themeDraftGenerator,
-            themeDraftApplier: themeDraftApplier,
-            speechDraftGenerator: speechDraftGenerator,
-            speechDraftApplier: speechDraftApplier,
-            onChoose: onChoose,
-            onClose: onClose
-        )
-    }
-
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
