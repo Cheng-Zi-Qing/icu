@@ -1,79 +1,50 @@
-# I.C.U. - 你的 AI 健康伙伴
+# I.C.U. - 原生 macOS AI 桌宠
 
 中文 | [English](README.md)
 
-> **I**ntelligent **C**are **U**nit - 可自定义的桌面宠物，在你编码时守护健康
->
-> 💡 **I.C.U. = I see u** - 你的专属健康守护者，有个性！
+> 一个基于 Swift/AppKit 的 macOS 桌宠项目，默认提供像素风主题、工作状态机，
+> 以及轻量的 `./icu` 本地启动入口。
 
 [![Swift](https://img.shields.io/badge/Swift-6-orange.svg)](https://www.swift.org/)
 [![Platform](https://img.shields.io/badge/Platform-macOS-green.svg)](https://www.apple.com/macos/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-## 🌟 I.C.U. 的特别之处
+## 当前运行形态
 
-### 🎨 完全可自定义的形象与人设
-- **AI 生成宠物**：几分钟内创建独一无二的桌面伙伴
-- **自定义人设**：每个宠物都有自己的语气、特质和消息
-- **内置收藏**：水豚、奶牛、马、海豹等
-- **零代码创建**：只需描述你想要的，AI 完成其余工作
+- `./icu` 默认拉起 `apps/macos-shell` 下的原生 Swift/AppKit shell。
+- 当前默认 GUI 主题是像素风，已经覆盖桌宠、状态气泡、右键菜单、更换形象页和模型工作台。
+- 运行时状态机是 `idle -> working -> focus/break -> working -> idle`。
+- 冷启动时如果读到上次持久化的是活动态，会自动归一回 `idle`，但保留窗口位置。
+- 首次启动会把桌宠放在屏幕右下角附近；后续启动会优先恢复上次仍然可见的位置。
+- 轻量本地开发只需要 Apple Command Line Tools；完整 Xcode 只在你希望 `./icu --verify` 顺带跑 `swift test` 时才需要。
+- Python 已经不参与应用启动链路，只保留在形象生成桥接上。
+- 当前用户可见文案默认是简体中文，并且已经抽离为可覆盖资源。
 
-### 💪 基于科学的健康管理
-- **智能提醒**：护眼（20-20-20 法则）、拉伸休息、补水追踪
-- **动态算法**：基于体重的个性化饮水量
-- **心流友好**：手动状态控制 - 永不打断专注
-- **周报统计**：追踪健康习惯和改进
+## 当前可用能力
 
-### 🤖 AI 优先设计
-- **本地隐私**：所有 AI 处理都在本地完成
-- **上下文感知**：理解你正在做什么
-- **人设系统**：宠物以符合角色的方式回应
-- **多模型支持**：Ollama 本地模型 + 远程 API + 图像生成
-
-## ✨ 核心功能
-
-### 🎭 创建你的完美宠物
-
-**三种获取方式：**
-1. **选择内置宠物**：水豚、奶牛、马、海豹、人类
-2. **AI 生成自定义宠物**：描述你理想的宠物，AI 创建它
-3. **上传自己的**：让你最喜欢的角色活起来
-
-**人设系统：**
-- 每个宠物都有独特的特质和说话风格
-- AI 生成的上下文消息
-- 可自定义人设描述
-- 符合角色的回应
-
-### 💊 有效的健康管理
-
-**智能工作状态：**
-- **待机** 🛌：休息模式，生成每日健康报告
-- **工作** 💻：主动健康监测与提醒
-- **专注** 🔕：暂停提醒，追踪健康负债
-- **暂离** ☕：重置计时器，无惩罚
-
-**科学提醒：**
-- **护眼**：20-20-20 法则（每 20 分钟，看 20 英尺外 20 秒）
-- **拉伸**：每 45 分钟运动休息
-- **补水**：基于体重的动态间隔
-
-**个性化补水：**
-```
-每日总需水量 = 体重(kg) × 35ml
-工作期间需水量 = 每日总需水量 × 65%
-提醒间隔 = 工作时长 ÷ (需水量 ÷ 杯容量)
-```
-
-### 📊 追踪你的进步
-- 每日健康报告与统计
-- 周报总结和趋势
-- 提醒完成率
-- 专注模式下的健康负债追踪
+- 拉起一个悬浮桌宠，并通过菜单栏面板或桌宠右键菜单控制它。
+- 通过 `更换形象` 打开统一工作台，里面分为 `主题风格`、`桌宠形象动画`、`话术` 三个 tab。
+- 通过 `生成配置` 配置三类模型能力：`文本描述`、`动画形象`、`主题代码`。
+- 所有 AI 生成都走统一节奏：先生成草稿和预览，不满意就重生成，满意后再应用。
+- 可以切换内置桌宠，也可以保存 AI 生成的新形象。
+- 可以不改代码直接覆盖用户可见文案。
 
 ## 🚀 快速开始
 
-### 安装
+### 环境要求
+
+- macOS
+- Apple Command Line Tools 或 Xcode
+- shell 中能直接执行 `swift`
+- 可选：如果希望 `./icu --verify` 里顺带跑 `swift test`，需要完整 Xcode
+
+轻量模式安装 Command Line Tools：
+
+```bash
+xcode-select --install
+```
+
+### 启动
 
 ```bash
 git clone https://github.com/yourusername/icu.git
@@ -81,76 +52,44 @@ cd icu
 ./icu
 ```
 
-这会直接启动 Swift/AppKit 原生 shell。
+这会直接从当前源码目录启动 Swift/AppKit 原生 shell。
 
-快速校验命令：
+启动行为说明：
+
+- 首次启动会把桌宠放到屏幕右下角附近。
+- 如果之前保存过仍然可见的位置，后续会自动恢复。
+- 如果上次退出前停在 `working`，这次启动会先归一到 `idle`，不会一拉起就直接进入工作中。
+- 启动脚本会自动使用隔离的 SwiftPM scratch path，因此一般不需要手工清 `apps/macos-shell/.build`。
+
+### 校验
 
 ```bash
 ./icu --verify
 ```
 
-打包本地 `.app`：
+这条命令会：
+
+- 运行 `apps/macos-shell` 的 `swift build`
+- 运行手工 runtime 校验
+- 仅在当前环境启用了完整 Xcode 时才继续跑 `swift test`
+
+如果机器上只有 Command Line Tools，这条命令仍然可用；脚本会明确跳过 `swift test`。
+
+### 打包本地 `.app`
 
 ```bash
 ./icu --package-app
 bash tools/check_macos_app_bundle.sh dist/ICU.app
 ```
 
-### 原生 macOS shell 校验
-
-对于 `apps/macos-shell` 下的 Swift/AppKit shell，简短本地校验命令是：
-
-```bash
-./icu --verify
-```
-
-这个命令会：
-- 运行针对 `apps/macos-shell` 的 `swift build`，并自动使用隔离 scratch path，避免旧 `.build` 缓存污染
-- 运行手工 runtime 校验脚本
-- 仅在当前环境启用了 Xcode 时才追加 `swift test`，同样走隔离 scratch path
-
-如果机器上只有 `Command Line Tools`，这条命令仍然可用；脚本会明确跳过 `swift test`，而不是直接失败。
-
-底层脚本仍可单独运行：
-
-```bash
-bash tools/verify_macos_shell.sh
-```
-
-如果要顺手做一次 `.app` release smoke check，可以运行：
-
-```bash
-VERIFY_MACOS_SHELL_PACKAGE_CHECK=1 ./icu --verify
-```
-
-如果要同时启用两层 release 校验（bundle 结构 + detached runtime smoke），运行：
-
-```bash
-VERIFY_MACOS_SHELL_PACKAGE_CHECK=1 \
-VERIFY_MACOS_SHELL_RUNTIME_SMOKE_CHECK=1 \
-./icu --verify
-```
-
-校验边界说明：
-- bundle 结构检查用于验证 `.app` 打包结构与资源布局是否正确
-- detached runtime smoke 用于验证复制后的 `.app` 能否在 detached 目录启动并完成 runtime 路径初始化
-- 签名、notarization、Gatekeeper 验证不在 `./icu --verify` 范围内，属于后续发布阶段
-
-如果要本地启动原生 shell，运行：
-
-```bash
-./icu
-```
-
-启动脚本也会自动使用隔离 scratch path，所以不需要再手动清 `apps/macos-shell/.build`。
-
-底层启动脚本仍可单独运行：
+底层脚本：
 
 ```bash
 bash tools/run_macos_shell.sh
+bash tools/verify_macos_shell.sh
 ```
 
-如果要看发布、签名和 notarize 的完整说明，见：
+如果要看打包、签名和 notarize 说明，见：
 
 ```bash
 docs/macos-shell-release.md
@@ -162,62 +101,163 @@ docs/macos-shell-release.md
 tools/macos_shell_release.env.example
 ```
 
-启动后建议检查：
-- 右键桌宠，确认至少能看到 `开始工作 / 进入专注 / 暂离 / 回来工作 / 下班 / 更换形象 / 退出`
-- 打开 `菜单栏 -> 更换形象`，确认会出现 Swift 版形象选择器
-- 确认生成了 `~/Library/Application Support/ICU/state/current_state.json`
-- `ICU_PET_ID=<pet_id>` 现在只作为首次启动回退；日常切换应使用 Swift UI
+可选 release 风格校验：
 
-### 首次设置
+```bash
+VERIFY_MACOS_SHELL_PACKAGE_CHECK=1 \
+VERIFY_MACOS_SHELL_RUNTIME_SMOKE_CHECK=1 \
+./icu --verify
+```
 
-1. **选择宠物**：从内置形象中选择或创建自定义形象
-2. **配置健康设置**：
-   - 菜单栏 → 个人设置
-   - 输入体重和杯子容量
-3. **可选 AI 设置**：
-   - 菜单栏 / 右键菜单 → 模型配置
-   - 配置本地 Ollama 或远程 AI 模型
+### 运行时控制
 
-当前用户配置会写到：
+菜单栏面板：
+
+- `显示桌宠`
+- `更换形象`
+- `生成配置`
+- `退出`
+
+桌宠处于待机态时的右键菜单：
+
+- `开始工作`
+- `更换形象`
+- `生成配置`
+- `隐藏桌宠`
+- `退出`
+
+桌宠处于工作态时的右键菜单：
+
+- `进入专注`
+- `暂离`
+- `下班`
+- `更换形象`
+- `生成配置`
+- `隐藏桌宠`
+- `退出`
+
+桌宠处于专注或暂离态时的右键菜单：
+
+- `回来工作`
+- `下班`
+- `更换形象`
+- `生成配置`
+- `隐藏桌宠`
+- `退出`
+
+当前提醒逻辑：
+
+- 进入 `working` 会启动护眼提醒。
+- 进入 `focus` 会暂停提醒。
+- 从 `focus` 或 `break` 回到工作态后会重新启动提醒。
+- 当前 Swift 迁移版已经落地的是护眼提醒；拉伸、补水、日报/周报等流程还没有完整迁移回来。
+
+### 模型工作台（`生成配置`）
+
+`生成配置` 只负责配置模型，不负责生成和应用内容。
+
+当前能力分栏：
+
+- `文本描述`：把 prompt 变成结构化文字意图
+- `动画形象`：生成桌宠形象与动作素材
+- `主题代码`：把文字意图变成主题草稿
+
+当前支持的 provider：
+
+- `ollama`
+- `huggingface`
+- `openai-compatible`
+
+每一类能力都会保存这些字段：
+
+- provider
+- model
+- base URL
+- auth JSON
+- options JSON
+
+### 统一形象工作台（`更换形象`）
+
+`更换形象` 才是生成、预览、重生成、应用真正发生的地方。
+
+当前 tab：
+
+- `主题风格`
+- `桌宠形象动画`
+- `话术`
+
+当前统一操作流：
+
+1. 输入原始 prompt。
+2. 优化 prompt。
+3. 生成预览。
+4. 不满意就重生成。
+5. 满意后再应用。
+
+各 tab 的职责：
+
+- `主题风格` 会先预览桌宠气泡、右键菜单和表单控件，再决定是否应用主题。
+- `桌宠形象动画` 可以浏览已有形象，也可以生成新的 `idle`、`working`、`alert` 动作图，随后保存并应用。
+- `话术` 会先生成文本草稿和真实气泡预览，再决定是否应用文案 override。
+
+### 持久化与文件位置
+
+运行时状态：
+
+```bash
+~/Library/Application Support/ICU/state/current_state.json
+```
+
+模型配置与当前主题选择：
 
 ```bash
 ~/Library/Application Support/ICU/config/settings.json
 ```
 
-桌宠话术 override 会写到：
+话术与用户可见文案 override：
 
 ```bash
 ~/Library/Application Support/ICU/config/copy/active.json
 ```
 
-### 日常使用
+生成后的主题草稿：
 
-1. **开始一天**：菜单栏 → 开始工作
-2. **保持健康**：响应宠物的温柔提醒
-3. **需要专注？**：菜单栏 → 进入专注（暂停提醒）
-4. **休息一下**：菜单栏 → 暂离（重置计时器）
-5. **结束一天**：菜单栏 → 下班（生成每日报告）
+```bash
+~/Library/Application Support/ICU/state/themes/
+```
 
-### 创建自定义宠物
+以源码仓库模式运行时，AI 生成的新桌宠图片素材当前会保存到：
 
-1. 菜单栏 → 更换形象，或右键桌宠 → 更换形象
-2. **步骤 1**：描述你的宠物（例如："一只淡定的水豚"）
-3. **步骤 2**：AI 优化提示词并生成图像
-4. **步骤 3**：AI 创建人设和消息
-5. 完成！你的独特宠物已就绪
+```bash
+assets/pets/<avatar_id>/
+```
 
-### AI 配置
+高级用法：覆盖 App Support 根目录：
 
-**三种模型类型：**
-- **本地模型**：Ollama 用于提示词优化和人设生成
-- **远程文本模型**：OpenAI、Claude 或自定义 API
-- **图像模型**：Stable Diffusion 或 HuggingFace 模型
+```bash
+ICU_APP_SUPPORT_ROOT=/tmp/icu-dev ./icu
+```
 
-访问方式：菜单栏 / 右键菜单 → 模型配置
+### Python 边界
+
+现在只在形象生成桥接层保留 Python：
+
+- `tools/avatar_builder_bridge.py`
+- `builder/`
+
+下面这些运行面已经是原生 Swift/AppKit，不再依赖旧 Python 启动路径：
+
+- 应用启动
+- 桌宠窗口
+- 右键菜单
+- 菜单栏面板
+- 状态流转
+- 主题运行时
+- 气泡渲染
 
 ## 📚 科学依据
 
-I.C.U. 的健康提醒基于同行评审的研究：
+下面这些研究链接描述的是更完整的产品方向。当前 Swift shell 里已经真实启用的是护眼提醒；拉伸、补水和更丰富的报告能力仍然属于后续路线。
 
 ### 👁️ 护眼模块：20-20-20 法则与数字眼疲劳 (DES)
 

@@ -17,7 +17,16 @@ final class WorkSessionController {
 
     init(store: StateStore) throws {
         self.store = store
-        self.currentState = try store.load()
+        let loadedState = try store.load()
+        if loadedState.state == .idle {
+            self.currentState = loadedState
+        } else {
+            let normalizedState = PersistedRuntimeState.idle(
+                windowPlacement: loadedState.windowPlacement
+            )
+            try store.save(normalizedState)
+            self.currentState = normalizedState
+        }
     }
 
     var state: ShellWorkState {

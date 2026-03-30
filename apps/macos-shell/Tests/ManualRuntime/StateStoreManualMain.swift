@@ -20,6 +20,7 @@ struct StateStoreManualMain {
             try testRejectsBreakToFocusShortcut()
             try testPersistWindowPlacementUpdatesCurrentStateAndStore()
             try testStateTransitionsPreserveSavedWindowPlacement()
+            try testLaunchResetsPersistedActiveSessionToIdleWhilePreservingWindowPlacement()
             try testIdleMenuShowsStartWork()
             try testIdleMenuShowsGenerationConfigEntryInUtilitySection()
             try testWorkingMenuSectionsStayGroupedForThemedPanel()

@@ -1,79 +1,50 @@
-# I.C.U. - Your AI-Powered Health Companion
+# I.C.U. - Native macOS AI Desktop Pet
 
 [中文](README_CN.md) | English
 
-> **I**ntelligent **C**are **U**nit - A customizable desktop pet that keeps you healthy while you code
->
-> 💡 **I.C.U. = I see u** - Your personal health guardian with personality!
+> A Swift/AppKit desktop pet for macOS with a default pixel theme, stateful work modes,
+> and a lightweight `./icu` launcher for local development.
 
 [![Swift](https://img.shields.io/badge/Swift-6-orange.svg)](https://www.swift.org/)
 [![Platform](https://img.shields.io/badge/Platform-macOS-green.svg)](https://www.apple.com/macos/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-## 🌟 What Makes I.C.U. Special
+## Current Runtime
 
-### 🎨 Fully Customizable Avatars & Personalities
-- **AI-Generated Pets**: Create your unique desktop companion in minutes
-- **Custom Personalities**: Each pet has its own tone, traits, and messages
-- **Built-in Collection**: Capybara, cow, horse, seal, and more
-- **Zero-Code Creation**: Just describe what you want, AI does the rest
+- `./icu` launches the native Swift/AppKit shell under `apps/macos-shell`.
+- The default GUI theme is pixel style and currently covers the desktop pet, status bubble, right-click menu, avatar studio, and model workbench.
+- The runtime state machine is `idle -> working -> focus/break -> working -> idle`.
+- On cold launch, persisted active sessions are normalized back to `idle` while preserving window placement.
+- First launch places the pet near the bottom-right corner; later launches restore the last saved position when it is still visible on screen.
+- Lightweight local development works with Apple Command Line Tools installed via `xcode-select --install`; full Xcode is optional and only needed if you want `swift test` during verification.
+- Python is no longer part of the app bootstrap path. It is retained only for avatar-generation bridge work.
+- Default user-visible copy is currently Simplified Chinese, and the copy catalog is overrideable.
 
-### 💪 Science-Based Health Management
-- **Smart Reminders**: Eye care (20-20-20 rule), stretch breaks, hydration tracking
-- **Dynamic Algorithms**: Personalized water intake based on your body weight
-- **Flow-Friendly**: Manual state control - never interrupts your focus
-- **Weekly Reports**: Track your health habits and improvements
+## What You Can Do Today
 
-### 🤖 AI-First Design
-- **Local Privacy**: All AI processing stays on your machine
-- **Context-Aware**: Understands what you're working on
-- **Personality System**: Pets respond with character-appropriate messages
-- **Multi-Model Support**: Ollama local models + remote APIs + image generation
-
-## ✨ Key Features
-
-### 🎭 Create Your Perfect Pet
-
-**Three Ways to Get Your Companion:**
-1. **Choose from Built-in Pets**: Capybara, cow, horse, seal, human
-2. **AI-Generated Custom Pet**: Describe your ideal pet, AI creates it
-3. **Upload Your Own**: Bring your favorite character to life
-
-**Personality System:**
-- Each pet has unique traits and speaking style
-- AI-generated contextual messages
-- Customizable personality descriptions
-- Character-appropriate responses
-
-### 💊 Health Management That Works
-
-**Smart Work States:**
-- **Idle** 🛌: Rest mode, generates daily health report
-- **Working** 💻: Active health monitoring with reminders
-- **Focus** 🔕: Pauses reminders, tracks health debt
-- **Break** ☕: Resets timers, no penalties
-
-**Science-Based Reminders:**
-- **Eye Care**: 20-20-20 rule (every 20 min, look 20 feet away for 20 sec)
-- **Stretch**: Movement breaks every 45 minutes
-- **Hydration**: Dynamic intervals based on your body weight
-
-**Personalized Hydration:**
-```
-Daily water = Body weight (kg) × 35ml
-Work water = Daily water × 65%
-Reminder interval = Work hours ÷ (Water needed ÷ Cup volume)
-```
-
-### 📊 Track Your Progress
-- Daily health reports with statistics
-- Weekly summaries and trends
-- Reminder completion rates
-- Health debt tracking during focus mode
+- Launch a floating desktop pet and control it from the menu bar panel or the pet's right-click menu.
+- Use `更换形象` to open a unified studio with three tabs: `主题风格`, `桌宠形象动画`, and `话术`.
+- Use `生成配置` as a model workbench for the three capability buckets: `文本描述`, `动画形象`, and `主题代码`.
+- Generate drafts, preview them, regenerate if they are not good enough, and only then apply them.
+- Switch built-in pets or save AI-generated custom pets.
+- Override user-visible copy without recompiling the app.
 
 ## 🚀 Quick Start
 
-### Installation
+### Requirements
+
+- macOS
+- Apple Command Line Tools or Xcode
+- `swift` available in your shell
+- Optional: full Xcode if you want `swift test` to run as part of `./icu --verify`
+
+Install Command Line Tools in lightweight mode:
+
+```bash
+xcode-select --install
+```
+
+### Launch
 
 ```bash
 git clone https://github.com/yourusername/icu.git
@@ -81,73 +52,41 @@ cd icu
 ./icu
 ```
 
-This launches the Swift/AppKit shell.
+This launches the Swift/AppKit shell from the current checkout.
 
-Quick verification:
+Launch behavior:
+
+- The pet is shown near the bottom-right corner on first launch.
+- A saved on-screen position is restored automatically on later launches.
+- A previously persisted active work state is normalized to `idle` on launch, so the pet does not immediately come up in `working`.
+- The launch script uses an isolated SwiftPM scratch path, so you should not need to manually clear `apps/macos-shell/.build`.
+
+### Verify
 
 ```bash
 ./icu --verify
 ```
 
-Package a local `.app` bundle:
+This verification flow:
+
+- runs `swift build` for `apps/macos-shell`
+- runs the manual runtime checks
+- runs `swift test` only when full Xcode is active
+
+If your machine only has Command Line Tools, `./icu --verify` still works and explicitly skips `swift test`.
+
+### Package a local `.app`
 
 ```bash
 ./icu --package-app
 bash tools/check_macos_app_bundle.sh dist/ICU.app
 ```
 
-### Native macOS shell verification
-
-For the Swift/AppKit shell under `apps/macos-shell`, the short local verification command is:
-
-```bash
-./icu --verify
-```
-
-What it does:
-- runs `swift build` for `apps/macos-shell` with an isolated scratch path so stale `.build` caches do not break the package
-- runs the manual runtime verification script
-- runs `swift test` only when Xcode is active, using the same isolated scratch path
-
-If you only have Command Line Tools installed, this command remains valid. In that environment, the script skips `swift test` explicitly instead of failing.
-
-Low-level helper:
-
-```bash
-bash tools/verify_macos_shell.sh
-```
-
-To include a release-bundle smoke check in verification:
-
-```bash
-VERIFY_MACOS_SHELL_PACKAGE_CHECK=1 ./icu --verify
-```
-
-To include both release checks (bundle structure + detached runtime smoke):
-
-```bash
-VERIFY_MACOS_SHELL_PACKAGE_CHECK=1 \
-VERIFY_MACOS_SHELL_RUNTIME_SMOKE_CHECK=1 \
-./icu --verify
-```
-
-Check boundaries:
-- bundle structure check validates `.app` packaging layout and expected resources
-- detached runtime smoke check validates copied app launch and runtime path initialization in detached mode
-- signing, notarization, and Gatekeeper validation are a later release phase and are not covered by `./icu --verify`
-
-To launch the native shell locally:
-
-```bash
-./icu
-```
-
-The launch script also uses the isolated scratch path automatically, so you should not need to manually clear `apps/macos-shell/.build`.
-
-Low-level helper:
+Low-level helpers:
 
 ```bash
 bash tools/run_macos_shell.sh
+bash tools/verify_macos_shell.sh
 ```
 
 For packaging, signing, and notarization notes, see:
@@ -162,62 +101,163 @@ Release env template:
 tools/macos_shell_release.env.example
 ```
 
-Useful local checks after launch:
-- right-click the pet to verify `开始工作 / 进入专注 / 暂离 / 回来工作 / 下班 / 更换形象 / 退出`
-- open `Menu Bar -> Change Avatar` and confirm the Swift selector appears
-- confirm `~/Library/Application Support/ICU/state/current_state.json` is created
-- `ICU_PET_ID=<pet_id>` is now only a fallback for first launch; regular switching should use the Swift UI
+Optional release-flavored verification:
 
-### First Time Setup
+```bash
+VERIFY_MACOS_SHELL_PACKAGE_CHECK=1 \
+VERIFY_MACOS_SHELL_RUNTIME_SMOKE_CHECK=1 \
+./icu --verify
+```
 
-1. **Choose Your Pet**: Select from built-in avatars or create a custom one
-2. **Configure Health Settings**:
-   - Menu Bar → Personal Settings
-   - Enter your body weight and cup volume
-3. **Optional AI Setup**:
-   - Menu Bar / right-click menu → Model Configuration
-   - Configure local Ollama or remote AI models
+### Runtime Controls
 
-User-writeable settings now live at:
+Menu bar panel:
+
+- `显示桌宠`
+- `更换形象`
+- `生成配置`
+- `退出`
+
+Desktop pet right-click menu while idle:
+
+- `开始工作`
+- `更换形象`
+- `生成配置`
+- `隐藏桌宠`
+- `退出`
+
+Desktop pet right-click menu while working:
+
+- `进入专注`
+- `暂离`
+- `下班`
+- `更换形象`
+- `生成配置`
+- `隐藏桌宠`
+- `退出`
+
+Desktop pet right-click menu while in focus or break:
+
+- `回来工作`
+- `下班`
+- `更换形象`
+- `生成配置`
+- `隐藏桌宠`
+- `退出`
+
+Current reminder behavior:
+
+- Entering `working` arms the eye-care reminder.
+- Entering `focus` pauses reminders.
+- Returning from `focus` or `break` re-arms reminders.
+- The migrated Swift shell currently ships the eye-care reminder; stretch, hydration, and report flows are not fully migrated yet.
+
+### Model Workbench (`生成配置`)
+
+`生成配置` is for model configuration only. It does not generate or apply assets by itself.
+
+Current capability tabs:
+
+- `文本描述`: turns a prompt into structured textual intent
+- `动画形象`: generates avatar and motion image assets
+- `主题代码`: turns textual intent into theme drafts
+
+Current provider set:
+
+- `ollama`
+- `huggingface`
+- `openai-compatible`
+
+Each capability stores:
+
+- provider
+- model
+- base URL
+- auth JSON
+- options JSON
+
+### Unified Avatar Studio (`更换形象`)
+
+`更换形象` is the place where generation, preview, regeneration, and apply actually happen.
+
+Tabs:
+
+- `主题风格`
+- `桌宠形象动画`
+- `话术`
+
+Current workflow by design:
+
+1. Write the raw prompt.
+2. Optimize the prompt.
+3. Generate a preview.
+4. Regenerate until the draft is acceptable.
+5. Apply only when satisfied.
+
+Tab specifics:
+
+- `主题风格` previews the desktop pet bubble, right-click menu chrome, and form controls before applying the theme.
+- `桌宠形象动画` can browse installed pets or create a new one by generating `idle`, `working`, and `alert` action images, then saving and applying the result.
+- `话术` generates a text draft and a real bubble preview before applying copy overrides.
+
+### Persistence and File Locations
+
+Runtime state:
+
+```bash
+~/Library/Application Support/ICU/state/current_state.json
+```
+
+Model settings and active theme selection:
 
 ```bash
 ~/Library/Application Support/ICU/config/settings.json
 ```
 
-Speech overrides live at:
+Speech and user-visible copy overrides:
 
 ```bash
 ~/Library/Application Support/ICU/config/copy/active.json
 ```
 
-### Daily Usage
+Generated theme packs:
 
-1. **Start Your Day**: Menu Bar → Start Work
-2. **Stay Healthy**: Respond to gentle reminders from your pet
-3. **Need Focus?**: Menu Bar → Enter Focus (pauses reminders)
-4. **Take Breaks**: Menu Bar → Break (resets timers)
-5. **End Your Day**: Menu Bar → Off Work (generates daily report)
+```bash
+~/Library/Application Support/ICU/state/themes/
+```
 
-### Create Custom Pet
+When running from a source checkout, generated custom avatar image assets are currently saved into:
 
-1. Menu Bar → Change Avatar, or right-click the pet → Change Avatar
-2. **Step 1**: Describe your pet (e.g., "a calm capybara")
-3. **Step 2**: AI optimizes the prompt and generates images
-4. **Step 3**: AI creates personality and messages
-5. Done! Your unique pet is ready
+```bash
+assets/pets/<avatar_id>/
+```
 
-### AI Configuration
+Advanced override for app-support root:
 
-**Three Model Types:**
-- **Local Models**: Ollama for prompt optimization and personality
-- **Remote Text Models**: OpenAI, Claude, or custom APIs
-- **Image Models**: Stable Diffusion or HuggingFace models
+```bash
+ICU_APP_SUPPORT_ROOT=/tmp/icu-dev ./icu
+```
 
-Access via: Menu Bar / right-click menu → Model Configuration
+### Python Boundary
+
+Python is retained only for avatar-generation bridge work:
+
+- `tools/avatar_builder_bridge.py`
+- `builder/`
+
+The following runtime surfaces are now native Swift/AppKit and do not depend on the old Python startup path:
+
+- app launch
+- desktop pet window
+- right-click menu
+- menu bar panel
+- state transitions
+- theme runtime
+- bubble rendering
 
 ## 📚 Scientific Foundation
 
-I.C.U.'s health reminders are based on peer-reviewed research:
+The research links below describe the broader product direction. In the current Swift shell, the eye-care reminder is the part that is already migrated and active. Stretch, hydration, and richer reporting remain roadmap work.
 
 ### 👁️ Eye Care Module: 20-20-20 Rule & Digital Eye Strain (DES)
 

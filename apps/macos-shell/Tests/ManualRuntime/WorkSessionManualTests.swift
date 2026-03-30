@@ -66,3 +66,28 @@ func testStateTransitionsPreserveSavedWindowPlacement() throws {
     let reloaded = try WorkSessionController(store: store)
     try expect(reloaded.savedWindowPlacement == placement, "persisted placement should survive reload after transitions")
 }
+
+func testLaunchResetsPersistedActiveSessionToIdleWhilePreservingWindowPlacement() throws {
+    let store = try makeStateStoreForTests()
+    let placement = SavedWindowPlacement(x: 640, y: 88)
+
+    try store.save(
+        PersistedRuntimeState(
+            state: .working,
+            updatedAt: at(10),
+            workStartedAt: at(0),
+            focusStartedAt: nil,
+            breakStartedAt: nil,
+            windowPlacement: placement
+        )
+    )
+
+    let controller = try WorkSessionController(store: store)
+
+    try expect(controller.state == .idle, "launch should normalize a persisted active work session back to idle")
+    try expect(controller.savedWindowPlacement == placement, "launch normalization should preserve the saved window placement")
+
+    let persisted = try store.load()
+    try expect(persisted.state == .idle, "launch normalization should persist the normalized idle state")
+    try expect(persisted.windowPlacement == placement, "launch normalization should keep the persisted window placement")
+}
