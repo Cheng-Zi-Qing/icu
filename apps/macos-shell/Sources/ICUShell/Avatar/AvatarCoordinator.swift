@@ -85,7 +85,7 @@ final class AvatarCoordinator {
                     }
                 },
                 onChoose: { [weak self] avatarID in
-                    try? self?.applyAvatarSelection(avatarID)
+                    try self?.applyAvatarSelection(avatarID)
                     self?.selectorController = nil
                 },
                 onClose: { [weak self] in

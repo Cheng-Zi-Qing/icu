@@ -32,7 +32,7 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
     private let avatarSaveHandler: ((InlineAvatarSaveRequest) throws -> String)?
     private let speechDraftGenerator: ((String) throws -> SpeechDraft)?
     private let speechDraftApplier: ((SpeechDraft) throws -> Void)?
-    private let onChoose: (String) -> Void
+    private let onChoose: (String) throws -> Void
     private let onClose: () -> Void
 
     private var selectedTab: StudioTab = .theme
@@ -83,6 +83,9 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
     private var creationDraftPersona = ""
     private var previousSuggestedPersona = ""
     private var creationStage: InlineAvatarCreationStage = .empty
+    private var isInlineAvatarPreviewInFlight = false
+    private var inlineAvatarPreviewRequestID: UUID?
+    private var isInlineAvatarSaveInFlight = false
     private var speechPrompt = ""
 
     private var appliedThemeSummary = TextCatalog.shared.text(
@@ -129,7 +132,7 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         avatarSaveHandler: ((InlineAvatarSaveRequest) throws -> String)? = nil,
         speechDraftGenerator: ((String) throws -> SpeechDraft)? = nil,
         speechDraftApplier: ((SpeechDraft) throws -> Void)? = nil,
-        onChoose: @escaping (String) -> Void,
+        onChoose: @escaping (String) throws -> Void,
         onClose: @escaping () -> Void
     ) {
         self.avatars = avatars
@@ -1247,6 +1250,8 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
     }
 
     private func invalidateInlineAvatarPreview() {
+        isInlineAvatarPreviewInFlight = false
+        inlineAvatarPreviewRequestID = nil
         creationPreviewDraft = nil
         syncInlineAvatarStage()
         updateAvatarCreateActionButtonStates()
@@ -1254,10 +1259,11 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
 
     private func updateAvatarCreateActionButtonStates() {
         let hasName = !normalizedPrompt(creationDraftName, fallback: "").isEmpty
-        avatarCreateOptimizeButton?.isEnabled = avatarTabMode == .create
-        avatarCreatePreviewButton?.isEnabled = avatarTabMode == .create && hasNonEmptyInlineAvatarOptimizedPrompt()
-        avatarCreateRegenerateButton?.isEnabled = avatarTabMode == .create && creationPreviewDraft != nil
-        avatarCreateSaveButton?.isEnabled = avatarTabMode == .create && creationStage == .previewReady && hasName
+        let isBusy = isInlineAvatarPreviewInFlight || isInlineAvatarSaveInFlight
+        avatarCreateOptimizeButton?.isEnabled = avatarTabMode == .create && !isBusy
+        avatarCreatePreviewButton?.isEnabled = avatarTabMode == .create && !isBusy && hasNonEmptyInlineAvatarOptimizedPrompt()
+        avatarCreateRegenerateButton?.isEnabled = avatarTabMode == .create && !isBusy && creationPreviewDraft != nil
+        avatarCreateSaveButton?.isEnabled = avatarTabMode == .create && !isBusy && creationStage == .previewReady && hasName
     }
 
     private func renderOptimizedInlineAvatarPrompt() throws {
@@ -1294,19 +1300,19 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
     }
 
     private func renderInlineAvatarPreview(regenerated: Bool) throws {
-        let prompt = normalizedPrompt(creationOptimizedPrompt, fallback: "")
-        guard !prompt.isEmpty else {
-            statusLabel.stringValue = copy("avatar_studio.preview_requires_optimized_status", fallback: "请先优化 prompt，再生成预览。")
-            statusLabel.textColor = AvatarPanelTheme.muted
-            return
+        let draft = try generateInlineAvatarPreviewDraft(for: normalizedPrompt(creationOptimizedPrompt, fallback: ""))
+        applyInlineAvatarPreviewDraft(draft, regenerated: regenerated, prompt: normalizedPrompt(creationOptimizedPrompt, fallback: ""))
+    }
+
+    private func generateInlineAvatarPreviewDraft(for prompt: String) throws -> InlineAvatarPreviewDraft {
+        if let avatarPreviewGenerator {
+            return try avatarPreviewGenerator(prompt)
         }
 
-        let draft = if let avatarPreviewGenerator {
-            try avatarPreviewGenerator(prompt)
-        } else {
-            makeFallbackInlineAvatarPreviewDraft()
-        }
+        return makeFallbackInlineAvatarPreviewDraft()
+    }
 
+    private func applyInlineAvatarPreviewDraft(_ draft: InlineAvatarPreviewDraft, regenerated: Bool, prompt: String) {
         let shouldReplacePersonaSuggestion = normalizedPrompt(creationDraftPersona, fallback: "").isEmpty
             || creationDraftPersona == previousSuggestedPersona
 
@@ -1332,6 +1338,58 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         updateAvatarCreateActionButtonStates()
     }
 
+    private func startInlineAvatarPreview(regenerated: Bool) {
+        let prompt = normalizedPrompt(creationOptimizedPrompt, fallback: "")
+        guard !prompt.isEmpty else {
+            statusLabel.stringValue = copy("avatar_studio.preview_requires_optimized_status", fallback: "请先优化 prompt，再生成预览。")
+            statusLabel.textColor = AvatarPanelTheme.muted
+            return
+        }
+
+        guard !isInlineAvatarPreviewInFlight else {
+            return
+        }
+
+        let requestID = UUID()
+        inlineAvatarPreviewRequestID = requestID
+        isInlineAvatarPreviewInFlight = true
+        statusLabel.stringValue = copy("avatar_wizard.generating_status", fallback: "生成中...")
+        statusLabel.textColor = AvatarPanelTheme.accent
+        updateAvatarCreateActionButtonStates()
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else {
+                return
+            }
+
+            let result = Result {
+                try self.generateInlineAvatarPreviewDraft(for: prompt)
+            }
+
+            DispatchQueue.main.async { [weak self] in
+                guard let self else {
+                    return
+                }
+
+                guard self.inlineAvatarPreviewRequestID == requestID else {
+                    return
+                }
+
+                self.inlineAvatarPreviewRequestID = nil
+                self.isInlineAvatarPreviewInFlight = false
+
+                switch result {
+                case let .success(draft):
+                    self.applyInlineAvatarPreviewDraft(draft, regenerated: regenerated, prompt: prompt)
+                    self.renderSelectedTab()
+                case let .failure(error):
+                    self.updateAvatarCreateActionButtonStates()
+                    self.showGenerationError(error)
+                }
+            }
+        }
+    }
+
     private func currentInlineAvatarSaveRequest() -> InlineAvatarSaveRequest? {
         guard
             creationStage == .previewReady,
@@ -1353,6 +1411,9 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
     }
 
     private func resetInlineAvatarCreationDraft() {
+        isInlineAvatarPreviewInFlight = false
+        inlineAvatarPreviewRequestID = nil
+        isInlineAvatarSaveInFlight = false
         creationRawPrompt = ""
         creationOptimizedPrompt = ""
         creationPreviewDraft = nil
@@ -1427,12 +1488,8 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
             return
         case .avatar:
             if avatarTabMode == .create {
-                do {
-                    try renderInlineAvatarPreview(regenerated: false)
-                } catch {
-                    showGenerationError(error)
-                    return
-                }
+                startInlineAvatarPreview(regenerated: false)
+                return
             } else {
                 renderAvatarPreview(regenerated: false)
             }
@@ -1453,12 +1510,8 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
             return
         case .avatar:
             if avatarTabMode == .create {
-                do {
-                    try renderInlineAvatarPreview(regenerated: true)
-                } catch {
-                    showGenerationError(error)
-                    return
-                }
+                startInlineAvatarPreview(regenerated: true)
+                return
             } else {
                 renderAvatarPreview(regenerated: true)
             }
@@ -1482,9 +1535,13 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
                 return
             }
 
-            didFinish = true
-            onChoose(avatarID)
-            close()
+            do {
+                try onChoose(avatarID)
+                didFinish = true
+                close()
+            } catch {
+                showGenerationError(error)
+            }
         case .speech:
             if let speechDraftApplier {
                 guard let pendingSpeechDraft else {
@@ -1627,22 +1684,28 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
             return
         }
 
+        guard !isInlineAvatarSaveInFlight else {
+            return
+        }
+
+        isInlineAvatarSaveInFlight = true
         creationStage = .saving
         updateAvatarCreateActionButtonStates()
         defer {
+            isInlineAvatarSaveInFlight = false
             syncInlineAvatarStage()
             updateAvatarCreateActionButtonStates()
         }
 
         do {
             let avatarID = try avatarSaveHandler(request)
+            try onChoose(avatarID)
             statusLabel.stringValue = copy(
                 "avatar_studio.save_success_status",
                 fallback: "新形象已保存并应用。"
             )
             statusLabel.textColor = AvatarPanelTheme.accent
             didFinish = true
-            onChoose(avatarID)
             close()
         } catch {
             showGenerationError(error)
