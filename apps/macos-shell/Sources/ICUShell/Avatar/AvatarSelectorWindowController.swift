@@ -1613,19 +1613,32 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
             return
         }
 
+        guard let avatarSaveHandler else {
+            syncInlineAvatarStage()
+            updateAvatarCreateActionButtonStates()
+            statusLabel.stringValue = copy(
+                "avatar_studio.save_unavailable_status",
+                fallback: "当前环境未接入形象保存能力，请稍后再试。"
+            )
+            statusLabel.textColor = AvatarPanelTheme.danger
+            return
+        }
+
         creationStage = .saving
         updateAvatarCreateActionButtonStates()
+        defer {
+            syncInlineAvatarStage()
+            updateAvatarCreateActionButtonStates()
+        }
 
         do {
-            try avatarSaveHandler?(request)
+            try avatarSaveHandler(request)
             statusLabel.stringValue = copy(
-                "avatar_studio.create_save_info_title",
-                fallback: "保存后将自动应用这个新形象。"
+                "avatar_studio.save_success_status",
+                fallback: "形象草稿已保存，可继续调整或返回现有形象。"
             )
             statusLabel.textColor = AvatarPanelTheme.accent
         } catch {
-            syncInlineAvatarStage()
-            updateAvatarCreateActionButtonStates()
             showGenerationError(error)
         }
     }

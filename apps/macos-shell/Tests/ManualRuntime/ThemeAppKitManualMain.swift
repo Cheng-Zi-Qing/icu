@@ -17,6 +17,7 @@ struct ThemeAppKitManualMain {
             try testAvatarSelectorInlineCreateModeOptimizesRawPromptAndUsesOptimizedPromptForPreview()
             try testAvatarSelectorInlineCreateModeRequiresThreePreviewsAndNameBeforeSave()
             try testAvatarSelectorInlineCreateModeCancelKeepsDraftUnsaved()
+            try testAvatarSelectorInlineCreateModeSaveWithoutHandlerStaysEditable()
             try testAvatarSelectorThemeTabGeneratesDraftBeforeApplyingTheme()
             try testAvatarSelectorThemeTabRequiresPreviewBeforeApply()
             try testAvatarSelectorThemeTabInvalidatesApplyWhenOptimizedPromptChanges()

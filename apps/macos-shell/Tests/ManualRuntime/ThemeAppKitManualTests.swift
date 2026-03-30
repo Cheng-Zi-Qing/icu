@@ -515,6 +515,97 @@ func testAvatarSelectorInlineCreateModeCancelKeepsDraftUnsaved() throws {
     try expect(controller.window?.isVisible == true, "avatar cancel should return to browse mode without closing the selector")
 }
 
+func testAvatarSelectorInlineCreateModeSaveWithoutHandlerStaysEditable() throws {
+    let previewURL = try makeTinyPNG()
+    let idleURL = try makeTinyPNG()
+    let workingURL = try makeTinyPNG()
+    let alertURL = try makeTinyPNG()
+
+    let controller = AvatarSelectorWindowController(
+        avatars: [
+            AvatarSummary(
+                id: "capybara",
+                name: "水豚",
+                style: "像素",
+                previewURL: previewURL,
+                traits: "稳重",
+                tone: "冷静"
+            )
+        ],
+        currentAvatarID: "capybara",
+        avatarPromptOptimizer: { prompt in
+            "optimized::\(prompt)"
+        },
+        avatarPreviewGenerator: { _ in
+            InlineAvatarPreviewDraft(
+                actionImageURLs: [
+                    "idle": idleURL,
+                    "working": workingURL,
+                    "alert": alertURL,
+                ],
+                suggestedPersona: "稳重、冷静、慢半拍"
+            )
+        },
+        onChoose: { _ in },
+        onClose: {}
+    )
+
+    controller.present()
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "selector content view should exist")
+    }
+
+    try requireButton(in: contentView, title: "桌宠形象动画").performClick(nil)
+    try requireButton(in: contentView, title: "新增自定义形象").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    let rawPromptView = try requireTextView(in: contentView, identifier: "avatarCreateRawPrompt")
+    rawPromptView.string = "draft without save handler"
+    controller.textDidChange(Notification(name: NSText.didChangeNotification, object: rawPromptView))
+
+    try requireActionButton(in: contentView, title: "优化 prompt").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    try requireActionButton(in: contentView, title: "生成预览").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    let nameField = try requireTextField(in: contentView, identifier: "avatarCreateNameField")
+    nameField.stringValue = "未接线草稿"
+    nameField.sendAction(nameField.action, to: nameField.target)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    let saveButtonBeforeClick = try requireActionButton(in: contentView, title: "保存并应用")
+    try expect(
+        saveButtonBeforeClick.isEnabled == true,
+        "avatar save button should be enabled before testing missing save handler"
+    )
+
+    try requireActionButton(in: contentView, title: "保存并应用").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    let saveButtonAfterClick = try requireActionButton(in: contentView, title: "保存并应用")
+    try expect(
+        saveButtonAfterClick.isEnabled == true,
+        "avatar save button should remain enabled when no save handler is injected"
+    )
+    _ = try requireLabel(in: contentView, stringValue: "当前环境未接入形象保存能力，请稍后再试。")
+    _ = try requireLabel(in: contentView, stringValue: "当前模式：新建形象")
+    try expect(
+        controller.window?.isVisible == true,
+        "selector window should stay open when inline avatar save is unavailable"
+    )
+
+    nameField.stringValue = "继续编辑"
+    nameField.sendAction(nameField.action, to: nameField.target)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    let saveButtonAfterEdit = try requireActionButton(in: contentView, title: "保存并应用")
+    try expect(
+        saveButtonAfterEdit.isEnabled == true,
+        "avatar save should stay retryable after an unavailable save attempt"
+    )
+}
+
 func testAvatarSelectorThemeTabGeneratesDraftBeforeApplyingTheme() throws {
     let environment = try makeGenerationEnvironment()
     ThemeManager.installShared(environment.themeManager)

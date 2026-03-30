@@ -103,6 +103,8 @@
     "create_prompt_hint": "描述你想生成的形象、动作和动画关键词。",
     "create_optimized_prompt_hint": "优化后的 prompt 会用于生成 idle / working / alert 三组预览。",
     "create_save_info_title": "保存后将自动应用这个新形象。",
+    "save_success_status": "形象草稿已保存，可继续调整或返回现有形象。",
+    "save_unavailable_status": "当前环境未接入形象保存能力，请稍后再试。",
     "list_title": "形象列表",
     "detail_title": "预览与说明",
     "no_selection_title": "未选择形象",
