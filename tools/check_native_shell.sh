@@ -76,6 +76,7 @@ swiftc -framework AppKit \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Avatar/AvatarBuilderBridge.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Avatar/AvatarAssetStore.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Avatar/AvatarSettingsStore.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Avatar/InlineAvatarCreationModels.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/DesktopPetMenuModel.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Menu/ThemedMenuPanel.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Menu/FloatingPanelController.swift" \

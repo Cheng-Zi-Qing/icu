@@ -91,9 +91,9 @@ extension UserVisibleCopyKey {
         case .menuHidePet:
             return "隐藏桌宠"
         case .generationConfigWindowTitle:
-            return "模型配置"
+            return "模型工作台"
         case .generationConfigWindowSubtitle:
-            return "这里只配置文本描述、动画形象和主题代码模型；生成与预览在更换形象工作台中完成。"
+            return "这里只配模型；生成、预览、应用都在更换形象页。"
         case .generationConfigStatusText:
             return "这里只配置模型，不负责生成与应用。"
         case .generationConfigTextDescriptionTabTitle:
@@ -103,11 +103,11 @@ extension UserVisibleCopyKey {
         case .generationConfigCodeGenerationTabTitle:
             return "主题代码"
         case .generationConfigTextDescriptionDetail:
-            return "负责把 prompt 转成结构化文字意图，供主题、形象和话术链路消费。"
+            return "负责把 prompt 转成结构化文字意图。"
         case .generationConfigAnimationAvatarDetail:
-            return "负责生成桌宠形象与动作素材，后续用于预览与应用角色草稿。"
+            return "负责生成桌宠形象与动作素材。"
         case .generationConfigCodeGenerationDetail:
-            return "负责把文字意图转成 ThemePack 和 GUI 主题草稿。"
+            return "负责把文字意图转成主题草稿。"
         case .generationConfigBasicSectionTitle:
             return "基础配置"
         case .generationConfigAdvancedSectionTitle:

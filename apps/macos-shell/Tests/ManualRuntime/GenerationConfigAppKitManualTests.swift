@@ -22,7 +22,7 @@ func testGenerationConfigWindowUsesInstalledCopyCatalogForVisibleLabels() throws
         {
           "generation_config": {
             "window_title": "模型工作台",
-            "window_subtitle": "这里只配模型，生成和预览去创作页。",
+            "window_subtitle": "这里只配模型；生成、预览、应用都在更换形象页。",
             "basic_section_title": "基础信息",
             "provider_label": "提供方",
             "text_description_tab_title": "文字意图",
@@ -57,7 +57,7 @@ func testGenerationConfigWindowUsesInstalledCopyCatalogForVisibleLabels() throws
     }
 
     _ = try requireLabel(in: contentView, stringValue: "模型工作台")
-    _ = try requireLabel(in: contentView, stringValue: "这里只配模型，生成和预览去创作页。")
+    _ = try requireLabel(in: contentView, stringValue: "这里只配模型；生成、预览、应用都在更换形象页。")
     _ = try requireButton(in: contentView, title: "文字意图")
     _ = try requireButton(in: contentView, title: "形象素材")
     _ = try requireButton(in: contentView, title: "主题样式代码")
@@ -140,18 +140,39 @@ func testGenerationConfigWindowCapabilityDetailUsesBasicAndAdvancedSections() th
     _ = try requireLabel(in: contentView, stringValue: "服务商")
     _ = try requireLabel(in: contentView, stringValue: "模型")
     _ = try requireLabel(in: contentView, stringValue: "接口地址")
-    _ = try requireButton(in: contentView, title: "显示高级设置")
+    _ = try requireTextField(in: contentView, placeholder: "provider，如 ollama / huggingface / openai-compatible")
+    _ = try requireTextField(in: contentView, placeholder: "model")
+    _ = try requireTextField(in: contentView, placeholder: "base_url")
+    let advancedToggle = try requireButton(in: contentView, title: "显示高级设置")
 
     try expect(
         findTextField(in: contentView, placeholder: "auth JSON，如 {\"api_key\":\"sk-xxx\"}") == nil,
         "advanced auth field should stay hidden until expanded"
     )
+    try expect(
+        findTextField(in: contentView, placeholder: "options JSON，如 {\"temperature\":0.7}") == nil,
+        "advanced options field should stay hidden until expanded"
+    )
+    try expect(
+        findLabel(in: contentView, stringValue: "高级设置") == nil,
+        "advanced section title should stay hidden until expanded"
+    )
+    try expect(
+        findLabel(in: contentView, stringValue: "认证 JSON") == nil,
+        "advanced auth label should stay hidden until expanded"
+    )
+    try expect(
+        findLabel(in: contentView, stringValue: "选项 JSON") == nil,
+        "advanced options label should stay hidden until expanded"
+    )
 
-    try requireButton(in: contentView, title: "显示高级设置").performClick(nil)
+    advancedToggle.performClick(nil)
 
     _ = try requireLabel(in: contentView, stringValue: "高级设置")
     _ = try requireLabel(in: contentView, stringValue: "认证 JSON")
     _ = try requireLabel(in: contentView, stringValue: "选项 JSON")
+    _ = try requireTextField(in: contentView, placeholder: "auth JSON，如 {\"api_key\":\"sk-xxx\"}")
+    _ = try requireTextField(in: contentView, placeholder: "options JSON，如 {\"temperature\":0.7}")
 }
 
 func testGenerationConfigWindowPreservesDraftAcrossNavigationSwitches() throws {
@@ -217,8 +238,84 @@ func testGenerationConfigWindowUsesCompactFrame() throws {
     }
 
     try expect(
-        contentSize == NSSize(width: 760, height: 640),
-        "generation config window should use a more compact default content size"
+        contentSize == NSSize(width: 804, height: 520),
+        "generation config window should use a tighter default content size"
+    )
+}
+
+func testGenerationConfigWindowUsesThickerFieldDensity() throws {
+    let settingsStore = try makeGenerationSettingsStore()
+    let themeManager = try makeThemeManagerWithPixelDefault()
+    let service = ThemeGenerationService(
+        transport: StubGenerationTransport(
+            results: [
+                .success(#"{\"name\":\"Moss Pixel\",\"summary\":\"掌机感、苔藓绿、低饱和\"}"#),
+                .success(validThemePackJSONString(id: "moss_pixel"))
+            ]
+        ),
+        settingsStore: settingsStore,
+        themeManager: themeManager
+    )
+    let coordinator = GenerationCoordinator(
+        settingsStore: settingsStore,
+        themeManager: themeManager,
+        generationService: service
+    )
+
+    let controller = coordinator.openGenerationConfig()
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "generation config window content view should exist")
+    }
+    contentView.layoutSubtreeIfNeeded()
+
+    let modelField = try requireTextField(in: contentView, placeholder: "model")
+
+    let heightConstraint = modelField.constraints.first { constraint in
+        constraint.firstAttribute == .height && constraint.firstItem === modelField
+    }
+
+    try expect(
+        heightConstraint?.constant == 42,
+        "model field should use the thicker field height"
+    )
+    try expect(modelField.frame.height == 42, "model field should render at the thicker field height")
+}
+
+func testGenerationConfigWindowKeepsCoreFieldsInUpperViewportBand() throws {
+    let settingsStore = try makeGenerationSettingsStore()
+    let themeManager = try makeThemeManagerWithPixelDefault()
+    let service = ThemeGenerationService(
+        transport: StubGenerationTransport(
+            results: [
+                .success(#"{\"name\":\"Moss Pixel\",\"summary\":\"掌机感、苔藓绿、低饱和\"}"#),
+                .success(validThemePackJSONString(id: "moss_pixel"))
+            ]
+        ),
+        settingsStore: settingsStore,
+        themeManager: themeManager
+    )
+    let coordinator = GenerationCoordinator(
+        settingsStore: settingsStore,
+        themeManager: themeManager,
+        generationService: service
+    )
+
+    let controller = coordinator.openGenerationConfig()
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "generation config window content view should exist")
+    }
+    contentView.layoutSubtreeIfNeeded()
+
+    let providerField = try requireTextField(
+        in: contentView,
+        placeholder: "provider，如 ollama / huggingface / openai-compatible"
+    )
+    let providerFrameInContent = providerField.convert(providerField.bounds, to: contentView)
+    let topGap = contentView.bounds.maxY - providerFrameInContent.maxY
+
+    try expect(
+        topGap <= 170,
+        "provider field should stay within the upper viewport band for field-first density"
     )
 }
 

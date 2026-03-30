@@ -7,7 +7,6 @@ final class AvatarCoordinator {
     private let bridge: AvatarBuilderBridge
     private let generationCoordinator: GenerationCoordinator?
     private var selectorController: AvatarSelectorWindowController?
-    private var wizardController: AvatarWizardWindowController?
     var onCurrentAvatarChanged: ((String) -> Void)?
 
     init(
@@ -34,6 +33,9 @@ final class AvatarCoordinator {
             let controller = AvatarSelectorWindowController(
                 avatars: avatars,
                 currentAvatarID: try settingsStore.loadCurrentAvatarID(),
+                themePromptOptimizer: { [bridge] prompt in
+                    try bridge.optimizePrompt(prompt)
+                },
                 themeDraftGenerator: generationCoordinator.map { coordinator in
                     { prompt in
                         try coordinator.generateThemeDraft(from: prompt)
@@ -43,6 +45,34 @@ final class AvatarCoordinator {
                     { pack in
                         try coordinator.applyThemeDraft(pack)
                     }
+                },
+                avatarPromptOptimizer: { [bridge] prompt in
+                    try bridge.optimizePrompt(prompt)
+                },
+                avatarPreviewGenerator: { [bridge, settingsStore] prompt in
+                    let model = try Self.firstImageModel(from: settingsStore)
+                    let sessionID = UUID().uuidString
+                    var actionImageURLs: [String: URL] = [:]
+
+                    for action in InlineAvatarCreation.requiredActions {
+                        actionImageURLs[action] = try bridge.generateImage(
+                            prompt: "\(prompt), \(action) pose, single character, centered, solid white background, high contrast, clean edges",
+                            model: model,
+                            sessionID: sessionID
+                        )
+                    }
+
+                    return InlineAvatarPreviewDraft(
+                        actionImageURLs: actionImageURLs,
+                        suggestedPersona: try bridge.generatePersona(prompt)
+                    )
+                },
+                avatarSaveHandler: { [assetStore] request in
+                    try assetStore.saveCustomAvatar(
+                        name: request.name,
+                        persona: request.persona,
+                        generatedActionImageURLs: request.actionImageURLs
+                    )
                 },
                 speechDraftGenerator: generationCoordinator.map { coordinator in
                     { prompt in
@@ -55,12 +85,8 @@ final class AvatarCoordinator {
                     }
                 },
                 onChoose: { [weak self] avatarID in
-                    try? self?.applyAvatarSelection(avatarID)
+                    try self?.applyAvatarSelection(avatarID)
                     self?.selectorController = nil
-                },
-                onAddCustom: { [weak self] in
-                    self?.selectorController = nil
-                    self?.presentAvatarWizard()
                 },
                 onClose: { [weak self] in
                     self?.selectorController = nil
@@ -86,34 +112,19 @@ final class AvatarCoordinator {
         onCurrentAvatarChanged?(avatarID)
     }
 
-    private func presentAvatarWizard() {
-        do {
-            let models = try bridge.listImageModels(repoRootURL: catalog.repoRootURL)
-            let controller = AvatarWizardWindowController(
-                bridge: bridge,
-                models: models,
-                settingsStore: settingsStore,
-                assetStore: assetStore,
-                onSave: { [weak self] avatarID in
-                    try? self?.applyAvatarSelection(avatarID)
-                    self?.wizardController = nil
-                },
-                onClose: { [weak self] in
-                    self?.wizardController = nil
-                }
-            )
-            wizardController = controller
-            controller.present()
-        } catch {
-            showError(error)
-        }
-    }
-
     private func showError(_ error: Error) {
         let alert = NSAlert()
         alert.messageText = TextCatalog.shared.text("avatar.error_unavailable_title", fallback: "形象功能暂不可用")
         alert.informativeText = UserFacingErrorCopy.avatarMessage(for: error)
         alert.addButton(withTitle: TextCatalog.shared.text("avatar.error_acknowledge_button", fallback: "知道了"))
         alert.runModal()
+    }
+
+    private static func firstImageModel(from settingsStore: AvatarSettingsStore) throws -> BridgeImageModel {
+        if let model = try settingsStore.loadImageModels().first {
+            return model
+        }
+
+        throw AvatarBuilderBridgeError.executionFailed(command: "load-image-models", details: "no image models configured")
     }
 }

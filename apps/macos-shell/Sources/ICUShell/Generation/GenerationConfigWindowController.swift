@@ -48,16 +48,21 @@ enum GenerationConfigFormError: Error, LocalizedError {
 }
 
 final class GenerationConfigWindowController: NSWindowController, NSWindowDelegate {
+    private final class FlippedView: NSView {
+        override var isFlipped: Bool { true }
+    }
+
     private enum Layout {
-        static let windowSize = NSSize(width: 760, height: 640)
-        static let contentInset: CGFloat = 20
-        static let rootSpacing: CGFloat = 12
-        static let contentSpacing: CGFloat = 12
+        static let windowSize = NSSize(width: 804, height: 520)
+        static let contentInset: CGFloat = 12
+        static let cardContentInset: CGFloat = 10
+        static let rootSpacing: CGFloat = 4
+        static let contentSpacing: CGFloat = 4
         static let tabSpacing: CGFloat = 8
-        static let tabHeight: CGFloat = 32
-        static let fieldRowSpacing: CGFloat = 6
-        static let labelSpacing: CGFloat = 4
-        static let fieldHeight: CGFloat = 26
+        static let tabHeight: CGFloat = 30
+        static let fieldRowSpacing: CGFloat = 10
+        static let labelSpacing: CGFloat = 2
+        static let fieldHeight: CGFloat = 42
     }
 
     private let settingsStore: GenerationSettingsStore
@@ -149,14 +154,26 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
         root.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(root)
 
-        let titleLabel = AvatarPanelTheme.makeTitleLabel(TextCatalog.shared.text(.generationConfigWindowTitle))
+        let titleLabel = AvatarPanelTheme.makeLabel(
+            TextCatalog.shared.text(.generationConfigWindowTitle),
+            color: AvatarPanelTheme.accent,
+            font: AvatarPanelTheme.bodyFont
+        )
         let subtitleLabel = AvatarPanelTheme.makeLabel(
             TextCatalog.shared.text(.generationConfigWindowSubtitle),
-            color: AvatarPanelTheme.muted
+            color: AvatarPanelTheme.muted,
+            font: AvatarPanelTheme.smallFont
         )
+        subtitleLabel.lineBreakMode = .byTruncatingTail
+        subtitleLabel.maximumNumberOfLines = 1
         let header = NSStackView(views: [titleLabel, subtitleLabel])
         header.orientation = .vertical
-        header.spacing = 4
+        header.spacing = 0
+
+        statusLabel.font = AvatarPanelTheme.smallFont
+        statusLabel.lineBreakMode = .byTruncatingTail
+        statusLabel.maximumNumberOfLines = 1
+        statusLabel.setContentHuggingPriority(.required, for: .vertical)
 
         root.addArrangedSubview(header)
         root.addArrangedSubview(buildTabBar())
@@ -195,21 +212,30 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
     }
 
     private func buildDetailContainer() -> NSView {
+        let card = AvatarPanelTheme.makeCard()
+        card.translatesAutoresizingMaskIntoConstraints = false
+
         let scrollView = NSScrollView()
         scrollView.translatesAutoresizingMaskIntoConstraints = false
-        scrollView.hasVerticalScroller = true
-        scrollView.borderType = .noBorder
         scrollView.drawsBackground = false
+        scrollView.borderType = .noBorder
+        scrollView.hasVerticalScroller = true
+        scrollView.autohidesScrollers = true
 
         let detailView = buildCapabilityDetail(for: selectedCapability)
         detailView.translatesAutoresizingMaskIntoConstraints = false
 
-        let documentView = NSView()
+        let documentView = FlippedView()
         documentView.translatesAutoresizingMaskIntoConstraints = false
         documentView.addSubview(detailView)
         scrollView.documentView = documentView
+        card.addSubview(scrollView)
 
         NSLayoutConstraint.activate([
+            scrollView.topAnchor.constraint(equalTo: card.topAnchor, constant: Layout.cardContentInset),
+            scrollView.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: Layout.cardContentInset),
+            scrollView.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -Layout.cardContentInset),
+            scrollView.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -Layout.cardContentInset),
             detailView.topAnchor.constraint(equalTo: documentView.topAnchor),
             detailView.leadingAnchor.constraint(equalTo: documentView.leadingAnchor),
             detailView.trailingAnchor.constraint(equalTo: documentView.trailingAnchor),
@@ -218,22 +244,36 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
             documentView.widthAnchor.constraint(equalTo: scrollView.contentView.widthAnchor),
         ])
 
-        return scrollView
+        return card
     }
 
     private func buildCapabilityDetail(for kind: GenerationCapabilityKind) -> NSView {
-        let card = AvatarPanelTheme.makeCard()
-        card.translatesAutoresizingMaskIntoConstraints = false
+        let contentView = FlippedView()
+        contentView.translatesAutoresizingMaskIntoConstraints = false
 
         let stack = NSStackView()
         stack.orientation = .vertical
         stack.spacing = Layout.contentSpacing
         stack.translatesAutoresizingMaskIntoConstraints = false
-        card.addSubview(stack)
+        contentView.addSubview(stack)
 
-        let titleLabel = AvatarPanelTheme.makeTitleLabel(kind.title)
-        let descriptionLabel = AvatarPanelTheme.makeLabel(kind.detailDescription, color: AvatarPanelTheme.muted)
-        let basicLabel = AvatarPanelTheme.makeLabel(TextCatalog.shared.text(.generationConfigBasicSectionTitle), color: AvatarPanelTheme.accent)
+        let titleLabel = AvatarPanelTheme.makeLabel(kind.title, color: AvatarPanelTheme.accent, font: AvatarPanelTheme.smallFont)
+        let descriptionLabel = AvatarPanelTheme.makeLabel(
+            kind.detailDescription,
+            color: AvatarPanelTheme.muted,
+            font: AvatarPanelTheme.smallFont
+        )
+        descriptionLabel.lineBreakMode = .byTruncatingTail
+        descriptionLabel.maximumNumberOfLines = 1
+        let detailHeader = NSStackView(views: [titleLabel, descriptionLabel])
+        detailHeader.orientation = .vertical
+        detailHeader.spacing = 1
+
+        let basicLabel = AvatarPanelTheme.makeLabel(
+            TextCatalog.shared.text(.generationConfigBasicSectionTitle),
+            color: AvatarPanelTheme.accent,
+            font: AvatarPanelTheme.smallFont
+        )
 
         let providerField = makeField(placeholder: TextCatalog.shared.text(.generationConfigProviderPlaceholder))
         let modelField = makeField(placeholder: TextCatalog.shared.text(.generationConfigModelPlaceholder))
@@ -267,9 +307,10 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
         advancedButton.identifier = NSUserInterfaceItemIdentifier("advanced-\(kind.rawValue)")
         advancedButton.alignment = .left
         AvatarPanelTheme.styleSecondaryButton(advancedButton)
+        advancedButton.translatesAutoresizingMaskIntoConstraints = false
+        advancedButton.heightAnchor.constraint(equalToConstant: Layout.tabHeight).isActive = true
 
-        stack.addArrangedSubview(titleLabel)
-        stack.addArrangedSubview(descriptionLabel)
+        stack.addArrangedSubview(detailHeader)
         stack.addArrangedSubview(basicLabel)
         stack.addArrangedSubview(basicStack)
         stack.addArrangedSubview(advancedButton)
@@ -288,13 +329,13 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
         }
 
         NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: card.topAnchor, constant: 18),
-            stack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 18),
-            stack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -18),
-            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -18),
+            stack.topAnchor.constraint(equalTo: contentView.topAnchor),
+            stack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            stack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
         ])
 
-        return card
+        return contentView
     }
 
     private func makeFieldRow(label: String, field: NSTextField) -> NSView {
