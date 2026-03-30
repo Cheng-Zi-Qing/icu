@@ -683,6 +683,9 @@ func testAvatarSelectorInlineCreateModeSavesAndAppliesGeneratedAvatar() throws {
         personaField.stringValue == "稳重、冷静、慢半拍",
         "avatar preview should seed the editable persona before save"
     )
+    personaField.stringValue = ""
+    personaField.sendAction(personaField.action, to: personaField.target)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
 
     nameField.stringValue = "淡定水豚"
     nameField.sendAction(nameField.action, to: nameField.target)
@@ -705,8 +708,8 @@ func testAvatarSelectorInlineCreateModeSavesAndAppliesGeneratedAvatar() throws {
         "save should receive the edited avatar name"
     )
     try expect(
-        savedRequests[0].persona == "稳重、冷静、慢半拍",
-        "save should receive the current persona draft"
+        savedRequests[0].persona == "",
+        "save should receive the current persona draft even when the user clears it"
     )
     try expect(
         savedRequests[0].actionImageURLs == [

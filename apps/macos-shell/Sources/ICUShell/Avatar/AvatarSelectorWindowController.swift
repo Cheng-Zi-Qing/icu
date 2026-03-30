@@ -1345,10 +1345,9 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
             return nil
         }
 
-        let persona = normalizedPrompt(creationDraftPersona, fallback: previewDraft.suggestedPersona)
         return InlineAvatarSaveRequest(
             name: name,
-            persona: persona,
+            persona: creationDraftPersona.trimmingCharacters(in: .whitespacesAndNewlines),
             actionImageURLs: previewDraft.actionImageURLs
         )
     }
