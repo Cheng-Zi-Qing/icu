@@ -76,6 +76,7 @@ swiftc -framework AppKit \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Avatar/AvatarBuilderBridge.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Avatar/AvatarAssetStore.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Avatar/AvatarSettingsStore.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Avatar/AvatarCoordinator.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Avatar/InlineAvatarCreationModels.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/DesktopPetMenuModel.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Menu/ThemedMenuPanel.swift" \
@@ -89,6 +90,7 @@ swiftc -framework AppKit \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Avatar/AvatarWizardWindowController.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Studio/StudioSidebarView.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Studio/ThemeStudioContentView.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Studio/AvatarStudioContentView.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Studio/SpeechStudioContentView.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Studio/StudioWindowController.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/DesktopPetCopy.swift" \

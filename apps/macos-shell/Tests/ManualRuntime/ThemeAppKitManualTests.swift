@@ -702,6 +702,615 @@ func testStudioWindowPreservesPerTabDraftsWhileSwitchingSidebarItems() throws {
     _ = try requireLabel(in: contentView, stringValue: speechDraft.previewSummaryText())
 }
 
+func testStudioAvatarBrowseModeShowsReadOnlyListAndPickerLink() throws {
+    let capybaraPreviewURL = try makeTinyPNG()
+    let sealPreviewURL = try makeTinyPNG()
+    var openPickerCount = 0
+
+    let controller = StudioWindowController(
+        avatars: [
+            AvatarSummary(
+                id: "capybara",
+                name: "水豚",
+                style: "像素风",
+                previewURL: capybaraPreviewURL,
+                traits: "稳重",
+                tone: "冷静"
+            ),
+            AvatarSummary(
+                id: "seal",
+                name: "海豹",
+                style: "奶油风",
+                previewURL: sealPreviewURL,
+                traits: "活泼",
+                tone: "轻快"
+            ),
+        ],
+        currentAvatarID: "seal",
+        onChooseAvatar: { _ in },
+        onOpenAvatarPicker: {
+            openPickerCount += 1
+        },
+        onClose: {}
+    )
+
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "studio content view should exist")
+    }
+
+    try requireButton(in: contentView, title: "形象生成").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    _ = try requireLabel(in: contentView, stringValue: "当前分区：形象生成")
+    _ = try requireLabel(in: contentView, stringValue: "当前已应用形象")
+    _ = try requireLabel(in: contentView, stringValue: "形象列表")
+
+    let tableView = try requireTableView(in: contentView)
+    try expect(tableView.numberOfRows == 2, "studio browse mode should expose a read-only avatar list")
+    try expect(
+        findLabel(in: contentView, stringValue: "当前模式：新建形象") == nil,
+        "studio browse mode should not start in create mode"
+    )
+    try expect(
+        findButton(in: contentView, title: "保存并应用") == nil,
+        "studio browse mode should not expose save/apply controls"
+    )
+
+    try requireButton(in: contentView, title: "切换形象请使用「更换形象」").performClick(nil)
+    try expect(openPickerCount == 1, "studio browse mode picker link should route through the injected picker callback")
+}
+
+func testStudioAvatarCreateModeLaunchTargetStartsInCreateState() throws {
+    let previewURL = try makeTinyPNG()
+
+    let controller = StudioWindowController(
+        avatars: [
+            AvatarSummary(
+                id: "capybara",
+                name: "水豚",
+                style: "像素风",
+                previewURL: previewURL,
+                traits: "稳重",
+                tone: "冷静"
+            )
+        ],
+        currentAvatarID: "capybara",
+        initialTarget: .avatarCreate,
+        onChooseAvatar: { _ in },
+        onOpenAvatarPicker: {},
+        onClose: {}
+    )
+
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "studio content view should exist")
+    }
+
+    _ = try requireLabel(in: contentView, stringValue: "当前模式：新建形象")
+    _ = try requireButton(in: contentView, title: "返回现有形象")
+    _ = try requireButton(in: contentView, title: "保存并应用")
+    _ = try requireTextView(in: contentView, identifier: "avatarCreateRawPrompt")
+    _ = try requireTextView(in: contentView, identifier: "avatarCreateOptimizedPrompt")
+
+    try expect(
+        findButton(in: contentView, title: "切换形象请使用「更换形象」") == nil,
+        "avatar create launch target should skip browse-mode picker link chrome"
+    )
+}
+
+func testStudioAvatarCreateModeOptimizesRawPromptAndUsesOptimizedPromptForPreview() throws {
+    let previewURL = try makeTinyPNG()
+    let idleURL = try makeTinyPNG()
+    let workingURL = try makeTinyPNG()
+    let alertURL = try makeTinyPNG()
+    var optimizedPrompts: [String] = []
+    var generatedPrompts: [String] = []
+
+    let controller = StudioWindowController(
+        avatars: [
+            AvatarSummary(
+                id: "capybara",
+                name: "水豚",
+                style: "像素",
+                previewURL: previewURL,
+                traits: "稳重",
+                tone: "冷静"
+            )
+        ],
+        currentAvatarID: "capybara",
+        initialTarget: .avatarCreate,
+        avatarPromptOptimizer: { prompt in
+            optimizedPrompts.append(prompt)
+            return "optimized::\(prompt)"
+        },
+        avatarPreviewGenerator: { prompt in
+            generatedPrompts.append(prompt)
+            return InlineAvatarPreviewDraft(
+                actionImageURLs: [
+                    "idle": idleURL,
+                    "working": workingURL,
+                    "alert": alertURL,
+                ],
+                suggestedPersona: "稳重、冷静、慢半拍"
+            )
+        },
+        onChooseAvatar: { _ in },
+        onOpenAvatarPicker: {},
+        onClose: {}
+    )
+
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "studio content view should exist")
+    }
+
+    let rawPromptView = try requireTextView(in: contentView, identifier: "avatarCreateRawPrompt")
+    let optimizedPromptView = try requireTextView(in: contentView, identifier: "avatarCreateOptimizedPrompt")
+
+    rawPromptView.string = "raw capybara prompt"
+    controller.textDidChange(Notification(name: NSText.didChangeNotification, object: rawPromptView))
+
+    try requireActionButton(in: contentView, title: "优化 prompt").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    try requireActionButton(in: contentView, title: "生成预览").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    try expect(
+        optimizedPrompts == ["raw capybara prompt"],
+        "studio avatar optimizer should receive the raw prompt from create mode"
+    )
+    try expect(
+        rawPromptView.string == "raw capybara prompt",
+        "studio avatar raw prompt should remain unchanged after optimization"
+    )
+    try expect(
+        optimizedPromptView.string == "optimized::raw capybara prompt",
+        "studio avatar optimized prompt should render in its dedicated text view"
+    )
+    try expect(
+        generatedPrompts == ["optimized::raw capybara prompt"],
+        "studio avatar preview generation should consume the optimized prompt instead of the raw prompt"
+    )
+}
+
+func testStudioAvatarCreateModePreviewGenerationReturnsWithoutBlockingUI() throws {
+    let previewURL = try makeTinyPNG()
+    let idleURL = try makeTinyPNG()
+    let workingURL = try makeTinyPNG()
+    let alertURL = try makeTinyPNG()
+    let previewCompletion = DispatchSemaphore(value: 0)
+
+    let controller = StudioWindowController(
+        avatars: [
+            AvatarSummary(
+                id: "capybara",
+                name: "水豚",
+                style: "像素",
+                previewURL: previewURL,
+                traits: "稳重",
+                tone: "冷静"
+            )
+        ],
+        currentAvatarID: "capybara",
+        initialTarget: .avatarCreate,
+        avatarPromptOptimizer: { prompt in
+            "optimized::\(prompt)"
+        },
+        avatarPreviewGenerator: { _ in
+            Thread.sleep(forTimeInterval: 0.2)
+            previewCompletion.signal()
+            return InlineAvatarPreviewDraft(
+                actionImageURLs: [
+                    "idle": idleURL,
+                    "working": workingURL,
+                    "alert": alertURL,
+                ],
+                suggestedPersona: "稳重、冷静、慢半拍"
+            )
+        },
+        onChooseAvatar: { _ in },
+        onOpenAvatarPicker: {},
+        onClose: {}
+    )
+
+    controller.present()
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "studio content view should exist")
+    }
+
+    let rawPromptView = try requireTextView(in: contentView, identifier: "avatarCreateRawPrompt")
+    rawPromptView.string = "slow async preview prompt"
+    controller.textDidChange(Notification(name: NSText.didChangeNotification, object: rawPromptView))
+
+    try requireActionButton(in: contentView, title: "优化 prompt").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    let previewButton = try requireActionButton(in: contentView, title: "生成预览")
+    let start = Date()
+    previewButton.performClick(nil)
+    let elapsed = Date().timeIntervalSince(start)
+
+    try expect(
+        elapsed < 0.1,
+        "studio avatar preview click should return before background generation finishes"
+    )
+
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    try expect(
+        previewCompletion.wait(timeout: .now()) == .timedOut,
+        "studio avatar preview generation should still be running shortly after the click returns"
+    )
+
+    let previewButtonWhileGenerating = try requireActionButton(in: contentView, title: "生成预览")
+    let regenerateButtonWhileGenerating = try requireActionButton(in: contentView, title: "重新生成")
+    let saveButtonWhileGenerating = try requireActionButton(in: contentView, title: "保存并应用")
+    try expect(previewButtonWhileGenerating.isEnabled == false, "studio avatar preview button should disable while generation is in flight")
+    try expect(regenerateButtonWhileGenerating.isEnabled == false, "studio avatar regenerate button should disable while generation is in flight")
+    try expect(saveButtonWhileGenerating.isEnabled == false, "studio avatar save button should disable while generation is in flight")
+
+    try requireActionButton(in: contentView, title: "返回现有形象").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    try expect(
+        findLabel(in: contentView, stringValue: "当前模式：新建形象") == nil,
+        "studio avatar browse mode should remain responsive while preview generation is still running"
+    )
+    _ = try requireButton(in: contentView, title: "切换形象请使用「更换形象」")
+
+    RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+    try expect(
+        previewCompletion.wait(timeout: .now()) == .success,
+        "slow studio avatar preview generation should eventually finish in the background"
+    )
+    try expect(controller.window?.isVisible == true, "studio should remain open after background preview completes")
+}
+
+func testStudioAvatarCreateModeRequiresThreePreviewsAndNameBeforeSave() throws {
+    let previewURL = try makeTinyPNG()
+    let idleURL = try makeTinyPNG()
+    let workingURL = try makeTinyPNG()
+    let alertURL = try makeTinyPNG()
+    var previewCallCount = 0
+
+    let controller = StudioWindowController(
+        avatars: [
+            AvatarSummary(
+                id: "capybara",
+                name: "水豚",
+                style: "像素",
+                previewURL: previewURL,
+                traits: "稳重",
+                tone: "冷静"
+            )
+        ],
+        currentAvatarID: "capybara",
+        initialTarget: .avatarCreate,
+        avatarPromptOptimizer: { prompt in
+            "optimized::\(prompt)"
+        },
+        avatarPreviewGenerator: { _ in
+            previewCallCount += 1
+            if previewCallCount == 1 {
+                return InlineAvatarPreviewDraft(
+                    actionImageURLs: [
+                        "idle": idleURL,
+                        "working": workingURL,
+                    ],
+                    suggestedPersona: "稳重、冷静、慢半拍"
+                )
+            }
+
+            return InlineAvatarPreviewDraft(
+                actionImageURLs: [
+                    "idle": idleURL,
+                    "working": workingURL,
+                    "alert": alertURL,
+                ],
+                suggestedPersona: "稳重、冷静、慢半拍"
+            )
+        },
+        onChooseAvatar: { _ in },
+        onOpenAvatarPicker: {},
+        onClose: {}
+    )
+
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "studio content view should exist")
+    }
+
+    let optimizeButton = try requireActionButton(in: contentView, title: "优化 prompt")
+    let previewButton = try requireActionButton(in: contentView, title: "生成预览")
+    let regenerateButton = try requireActionButton(in: contentView, title: "重新生成")
+    let saveButton = try requireActionButton(in: contentView, title: "保存并应用")
+
+    try expect(optimizeButton.isEnabled == true, "studio avatar optimize button should stay enabled in create mode")
+    try expect(previewButton.isEnabled == false, "studio avatar preview button should stay disabled until optimized prompt exists")
+    try expect(regenerateButton.isEnabled == false, "studio avatar regenerate button should stay disabled before any preview")
+    try expect(saveButton.isEnabled == false, "studio avatar save button should stay disabled before preview and name")
+
+    let rawPromptView = try requireTextView(in: contentView, identifier: "avatarCreateRawPrompt")
+    rawPromptView.string = "raw prompt for gating"
+    controller.textDidChange(Notification(name: NSText.didChangeNotification, object: rawPromptView))
+
+    try requireActionButton(in: contentView, title: "优化 prompt").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    let previewButtonAfterOptimize = try requireActionButton(in: contentView, title: "生成预览")
+    let saveButtonAfterOptimize = try requireActionButton(in: contentView, title: "保存并应用")
+    try expect(previewButtonAfterOptimize.isEnabled == true, "studio avatar preview button should enable after optimization")
+    try expect(saveButtonAfterOptimize.isEnabled == false, "studio avatar save button should still wait for preview")
+
+    try requireActionButton(in: contentView, title: "生成预览").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    let regenerateButtonAfterPreview = try requireActionButton(in: contentView, title: "重新生成")
+    let saveButtonAfterPreview = try requireActionButton(in: contentView, title: "保存并应用")
+    try expect(regenerateButtonAfterPreview.isEnabled == true, "studio avatar regenerate button should enable after the first preview")
+    try expect(saveButtonAfterPreview.isEnabled == false, "studio avatar save button should stay disabled when one action preview is missing")
+
+    let nameField = try requireTextField(in: contentView, identifier: "avatarCreateNameField")
+    let personaField = try requireTextField(in: contentView, identifier: "avatarCreatePersonaField")
+    try expect(
+        personaField.stringValue == "稳重、冷静、慢半拍",
+        "studio avatar preview should hydrate the editable persona field from the preview draft"
+    )
+
+    nameField.stringValue = "淡定水豚"
+    nameField.sendAction(nameField.action, to: nameField.target)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    let saveButtonAfterName = try requireActionButton(in: contentView, title: "保存并应用")
+    try expect(
+        saveButtonAfterName.isEnabled == false,
+        "studio avatar save button should still stay disabled until idle working alert previews all exist"
+    )
+
+    try requireActionButton(in: contentView, title: "重新生成").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    let saveButtonAfterCompletePreview = try requireActionButton(in: contentView, title: "保存并应用")
+    try expect(
+        saveButtonAfterCompletePreview.isEnabled == true,
+        "studio avatar save button should enable only after all previews exist and name is non-empty"
+    )
+}
+
+func testStudioAvatarCreateModeSavesAndAppliesGeneratedAvatar() throws {
+    let previewURL = try makeTinyPNG()
+    let idleURL = try makeTinyPNG()
+    let workingURL = try makeTinyPNG()
+    let alertURL = try makeTinyPNG()
+    var optimizedPrompts: [String] = []
+    var previewPrompts: [String] = []
+    var savedRequests: [InlineAvatarSaveRequest] = []
+    var chosenAvatarIDs: [String] = []
+    var closeCount = 0
+
+    let controller = StudioWindowController(
+        avatars: [
+            AvatarSummary(
+                id: "capybara",
+                name: "水豚",
+                style: "像素",
+                previewURL: previewURL,
+                traits: "稳重",
+                tone: "冷静"
+            )
+        ],
+        currentAvatarID: "capybara",
+        initialTarget: .avatarCreate,
+        avatarPromptOptimizer: { prompt in
+            optimizedPrompts.append(prompt)
+            return "optimized::\(prompt)"
+        },
+        avatarPreviewGenerator: { prompt in
+            previewPrompts.append(prompt)
+            return InlineAvatarPreviewDraft(
+                actionImageURLs: [
+                    "idle": idleURL,
+                    "working": workingURL,
+                    "alert": alertURL,
+                ],
+                suggestedPersona: "稳重、冷静、慢半拍"
+            )
+        },
+        avatarSaveHandler: { request in
+            savedRequests.append(request)
+            return "custom_capybara"
+        },
+        onChooseAvatar: { avatarID in
+            chosenAvatarIDs.append(avatarID)
+        },
+        onOpenAvatarPicker: {},
+        onClose: {
+            closeCount += 1
+        }
+    )
+
+    controller.present()
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "studio content view should exist")
+    }
+
+    let rawPromptView = try requireTextView(in: contentView, identifier: "avatarCreateRawPrompt")
+    rawPromptView.string = "raw capybara save/apply prompt"
+    controller.textDidChange(Notification(name: NSText.didChangeNotification, object: rawPromptView))
+
+    try requireActionButton(in: contentView, title: "优化 prompt").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    try requireActionButton(in: contentView, title: "生成预览").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    let nameField = try requireTextField(in: contentView, identifier: "avatarCreateNameField")
+    let personaField = try requireTextField(in: contentView, identifier: "avatarCreatePersonaField")
+    try expect(
+        personaField.stringValue == "稳重、冷静、慢半拍",
+        "studio avatar preview should seed the editable persona before save"
+    )
+    personaField.stringValue = ""
+    personaField.sendAction(personaField.action, to: personaField.target)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    nameField.stringValue = "淡定水豚"
+    nameField.sendAction(nameField.action, to: nameField.target)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    try requireActionButton(in: contentView, title: "保存并应用").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    try expect(
+        optimizedPrompts == ["raw capybara save/apply prompt"],
+        "studio avatar save/apply flow should optimize the raw prompt exactly once"
+    )
+    try expect(
+        previewPrompts == ["optimized::raw capybara save/apply prompt"],
+        "studio avatar save/apply flow should preview using the optimized prompt"
+    )
+    try expect(savedRequests.count == 1, "studio avatar save should run exactly once")
+    try expect(savedRequests[0].name == "淡定水豚", "studio avatar save should receive the edited avatar name")
+    try expect(savedRequests[0].persona == "", "studio avatar save should receive the current persona draft even when the user clears it")
+    try expect(
+        savedRequests[0].actionImageURLs == [
+            "idle": idleURL,
+            "working": workingURL,
+            "alert": alertURL,
+        ],
+        "studio avatar save should receive all generated action image URLs"
+    )
+    try expect(
+        chosenAvatarIDs == ["custom_capybara"],
+        "studio avatar save/apply should route the saved avatar through the existing choose path"
+    )
+    try expect(closeCount == 0, "successful studio avatar save/apply should finish without calling onClose")
+    try expect(controller.window?.isVisible == true, "studio should stay open after a successful avatar save/apply")
+    try expect(
+        findLabel(in: contentView, stringValue: "当前模式：新建形象") == nil,
+        "successful studio avatar save/apply should return to browse mode"
+    )
+    _ = try requireButton(in: contentView, title: "切换形象请使用「更换形象」")
+}
+
+func testSavingNewAvatarRefreshesPickerAndStudioAvatarLists() throws {
+    let repoRoot = try makeTemporaryDirectory()
+    try writeTestAvatar(
+        repoRoot: repoRoot,
+        id: "capybara",
+        name: "水豚",
+        style: "像素风",
+        traits: "稳重",
+        tone: "冷静"
+    )
+    try writeTestAvatar(
+        repoRoot: repoRoot,
+        id: "seal",
+        name: "海豹",
+        style: "奶油风",
+        traits: "活泼",
+        tone: "轻快"
+    )
+
+    let settingsStore = AvatarSettingsStore(repoRootURL: repoRoot)
+    try settingsStore.saveCurrentAvatarID("capybara")
+
+    let scriptURL = try makeBridgeScript(
+        body: """
+import json
+import sys
+
+command = sys.argv[1]
+if command == "optimize-prompt":
+    text = sys.argv[sys.argv.index("--text") + 1]
+    print(json.dumps({"prompt": "optimized::" + text}))
+else:
+    print(json.dumps({"prompt": "unused"}))
+"""
+    )
+
+    let coordinator = AvatarCoordinator(
+        settingsStore: settingsStore,
+        catalog: AvatarCatalog(repoRootURL: repoRoot),
+        assetStore: AvatarAssetStore(repoRootURL: repoRoot),
+        bridge: AvatarBuilderBridge(scriptURL: scriptURL)
+    )
+    var currentAvatarChanges: [String] = []
+    coordinator.onCurrentAvatarChanged = { avatarID in
+        currentAvatarChanges.append(avatarID)
+    }
+
+    let existingWindows = Set(NSApp.windows.map { ObjectIdentifier($0) })
+    coordinator.presentAvatarPicker()
+    coordinator.presentStudio(target: .avatarCreate)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    let newWindows = NSApp.windows.filter { !existingWindows.contains(ObjectIdentifier($0)) }
+    defer {
+        newWindows.forEach { $0.close() }
+    }
+
+    let (pickerWindow, _) = try requireWindow(in: newWindows, controlledBy: AvatarPickerWindowController.self)
+    let (studioWindow, studioController) = try requireWindow(in: newWindows, controlledBy: StudioWindowController.self)
+    guard
+        let pickerContentView = pickerWindow.contentView,
+        let studioContentView = studioWindow.contentView
+    else {
+        throw TestFailure(message: "picker and studio content views should exist")
+    }
+
+    let rawPromptView = try requireTextView(in: studioContentView, identifier: "avatarCreateRawPrompt")
+    rawPromptView.string = "shared refresh avatar prompt"
+    studioController.textDidChange(Notification(name: NSText.didChangeNotification, object: rawPromptView))
+
+    try requireActionButton(in: studioContentView, title: "优化 prompt").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    try requireActionButton(in: studioContentView, title: "生成预览").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    let nameField = try requireTextField(in: studioContentView, identifier: "avatarCreateNameField")
+    nameField.stringValue = "Calm Capybara"
+    nameField.sendAction(nameField.action, to: nameField.target)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    try requireActionButton(in: studioContentView, title: "保存并应用").performClick(nil)
+    try expect(
+        waitForCondition(timeout: 0.2) { currentAvatarChanges == ["calm_capybara"] },
+        "avatar coordinator should broadcast the newly saved avatar id exactly once"
+    )
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    let savedCurrentAvatarID = try settingsStore.loadCurrentAvatarID()
+    try expect(
+        savedCurrentAvatarID == "calm_capybara",
+        "avatar coordinator should persist the newly saved avatar as current"
+    )
+
+    let pickerTableView = try requireTableView(in: pickerContentView)
+    let studioTableView = try requireTableView(in: studioContentView)
+    try expect(
+        waitForCondition(timeout: 0.2) { pickerTableView.numberOfRows == 3 },
+        "picker should refresh to include the newly saved avatar without reopening"
+    )
+    try expect(
+        waitForCondition(timeout: 0.2) { studioTableView.numberOfRows == 3 },
+        "studio browse list should refresh to include the newly saved avatar without reopening"
+    )
+
+    pickerContentView.layoutSubtreeIfNeeded()
+    studioContentView.layoutSubtreeIfNeeded()
+
+    let pickerRows = try tableRowStrings(in: pickerTableView)
+    let studioRows = try tableRowStrings(in: studioTableView)
+    try expect(
+        pickerRows.contains("Calm Capybara ●"),
+        "picker should mark the newly saved avatar as current after coordinator refresh"
+    )
+    try expect(
+        studioRows.contains(where: { $0.contains("Calm Capybara") }),
+        "studio browse list should include the newly saved avatar after coordinator refresh"
+    )
+    try expect(
+        findLabel(in: studioContentView, stringValue: "当前模式：新建形象") == nil,
+        "studio should return to browse mode after save/apply refreshes shared avatar data"
+    )
+    _ = try requireButton(in: studioContentView, title: "切换形象请使用「更换形象」")
+}
+
 func testAvatarPanelThemeReflectsSharedThemeColors() throws {
     let manager = try makeInstalledThemeManager()
     let pack = makeAppKitTestThemePack(id: "wrapper_refresh")
@@ -3181,8 +3790,23 @@ func makeAppKitTestThemePack(id: String) -> ThemePack {
     return pack
 }
 
+func requireWindow<Controller: NSWindowController>(
+    in windows: [NSWindow],
+    controlledBy _: Controller.Type
+) throws -> (NSWindow, Controller) {
+    for window in windows {
+        if let controller = window.windowController as? Controller {
+            return (window, controller)
+        }
+    }
+
+    throw TestFailure(message: "expected window controlled by \(Controller.self)")
+}
+
 func requireLabel(in root: NSView, stringValue: String) throws -> NSTextField {
-    if let label = allSubviews(in: root).compactMap({ $0 as? NSTextField }).first(where: { $0.stringValue == stringValue }) {
+    if let label = allSubviews(in: root)
+        .compactMap({ $0 as? NSTextField })
+        .first(where: { isVisibleForManualTest($0) && $0.stringValue == stringValue }) {
         return label
     }
 
@@ -3238,7 +3862,9 @@ func waitForCondition(
 }
 
 func requireButton(in root: NSView, title: String) throws -> NSButton {
-    if let button = allSubviews(in: root).compactMap({ $0 as? NSButton }).first(where: { $0.title == title }) {
+    if let button = allSubviews(in: root)
+        .compactMap({ $0 as? NSButton })
+        .first(where: { isVisibleForManualTest($0) && $0.title == title }) {
         return button
     }
 
@@ -3248,7 +3874,7 @@ func requireButton(in root: NSView, title: String) throws -> NSButton {
 func requireActionButton(in root: NSView, title: String) throws -> NSButton {
     if let button = allSubviews(in: root)
         .compactMap({ $0 as? NSButton })
-        .first(where: { $0.title == title && $0.action != nil }) {
+        .first(where: { isVisibleForManualTest($0) && $0.title == title && $0.action != nil }) {
         return button
     }
 
@@ -3256,7 +3882,9 @@ func requireActionButton(in root: NSView, title: String) throws -> NSButton {
 }
 
 func requireTableView(in root: NSView) throws -> NSTableView {
-    if let tableView = allSubviews(in: root).compactMap({ $0 as? NSTableView }).first {
+    if let tableView = allSubviews(in: root)
+        .compactMap({ $0 as? NSTableView })
+        .first(where: { isVisibleForManualTest($0) }) {
         return tableView
     }
 
@@ -3272,10 +3900,16 @@ func requireTableCellLabel(in tableView: NSTableView, row: Int) throws -> NSText
     return label
 }
 
+func tableRowStrings(in tableView: NSTableView) throws -> [String] {
+    try (0..<tableView.numberOfRows).map { row in
+        try requireTableCellLabel(in: tableView, row: row).stringValue
+    }
+}
+
 func requireTextView(in root: NSView, identifier: String) throws -> NSTextView {
     if let textView = allSubviews(in: root)
         .compactMap({ $0 as? NSTextView })
-        .first(where: { $0.identifier?.rawValue == identifier }) {
+        .first(where: { isVisibleForManualTest($0) && $0.identifier?.rawValue == identifier }) {
         return textView
     }
     throw TestFailure(message: "missing text view: \(identifier)")
@@ -3284,7 +3918,7 @@ func requireTextView(in root: NSView, identifier: String) throws -> NSTextView {
 func requireTextField(in root: NSView, identifier: String) throws -> NSTextField {
     if let textField = allSubviews(in: root)
         .compactMap({ $0 as? NSTextField })
-        .first(where: { $0.identifier?.rawValue == identifier }) {
+        .first(where: { isVisibleForManualTest($0) && $0.identifier?.rawValue == identifier }) {
         return textField
     }
 
@@ -3297,6 +3931,17 @@ func allSubviews(in root: NSView) -> [NSView] {
         result.append(contentsOf: allSubviews(in: subview))
     }
     return result
+}
+
+func isVisibleForManualTest(_ view: NSView) -> Bool {
+    var current: NSView? = view
+    while let currentView = current {
+        if currentView.isHidden || currentView.alphaValue <= 0.001 {
+            return false
+        }
+        current = currentView.superview
+    }
+    return true
 }
 
 func hexString(_ color: NSColor?) -> String? {
@@ -3348,6 +3993,39 @@ func makeTinyPNG() throws -> URL {
 
     try pngData.write(to: url, options: .atomic)
     return url
+}
+
+func writeTestAvatar(
+    repoRoot: URL,
+    id: String,
+    name: String,
+    style: String,
+    traits: String,
+    tone: String
+) throws {
+    let avatarRoot = repoRoot
+        .appendingPathComponent("assets", isDirectory: true)
+        .appendingPathComponent("pets", isDirectory: true)
+        .appendingPathComponent(id, isDirectory: true)
+    try FileManager.default.createDirectory(at: avatarRoot, withIntermediateDirectories: true)
+    try makeColorPNG(
+        at: avatarRoot.appendingPathComponent("base.png", isDirectory: false),
+        color: .white
+    )
+    try writeText(
+        at: avatarRoot.appendingPathComponent("config.json", isDirectory: false),
+        contents: """
+        {
+          "id": "\(id)",
+          "name": "\(name)",
+          "style": "\(style)",
+          "persona": {
+            "traits": "\(traits)",
+            "tone": "\(tone)"
+          }
+        }
+        """
+    )
 }
 
 func makeColorPNG(at url: URL, color: NSColor) throws {

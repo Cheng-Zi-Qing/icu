@@ -453,9 +453,9 @@ func requireTextField(in root: NSView, placeholder: String) throws -> NSTextFiel
 }
 
 func findButton(in root: NSView, title: String) -> NSButton? {
-    allSubviews(in: root).compactMap { $0 as? NSButton }.first { $0.title == title }
+    allSubviews(in: root).compactMap { $0 as? NSButton }.first { isVisibleForManualTest($0) && $0.title == title }
 }
 
 func findLabel(in root: NSView, stringValue: String) -> NSTextField? {
-    allSubviews(in: root).compactMap { $0 as? NSTextField }.first { $0.stringValue == stringValue }
+    allSubviews(in: root).compactMap { $0 as? NSTextField }.first { isVisibleForManualTest($0) && $0.stringValue == stringValue }
 }

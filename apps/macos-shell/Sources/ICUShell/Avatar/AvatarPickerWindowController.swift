@@ -1,8 +1,8 @@
 import AppKit
 
 final class AvatarPickerWindowController: NSWindowController, NSWindowDelegate, NSTableViewDataSource, NSTableViewDelegate {
-    private let avatars: [AvatarSummary]
-    private let currentAvatarID: String?
+    private var avatars: [AvatarSummary]
+    private var currentAvatarID: String?
     private let onChoose: (String) throws -> Void
     private let onCreateNew: () -> Void
     private let onClose: () -> Void
@@ -54,6 +54,15 @@ final class AvatarPickerWindowController: NSWindowController, NSWindowDelegate, 
         window?.center()
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func updateAvatars(_ avatars: [AvatarSummary], currentAvatarID: String?) {
+        self.avatars = avatars
+        self.currentAvatarID = currentAvatarID
+        self.selectedAvatarID = currentAvatarID ?? avatars.first?.id
+        tableView.reloadData()
+        updateSelectedRow()
+        updatePreview()
     }
 
     func numberOfRows(in tableView: NSTableView) -> Int {

@@ -82,6 +82,23 @@ final class AvatarCoordinator {
                     }
                     try generationCoordinator.applyThemeDraft(pack)
                 },
+                avatarPromptOptimizer: bridge.optimizePrompt,
+                avatarSaveHandler: { [weak self] request in
+                    guard let assetStore = self?.assetStore else {
+                        throw AvatarBuilderBridgeError.executionFailed(command: "save-avatar", details: "asset store unavailable")
+                    }
+                    return try assetStore.saveCustomAvatar(
+                        name: request.name,
+                        persona: request.persona,
+                        generatedActionImageURLs: request.actionImageURLs
+                    )
+                },
+                onChooseAvatar: { [weak self] avatarID in
+                    try self?.applyAvatarSelection(avatarID)
+                },
+                onOpenAvatarPicker: { [weak self] in
+                    self?.presentAvatarPicker()
+                },
                 speechDraftGenerator: { [weak self] prompt in
                     guard let generationCoordinator = self?.generationCoordinator else {
                         throw GenerationRouteError.missingCapabilityConfig("text_description")
@@ -115,7 +132,14 @@ final class AvatarCoordinator {
 
     func applyAvatarSelection(_ avatarID: String) throws {
         try settingsStore.saveCurrentAvatarID(avatarID)
+        try refreshAvatarControllers(selectedAvatarID: avatarID)
         onCurrentAvatarChanged?(avatarID)
+    }
+
+    private func refreshAvatarControllers(selectedAvatarID: String) throws {
+        let avatars = try catalog.loadAvatars()
+        pickerController?.updateAvatars(avatars, currentAvatarID: selectedAvatarID)
+        studioController?.updateAvatars(avatars, currentAvatarID: selectedAvatarID)
     }
 
     private func showError(_ error: Error) {

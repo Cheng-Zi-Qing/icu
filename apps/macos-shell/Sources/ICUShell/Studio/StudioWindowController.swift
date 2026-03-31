@@ -8,14 +8,14 @@ enum StudioLaunchTarget: String {
 }
 
 final class StudioWindowController: NSWindowController, NSWindowDelegate, NSTextViewDelegate {
-    private let avatars: [AvatarSummary]
-    private let currentAvatarID: String?
+    private var avatars: [AvatarSummary]
+    private var currentAvatarID: String?
     private let onClose: () -> Void
 
     private let sidebarView: StudioSidebarView
     private let contentContainer = AvatarPanelTheme.makeCard()
     private let themeContentView: ThemeStudioContentView
-    private let avatarContentView: NSView
+    private let avatarContentView: AvatarStudioContentView
     private let speechContentView: SpeechStudioContentView
     private var sectionViews: [StudioLaunchTarget: NSView] = [:]
     private var didFinish = false
@@ -29,6 +29,11 @@ final class StudioWindowController: NSWindowController, NSWindowDelegate, NSText
         themePromptOptimizer: ((String) throws -> String)? = nil,
         themeDraftGenerator: ((String) throws -> ThemePack)? = nil,
         themeDraftApplier: ((ThemePack) throws -> Void)? = nil,
+        avatarPromptOptimizer: ((String) throws -> String)? = nil,
+        avatarPreviewGenerator: ((String) throws -> InlineAvatarPreviewDraft)? = nil,
+        avatarSaveHandler: ((InlineAvatarSaveRequest) throws -> String)? = nil,
+        onChooseAvatar: @escaping (String) throws -> Void = { _ in },
+        onOpenAvatarPicker: @escaping () -> Void = {},
         speechDraftGenerator: ((String) throws -> SpeechDraft)? = nil,
         speechDraftApplier: ((SpeechDraft) throws -> Void)? = nil,
         onClose: @escaping () -> Void
@@ -50,7 +55,16 @@ final class StudioWindowController: NSWindowController, NSWindowDelegate, NSText
             speechDraftGenerator: speechDraftGenerator,
             speechDraftApplier: speechDraftApplier
         )
-        self.avatarContentView = StudioWindowController.makeAvatarPlaceholderView()
+        self.avatarContentView = AvatarStudioContentView(
+            avatars: avatars,
+            currentAvatarID: currentAvatarID,
+            initialMode: initialTarget == .avatarCreate ? .create : .browse,
+            avatarPromptOptimizer: avatarPromptOptimizer,
+            avatarPreviewGenerator: avatarPreviewGenerator,
+            avatarSaveHandler: avatarSaveHandler,
+            onChooseAvatar: onChooseAvatar,
+            onOpenAvatarPicker: onOpenAvatarPicker
+        )
 
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 640),
@@ -70,6 +84,7 @@ final class StudioWindowController: NSWindowController, NSWindowDelegate, NSText
         window.delegate = self
 
         themeContentView.setTextViewDelegate(self)
+        avatarContentView.setTextViewDelegate(self)
         speechContentView.setTextViewDelegate(self)
 
         didSelectTarget = { [weak self] target in
@@ -77,7 +92,7 @@ final class StudioWindowController: NSWindowController, NSWindowDelegate, NSText
         }
 
         buildUI()
-        setSelectedTarget(normalizedInitialTarget)
+        setSelectedTarget(initialTarget)
     }
 
     @available(*, unavailable)
@@ -104,6 +119,8 @@ final class StudioWindowController: NSWindowController, NSWindowDelegate, NSText
         switch textView.identifier?.rawValue {
         case "themeRawPrompt", "themeOptimizedPrompt":
             themeContentView.handleTextDidChange(textView)
+        case "avatarCreateRawPrompt", "avatarCreateOptimizedPrompt":
+            avatarContentView.handleTextDidChange(textView)
         case "speechPrompt":
             speechContentView.handleTextDidChange(textView)
         default:
@@ -115,6 +132,12 @@ final class StudioWindowController: NSWindowController, NSWindowDelegate, NSText
         if !didFinish {
             onClose()
         }
+    }
+
+    func updateAvatars(_ avatars: [AvatarSummary], currentAvatarID: String?) {
+        self.avatars = avatars
+        self.currentAvatarID = currentAvatarID
+        avatarContentView.updateAvatars(avatars, currentAvatarID: currentAvatarID)
     }
 
     private func buildUI() {
@@ -169,6 +192,14 @@ final class StudioWindowController: NSWindowController, NSWindowDelegate, NSText
 
     private func setSelectedTarget(_ target: StudioLaunchTarget) {
         let normalizedTarget = StudioWindowController.normalized(target)
+        switch target {
+        case .avatarCreate:
+            avatarContentView.present(mode: .create)
+        case .avatarBrowse:
+            avatarContentView.present(mode: .browse)
+        case .theme, .speech:
+            break
+        }
         selectedTarget = normalizedTarget
         for (sectionTarget, view) in sectionViews {
             view.isHidden = sectionTarget != normalizedTarget
@@ -185,29 +216,4 @@ final class StudioWindowController: NSWindowController, NSWindowDelegate, NSText
         }
     }
 
-    private static func makeAvatarPlaceholderView() -> NSView {
-        let view = NSView()
-        let stack = NSStackView()
-        stack.orientation = .vertical
-        stack.spacing = 10
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(stack)
-
-        let titleLabel = AvatarPanelTheme.makeTitleLabel("当前分区：形象生成")
-        let subtitleLabel = AvatarPanelTheme.makeLabel(
-            "形象生成内容会在后续任务迁入独立 content view。",
-            color: AvatarPanelTheme.muted
-        )
-        subtitleLabel.maximumNumberOfLines = 2
-
-        stack.addArrangedSubview(titleLabel)
-        stack.addArrangedSubview(subtitleLabel)
-
-        NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: view.topAnchor),
-            stack.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-        ])
-        return view
-    }
 }
