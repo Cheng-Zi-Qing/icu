@@ -259,6 +259,449 @@ func testAvatarPickerCancelClosesWithoutApplying() throws {
     try expect(closeCount == 1, "cancel should route through the onClose lifecycle callback exactly once")
 }
 
+func testStudioThemeTabUsesOptimizedPromptReviewFlow() throws {
+    let environment = try makeGenerationEnvironment()
+    ThemeManager.installShared(environment.themeManager)
+
+    let previewURL = try makeTinyPNG()
+    let generatedPack = makeAppKitTestThemePack(id: "studio_generated_preview_theme")
+    var optimizedPrompts: [String] = []
+    var generatedPrompts: [String] = []
+    var appliedPackIDs: [String] = []
+
+    let controller = StudioWindowController(
+        avatars: [
+            AvatarSummary(
+                id: "capybara",
+                name: "水豚",
+                style: "像素",
+                previewURL: previewURL,
+                traits: "稳重",
+                tone: "冷静"
+            )
+        ],
+        currentAvatarID: "capybara",
+        themePromptOptimizer: { prompt in
+            optimizedPrompts.append(prompt)
+            return "optimized::\(prompt)"
+        },
+        themeDraftGenerator: { prompt in
+            generatedPrompts.append(prompt)
+            return generatedPack
+        },
+        themeDraftApplier: { pack in
+            appliedPackIDs.append(pack.meta.id)
+            try environment.themeManager.apply(pack)
+        },
+        onClose: {}
+    )
+
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "studio content view should exist")
+    }
+
+    let rawPromptView = try requireTextView(in: contentView, identifier: "themeRawPrompt")
+    let optimizedPromptView = try requireTextView(in: contentView, identifier: "themeOptimizedPrompt")
+    rawPromptView.string = "raw cozy pixel vibe"
+    controller.textDidChange(Notification(name: NSText.didChangeNotification, object: rawPromptView))
+
+    try requireActionButton(in: contentView, title: "优化 prompt").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    try requireActionButton(in: contentView, title: "预览效果").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    try expect(optimizedPrompts == ["raw cozy pixel vibe"], "theme optimizer should receive the raw prompt")
+    try expect(
+        optimizedPromptView.string == "optimized::raw cozy pixel vibe",
+        "optimized prompt should be shown separately without overwriting the raw prompt"
+    )
+    try expect(rawPromptView.string == "raw cozy pixel vibe", "raw prompt should remain unchanged after optimization")
+    try expect(generatedPrompts == ["optimized::raw cozy pixel vibe"], "theme preview should use the optimized prompt")
+    try expect(
+        environment.themeManager.currentTheme.id == "pixel_default",
+        "theme preview must not activate the generated theme before apply"
+    )
+
+    try requireActionButton(in: contentView, title: "应用主题").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    try expect(appliedPackIDs == ["studio_generated_preview_theme"], "theme apply should pass the pending generated pack to the applier")
+    try expect(environment.themeManager.currentTheme.id == "studio_generated_preview_theme", "theme apply should activate the generated theme")
+}
+
+func testStudioThemeTabRequiresPreviewBeforeApply() throws {
+    let environment = try makeGenerationEnvironment()
+    ThemeManager.installShared(environment.themeManager)
+
+    let previewURL = try makeTinyPNG()
+    var appliedPackIDs: [String] = []
+
+    let controller = StudioWindowController(
+        avatars: [
+            AvatarSummary(
+                id: "capybara",
+                name: "水豚",
+                style: "像素",
+                previewURL: previewURL,
+                traits: "稳重",
+                tone: "冷静"
+            )
+        ],
+        currentAvatarID: "capybara",
+        themePromptOptimizer: { prompt in
+            "optimized::\(prompt)"
+        },
+        themeDraftGenerator: { _ in
+            makeAppKitTestThemePack(id: "should_not_generate_here")
+        },
+        themeDraftApplier: { pack in
+            appliedPackIDs.append(pack.meta.id)
+            try environment.themeManager.apply(pack)
+        },
+        onClose: {}
+    )
+
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "studio content view should exist")
+    }
+
+    let rawPromptView = try requireTextView(in: contentView, identifier: "themeRawPrompt")
+    rawPromptView.string = "raw apply without preview"
+    controller.textDidChange(Notification(name: NSText.didChangeNotification, object: rawPromptView))
+
+    try requireActionButton(in: contentView, title: "优化 prompt").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    try requireActionButton(in: contentView, title: "应用主题").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    try expect(appliedPackIDs.isEmpty, "theme apply should not call the applier before a preview is generated")
+    try expect(
+        environment.themeManager.currentTheme.id == "pixel_default",
+        "theme apply should keep the current theme unchanged before a preview exists"
+    )
+    try expect(findLabel(in: contentView, stringValue: "主题草稿已应用。") == nil, "theme apply should not report success before a preview exists")
+}
+
+func testStudioThemeTabInvalidatesApplyWhenOptimizedPromptChanges() throws {
+    let environment = try makeGenerationEnvironment()
+    ThemeManager.installShared(environment.themeManager)
+
+    let previewURL = try makeTinyPNG()
+    let generatedPack = makeAppKitTestThemePack(id: "studio_generated_preview_theme_after_edit")
+    var generatedPrompts: [String] = []
+    var appliedPackIDs: [String] = []
+
+    let controller = StudioWindowController(
+        avatars: [
+            AvatarSummary(
+                id: "capybara",
+                name: "水豚",
+                style: "像素",
+                previewURL: previewURL,
+                traits: "稳重",
+                tone: "冷静"
+            )
+        ],
+        currentAvatarID: "capybara",
+        themePromptOptimizer: { prompt in
+            "optimized::\(prompt)"
+        },
+        themeDraftGenerator: { prompt in
+            generatedPrompts.append(prompt)
+            return generatedPack
+        },
+        themeDraftApplier: { pack in
+            appliedPackIDs.append(pack.meta.id)
+            try environment.themeManager.apply(pack)
+        },
+        onClose: {}
+    )
+
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "studio content view should exist")
+    }
+
+    let rawPromptView = try requireTextView(in: contentView, identifier: "themeRawPrompt")
+    let optimizedPromptView = try requireTextView(in: contentView, identifier: "themeOptimizedPrompt")
+    rawPromptView.string = "raw theme prompt"
+    controller.textDidChange(Notification(name: NSText.didChangeNotification, object: rawPromptView))
+
+    try requireActionButton(in: contentView, title: "优化 prompt").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    try requireActionButton(in: contentView, title: "预览效果").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    _ = try requireLabel(in: contentView, stringValue: "草稿 1：AppKit Test Theme / optimized::raw theme prompt")
+
+    optimizedPromptView.string = "optimized::raw theme prompt edited"
+    controller.textDidChange(Notification(name: NSText.didChangeNotification, object: optimizedPromptView))
+
+    try requireActionButton(in: contentView, title: "应用主题").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    try expect(generatedPrompts == ["optimized::raw theme prompt"], "theme preview should lock to the last previewed optimized prompt")
+    try expect(appliedPackIDs.isEmpty, "theme apply should be invalidated after the optimized prompt changes")
+    _ = try requireLabel(in: contentView, stringValue: "尚未生成新的主题草稿。")
+    _ = try requireLabel(in: contentView, stringValue: "优化后 prompt 已变更，请重新预览效果。")
+}
+
+func testStudioThemeTabUpdatesActionButtonStatesAcrossReviewFlow() throws {
+    let previewURL = try makeTinyPNG()
+
+    let controller = StudioWindowController(
+        avatars: [
+            AvatarSummary(
+                id: "capybara",
+                name: "水豚",
+                style: "像素",
+                previewURL: previewURL,
+                traits: "稳重",
+                tone: "冷静"
+            )
+        ],
+        currentAvatarID: "capybara",
+        themePromptOptimizer: { prompt in
+            "optimized::\(prompt)"
+        },
+        themeDraftGenerator: { _ in
+            makeAppKitTestThemePack(id: "studio_generated_preview_theme_button_states")
+        },
+        onClose: {}
+    )
+
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "studio content view should exist")
+    }
+
+    let initialPreviewButton = try requireActionButton(in: contentView, title: "预览效果")
+    let initialApplyButton = try requireActionButton(in: contentView, title: "应用主题")
+    try expect(initialPreviewButton.isEnabled == false, "theme preview button should start disabled before an optimized prompt exists")
+    try expect(initialApplyButton.isEnabled == false, "theme apply button should start disabled before a preview exists")
+
+    let rawPromptView = try requireTextView(in: contentView, identifier: "themeRawPrompt")
+    let optimizedPromptView = try requireTextView(in: contentView, identifier: "themeOptimizedPrompt")
+    rawPromptView.string = "raw button state prompt"
+    controller.textDidChange(Notification(name: NSText.didChangeNotification, object: rawPromptView))
+
+    try requireActionButton(in: contentView, title: "优化 prompt").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    let previewButtonAfterOptimize = try requireActionButton(in: contentView, title: "预览效果")
+    let applyButtonAfterOptimize = try requireActionButton(in: contentView, title: "应用主题")
+    try expect(previewButtonAfterOptimize.isEnabled == true, "theme preview button should enable once an optimized prompt exists")
+    try expect(applyButtonAfterOptimize.isEnabled == false, "theme apply button should stay disabled until preview succeeds")
+
+    try requireActionButton(in: contentView, title: "预览效果").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    let previewButtonAfterPreview = try requireActionButton(in: contentView, title: "预览效果")
+    let applyButtonAfterPreview = try requireActionButton(in: contentView, title: "应用主题")
+    try expect(previewButtonAfterPreview.isEnabled == true, "theme preview button should remain enabled after preview")
+    try expect(applyButtonAfterPreview.isEnabled == true, "theme apply button should enable after a valid preview exists")
+
+    optimizedPromptView.string = "optimized::raw button state prompt edited"
+    controller.textDidChange(Notification(name: NSText.didChangeNotification, object: optimizedPromptView))
+
+    let previewButtonAfterEdit = try requireActionButton(in: contentView, title: "预览效果")
+    let applyButtonAfterEdit = try requireActionButton(in: contentView, title: "应用主题")
+    try expect(previewButtonAfterEdit.isEnabled == true, "theme preview button should stay enabled when the edited optimized prompt is still non-empty")
+    try expect(applyButtonAfterEdit.isEnabled == false, "theme apply button should disable when the optimized prompt invalidates the last preview")
+}
+
+func testStudioSpeechTabShowsBubblePreviewAndApplyActions() throws {
+    let previewURL = try makeTinyPNG()
+    let controller = StudioWindowController(
+        avatars: [
+            AvatarSummary(
+                id: "capybara",
+                name: "水豚",
+                style: "像素",
+                previewURL: previewURL,
+                traits: "稳重",
+                tone: "冷静"
+            )
+        ],
+        currentAvatarID: "capybara",
+        onClose: {}
+    )
+
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "studio content view should exist")
+    }
+
+    try requireButton(in: contentView, title: "话术").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    _ = try requireLabel(in: contentView, stringValue: "当前已应用话术")
+    _ = try requireLabel(in: contentView, stringValue: "桌宠对话气泡预览")
+    _ = try requireButton(in: contentView, title: "生成预览")
+    _ = try requireButton(in: contentView, title: "重新生成")
+    _ = try requireButton(in: contentView, title: "应用")
+}
+
+func testStudioSpeechTabAppliesGeneratedCopyToDesktopPetRuntime() throws {
+    let original = TextCatalog.shared
+    defer { TextCatalog.installShared(original) }
+
+    let repoRoot = try makeTemporaryDirectory()
+    let appPaths = try makeTemporaryAppPaths()
+    let baseCopyURL = repoRoot
+        .appendingPathComponent("config", isDirectory: true)
+        .appendingPathComponent("copy", isDirectory: true)
+        .appendingPathComponent("base.json", isDirectory: false)
+    try writeText(
+        at: baseCopyURL,
+        contents: """
+        {
+          "pet": {
+            "status_idle": "待机中",
+            "status_working": "工作中",
+            "status_focus": "专注中",
+            "status_break": "暂离中",
+            "focus_end_light": "抬头缓一缓，再接着做。",
+            "focus_end_heavy": "这一段够久了，先休息一下。",
+            "stop_work_message": "收工，歇会儿。",
+            "eye_reminder": "看看远处，护护眼。"
+          }
+        }
+        """
+    )
+    TextCatalog.installShared(try TextCatalog.live(appPaths: appPaths, repoRootURL: repoRoot))
+
+    let manager = try makeInstalledThemeManager()
+    _ = manager
+
+    let petView = DesktopPetView(
+        frame: NSRect(x: 0, y: 0, width: 128, height: 128),
+        assetLocator: PetAssetLocator(appPaths: appPaths),
+        petID: "missing_pet"
+    )
+    let initialStatusLabel = try requireStatusLabel(in: petView)
+    try expect(initialStatusLabel.stringValue == "待机中", "desktop pet should start from the base speech copy")
+
+    let previewURL = try makeTinyPNG()
+    let draft = SpeechDraft(
+        statusIdle: "空闲待命",
+        statusWorking: "稳步推进",
+        statusFocus: "沉浸专注",
+        statusBreak: "暂时离开",
+        focusEndLight: "抬头看远一点，再继续。",
+        focusEndHeavy: "已经持续很久了，先完整休息一下。",
+        stopWorkMessage: "今天先到这里。",
+        eyeReminder: "看向远处，放松一下眼睛。"
+    )
+    let store = CopyOverrideStore(appPaths: appPaths, repoRootURL: repoRoot)
+    var generatedPrompts: [String] = []
+
+    let controller = StudioWindowController(
+        avatars: [
+            AvatarSummary(
+                id: "capybara",
+                name: "水豚",
+                style: "像素",
+                previewURL: previewURL,
+                traits: "稳重",
+                tone: "冷静"
+            )
+        ],
+        currentAvatarID: "capybara",
+        speechDraftGenerator: { prompt in
+            generatedPrompts.append(prompt)
+            return draft
+        },
+        speechDraftApplier: { appliedDraft in
+            try store.applySpeechDraft(appliedDraft)
+        },
+        onClose: {}
+    )
+
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "studio content view should exist")
+    }
+
+    try requireButton(in: contentView, title: "话术").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    try requireActionButton(in: contentView, title: "生成预览").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    try expect(generatedPrompts.count == 1, "speech preview should call the speech draft generator exactly once")
+    try expect(DesktopPetCopy.statusText(for: .idle) == "待机中", "speech preview must not mutate the active desktop pet copy before apply")
+    let statusLabelBeforeApply = try requireStatusLabel(in: petView)
+    try expect(statusLabelBeforeApply.stringValue == "待机中", "desktop pet view should keep its current status before speech apply")
+
+    try requireActionButton(in: contentView, title: "应用").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    try expect(DesktopPetCopy.statusText(for: .idle) == "空闲待命", "speech apply should replace the active desktop pet idle status copy")
+    let statusLabelAfterApply = try requireStatusLabel(in: petView)
+    try expect(statusLabelAfterApply.stringValue == "空闲待命", "desktop pet view should refresh its visible status after speech apply")
+}
+
+func testStudioWindowPreservesPerTabDraftsWhileSwitchingSidebarItems() throws {
+    let previewURL = try makeTinyPNG()
+    let speechDraft = SpeechDraft(
+        statusIdle: "空闲待命",
+        statusWorking: "稳步推进",
+        statusFocus: "沉浸专注",
+        statusBreak: "暂时离开",
+        focusEndLight: "抬头看远一点，再继续。",
+        focusEndHeavy: "已经持续很久了，先完整休息一下。",
+        stopWorkMessage: "今天先到这里。",
+        eyeReminder: "看向远处，放松一下眼睛。"
+    )
+
+    let controller = StudioWindowController(
+        avatars: [
+            AvatarSummary(
+                id: "capybara",
+                name: "水豚",
+                style: "像素",
+                previewURL: previewURL,
+                traits: "稳重",
+                tone: "冷静"
+            )
+        ],
+        currentAvatarID: "capybara",
+        themePromptOptimizer: { prompt in
+            "optimized::\(prompt)"
+        },
+        themeDraftGenerator: { _ in
+            makeAppKitTestThemePack(id: "studio_preserved_theme_draft")
+        },
+        speechDraftGenerator: { _ in
+            speechDraft
+        },
+        onClose: {}
+    )
+
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "studio content view should exist")
+    }
+
+    let rawThemePromptView = try requireTextView(in: contentView, identifier: "themeRawPrompt")
+    rawThemePromptView.string = "theme draft prompt"
+    controller.textDidChange(Notification(name: NSText.didChangeNotification, object: rawThemePromptView))
+    try requireActionButton(in: contentView, title: "优化 prompt").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    try requireActionButton(in: contentView, title: "预览效果").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    _ = try requireLabel(in: contentView, stringValue: "草稿 1：AppKit Test Theme / optimized::theme draft prompt")
+
+    try requireButton(in: contentView, title: "话术").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    try requireActionButton(in: contentView, title: "生成预览").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    _ = try requireLabel(in: contentView, stringValue: speechDraft.previewSummaryText())
+
+    try requireButton(in: contentView, title: "主题风格").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    _ = try requireLabel(in: contentView, stringValue: "草稿 1：AppKit Test Theme / optimized::theme draft prompt")
+
+    try requireButton(in: contentView, title: "话术").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    _ = try requireLabel(in: contentView, stringValue: speechDraft.previewSummaryText())
+}
+
 func testAvatarPanelThemeReflectsSharedThemeColors() throws {
     let manager = try makeInstalledThemeManager()
     let pack = makeAppKitTestThemePack(id: "wrapper_refresh")

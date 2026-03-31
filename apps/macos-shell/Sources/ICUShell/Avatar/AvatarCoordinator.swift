@@ -69,6 +69,31 @@ final class AvatarCoordinator {
                 avatars: avatars,
                 currentAvatarID: try settingsStore.loadCurrentAvatarID(),
                 initialTarget: target,
+                themePromptOptimizer: bridge.optimizePrompt,
+                themeDraftGenerator: { [weak self] prompt in
+                    guard let generationCoordinator = self?.generationCoordinator else {
+                        throw GenerationRouteError.missingCapabilityConfig("theme_description")
+                    }
+                    return try generationCoordinator.generateThemeDraft(from: prompt)
+                },
+                themeDraftApplier: { [weak self] pack in
+                    guard let generationCoordinator = self?.generationCoordinator else {
+                        throw GenerationRouteError.missingCapabilityConfig("theme_description")
+                    }
+                    try generationCoordinator.applyThemeDraft(pack)
+                },
+                speechDraftGenerator: { [weak self] prompt in
+                    guard let generationCoordinator = self?.generationCoordinator else {
+                        throw GenerationRouteError.missingCapabilityConfig("text_description")
+                    }
+                    return try generationCoordinator.generateSpeechDraft(from: prompt)
+                },
+                speechDraftApplier: { [weak self] draft in
+                    guard let generationCoordinator = self?.generationCoordinator else {
+                        throw GenerationRouteError.missingCapabilityConfig("text_description")
+                    }
+                    try generationCoordinator.applySpeechDraft(draft)
+                },
                 onClose: { [weak self] in
                     self?.studioController = nil
                 }

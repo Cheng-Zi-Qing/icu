@@ -88,6 +88,8 @@ swiftc -framework AppKit \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Avatar/AvatarSelectorWindowController.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Avatar/AvatarWizardWindowController.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Studio/StudioSidebarView.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Studio/ThemeStudioContentView.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Studio/SpeechStudioContentView.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Studio/StudioWindowController.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/DesktopPetCopy.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/PetAnimationPlayer.swift" \
