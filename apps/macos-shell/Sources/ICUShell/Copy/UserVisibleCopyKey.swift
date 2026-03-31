@@ -2,9 +2,11 @@ import Foundation
 
 enum UserVisibleCopyKey: String {
     case commonApplyButton = "common.apply_button"
+    case commonCancelButton = "common.cancel_button"
     case commonCloseButton = "common.close_button"
     case commonPreviewButton = "common.preview_button"
     case commonRegenerateButton = "common.regenerate_button"
+    case commonSaveButton = "common.save_button"
 
     case menuShowPet = "menu.show_pet"
     case menuChangeAvatar = "menu.change_avatar"
@@ -36,6 +38,12 @@ enum UserVisibleCopyKey: String {
     case generationConfigBaseURLLabel = "generation_config.base_url_label"
     case generationConfigAuthLabel = "generation_config.auth_label"
     case generationConfigOptionsLabel = "generation_config.options_label"
+    case generationConfigConfiguredStatus = "generation_config.configured_status"
+    case generationConfigUnconfiguredStatus = "generation_config.unconfigured_status"
+    case generationConfigTestConnectionButton = "generation_config.test_connection_button"
+    case generationConfigConnectionTestingStatus = "generation_config.connection_testing_status"
+    case generationConfigConnectionSuccessStatus = "generation_config.connection_success_status"
+    case generationConfigConnectionFailureStatus = "generation_config.connection_failure_status"
     case generationConfigProviderPlaceholder = "generation_config.provider_placeholder"
     case generationConfigModelPlaceholder = "generation_config.model_placeholder"
     case generationConfigBaseURLPlaceholder = "generation_config.base_url_placeholder"
@@ -65,12 +73,16 @@ extension UserVisibleCopyKey {
         switch self {
         case .commonApplyButton:
             return "应用"
+        case .commonCancelButton:
+            return "取消"
         case .commonCloseButton:
             return "关闭"
         case .commonPreviewButton:
             return "生成预览"
         case .commonRegenerateButton:
             return "重新生成"
+        case .commonSaveButton:
+            return "保存"
         case .menuShowPet:
             return "显示桌宠"
         case .menuChangeAvatar:
@@ -126,9 +138,21 @@ extension UserVisibleCopyKey {
         case .generationConfigBaseURLLabel:
             return "接口地址"
         case .generationConfigAuthLabel:
-            return "认证 JSON"
+            return "Auth Token（可选）"
         case .generationConfigOptionsLabel:
             return "选项 JSON"
+        case .generationConfigConfiguredStatus:
+            return "● 已配置"
+        case .generationConfigUnconfiguredStatus:
+            return "未配置"
+        case .generationConfigTestConnectionButton:
+            return "测试连接"
+        case .generationConfigConnectionTestingStatus:
+            return "连接测试中..."
+        case .generationConfigConnectionSuccessStatus:
+            return "● 已连接"
+        case .generationConfigConnectionFailureStatus:
+            return "✕ 连接失败: %@"
         case .generationConfigProviderPlaceholder:
             return "provider，如 ollama / huggingface / openai-compatible"
         case .generationConfigModelPlaceholder:
@@ -136,7 +160,7 @@ extension UserVisibleCopyKey {
         case .generationConfigBaseURLPlaceholder:
             return "base_url"
         case .generationConfigAuthPlaceholder:
-            return "auth JSON，如 {\"api_key\":\"sk-xxx\"}"
+            return "token / api_key / authorization"
         case .generationConfigOptionsPlaceholder:
             return "options JSON，如 {\"temperature\":0.7}"
         case .themeStudioTabTitle:

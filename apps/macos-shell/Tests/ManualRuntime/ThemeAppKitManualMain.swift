@@ -7,7 +7,7 @@ struct ThemeAppKitManualMain {
         NSApp.setActivationPolicy(.prohibited)
 
         do {
-            try testGenerationConfigWindowUsesInstalledCopyCatalogForVisibleLabels()
+            try testGenerationConfigWindowUsesAccordionPanelsAndFooterSave()
             try testAvatarPanelThemeReflectsSharedThemeColors()
             try testAvatarPickerWindowUsesListPreviewAndFooterActions()
             try testStudioWindowUsesStableSidebarAndInitialThemeSelection()
@@ -77,9 +77,10 @@ struct ThemeAppKitManualMain {
             try testFloatingPanelControllerDismissesOnApplicationDeactivate()
             try testFloatingPanelControllerRepeatedPresentOnlyDismissesExistingPanels()
             try testFloatingPanelControllerDismissesOnOutsideClickEvent()
-            try testGenerationConfigWindowUsesModelTabsByDefault()
-            try testGenerationConfigWindowCapabilityDetailUsesBasicAndAdvancedSections()
-            try testGenerationConfigWindowPreservesDraftAcrossNavigationSwitches()
+            try testGenerationConfigWindowAllowsMultipleExpandedPanelsWithoutRebuild()
+            try testGenerationConfigWindowUsesPlainAuthTokenFieldAndHidesOptionsJSON()
+            try testGenerationConfigWindowCancelDiscardsUnsavedChanges()
+            try testGenerationConfigWindowShowsInlineConnectionStatusPerPanel()
             try testGenerationConfigWindowUsesCompactFrame()
             try testGenerationConfigWindowUsesThickerFieldDensity()
             try testGenerationConfigWindowKeepsCoreFieldsInUpperViewportBand()

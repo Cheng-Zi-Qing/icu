@@ -60,6 +60,13 @@ struct GenerationCapabilityConfig: Codable, Equatable {
     )
 }
 
+struct GenerationCapabilityVisibleDraft: Equatable {
+    var provider: GenerationCapabilityProvider
+    var baseURL: String
+    var model: String
+    var authToken: String
+}
+
 protocol GenerationTransport {
     func completeJSON(
         prompt: String,
@@ -136,5 +143,60 @@ extension GenerationCapabilityConfig {
     var isConfigured: Bool {
         !baseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var visibleAuthToken: String {
+        switch provider {
+        case .huggingFace:
+            return auth["token"] ?? auth["authorization"] ?? auth["api_key"] ?? ""
+        case .openAICompatible:
+            return auth["api_key"] ?? auth["authorization"] ?? auth["token"] ?? ""
+        case .ollama:
+            return auth["authorization"] ?? auth["token"] ?? auth["api_key"] ?? ""
+        }
+    }
+
+    func applyingVisibleDraft(_ draft: GenerationCapabilityVisibleDraft) -> GenerationCapabilityConfig {
+        GenerationCapabilityConfig(
+            provider: draft.provider,
+            baseURL: draft.baseURL.trimmingCharacters(in: .whitespacesAndNewlines),
+            model: draft.model.trimmingCharacters(in: .whitespacesAndNewlines),
+            auth: GenerationCapabilityConfig.authDictionary(for: draft.provider, token: draft.authToken),
+            options: options
+        )
+    }
+
+    static func authDictionary(
+        for provider: GenerationCapabilityProvider,
+        token: String
+    ) -> [String: String] {
+        let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return [:]
+        }
+
+        switch provider {
+        case .huggingFace:
+            return ["token": trimmed]
+        case .openAICompatible:
+            return ["api_key": trimmed]
+        case .ollama:
+            return ["authorization": trimmed]
+        }
+    }
+}
+
+extension GenerationSettings {
+    func applyingVisibleDrafts(
+        textDescription: GenerationCapabilityVisibleDraft,
+        animationAvatar: GenerationCapabilityVisibleDraft,
+        codeGeneration: GenerationCapabilityVisibleDraft
+    ) -> GenerationSettings {
+        GenerationSettings(
+            activeThemeID: activeThemeID,
+            textDescription: self.textDescription.applyingVisibleDraft(textDescription),
+            animationAvatar: self.animationAvatar.applyingVisibleDraft(animationAvatar),
+            codeGeneration: self.codeGeneration.applyingVisibleDraft(codeGeneration)
+        )
     }
 }

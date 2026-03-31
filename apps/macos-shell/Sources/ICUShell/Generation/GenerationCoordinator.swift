@@ -7,6 +7,7 @@ final class GenerationCoordinator {
     private let generationService: ThemeGenerationService
     private let speechGenerationService: SpeechGenerationService?
     private let copyOverrideStore: CopyOverrideStore?
+    private let connectionTester: GenerationConnectionTesting
 
     private var configWindowController: GenerationConfigWindowController?
 
@@ -15,13 +16,15 @@ final class GenerationCoordinator {
         themeManager: ThemeManager,
         generationService: ThemeGenerationService,
         speechGenerationService: SpeechGenerationService? = nil,
-        copyOverrideStore: CopyOverrideStore? = nil
+        copyOverrideStore: CopyOverrideStore? = nil,
+        connectionTester: GenerationConnectionTesting = GenerationHTTPClient()
     ) {
         self.settingsStore = settingsStore
         self.themeManager = themeManager
         self.generationService = generationService
         self.speechGenerationService = speechGenerationService
         self.copyOverrideStore = copyOverrideStore
+        self.connectionTester = connectionTester
     }
 
     func openGenerationConfig() -> GenerationConfigWindowController {
@@ -67,6 +70,10 @@ final class GenerationCoordinator {
             throw GenerationRouteError.invalidResponse("copy override store is unavailable")
         }
         try copyOverrideStore.applySpeechDraft(draft)
+    }
+
+    func testConnection(_ capability: GenerationCapabilityConfig) throws {
+        try connectionTester.testConnection(capability: capability)
     }
 
     func resetToPixelDefault() throws {

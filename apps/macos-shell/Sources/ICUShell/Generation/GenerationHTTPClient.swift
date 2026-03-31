@@ -1,6 +1,6 @@
 import Foundation
 
-final class GenerationHTTPClient: GenerationTransport {
+final class GenerationHTTPClient: GenerationTransport, GenerationConnectionTesting {
     private let session: URLSession
 
     init(session: URLSession = .shared) {
@@ -16,6 +16,25 @@ final class GenerationHTTPClient: GenerationTransport {
         case .huggingFace:
             throw GenerationRouteError.unsupportedProviderForTheme(capability.provider)
         }
+    }
+
+    func testConnection(capability: GenerationCapabilityConfig) throws {
+        let trimmedModel = capability.model.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedModel.isEmpty else {
+            throw GenerationRouteError.requestFailed("model is required before testing the connection")
+        }
+
+        let endpoint: URL
+        switch capability.provider {
+        case .ollama:
+            endpoint = try endpointURL(baseURL: capability.baseURL, path: "api/tags")
+        case .openAICompatible:
+            endpoint = try endpointURL(baseURL: capability.baseURL, path: "models")
+        case .huggingFace:
+            endpoint = try endpointURL(baseURL: capability.baseURL, path: "models/\(trimmedModel)")
+        }
+
+        try performConnectionRequest(url: endpoint, auth: capability.auth)
     }
 
     private func callOllama(prompt: String, capability: GenerationCapabilityConfig) throws -> String {
@@ -128,17 +147,12 @@ final class GenerationHTTPClient: GenerationTransport {
         payload: [String: Any],
         auth: [String: String]
     ) throws -> [String: Any] {
-        var request = URLRequest(url: url, timeoutInterval: 60)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        applyAuth(auth, to: &request)
-
-        do {
-            request.httpBody = try JSONSerialization.data(withJSONObject: payload, options: [])
-        } catch {
-            throw GenerationRouteError.invalidResponse("unable to encode request payload")
-        }
+        let request = try makeRequest(
+            url: url,
+            method: "POST",
+            payload: payload,
+            auth: auth
+        )
 
         let (data, response) = try perform(request)
         guard (200...299).contains(response.statusCode) else {
@@ -159,6 +173,51 @@ final class GenerationHTTPClient: GenerationTransport {
             throw GenerationRouteError.invalidResponse(error.localizedDescription)
         }
         return object
+    }
+
+    private func performConnectionRequest(
+        url: URL,
+        auth: [String: String]
+    ) throws {
+        let request = try makeRequest(
+            url: url,
+            method: "GET",
+            payload: nil,
+            auth: auth
+        )
+        let (data, response) = try perform(request)
+
+        guard (200...299).contains(response.statusCode) else {
+            let message = extractProviderError(from: data) ?? "HTTP \(response.statusCode)"
+            throw GenerationRouteError.requestFailed("HTTP \(response.statusCode): \(message)")
+        }
+
+        if let providerError = extractProviderError(from: data) {
+            throw GenerationRouteError.providerReturnedError(providerError)
+        }
+    }
+
+    private func makeRequest(
+        url: URL,
+        method: String,
+        payload: [String: Any]?,
+        auth: [String: String]
+    ) throws -> URLRequest {
+        var request = URLRequest(url: url, timeoutInterval: 60)
+        request.httpMethod = method
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        applyAuth(auth, to: &request)
+
+        if let payload {
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            do {
+                request.httpBody = try JSONSerialization.data(withJSONObject: payload, options: [])
+            } catch {
+                throw GenerationRouteError.invalidResponse("unable to encode request payload")
+            }
+        }
+
+        return request
     }
 
     private func perform(_ request: URLRequest) throws -> (Data, HTTPURLResponse) {

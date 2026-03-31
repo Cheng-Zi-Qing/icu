@@ -25,44 +25,75 @@ extension GenerationCapabilityKind {
     }
 }
 
-struct GenerationCapabilityFormViews {
-    let providerField: NSTextField
-    let baseURLField: NSTextField
-    let modelField: NSTextField
-    let authField: NSTextField
-    let optionsField: NSTextField
-}
-
-enum GenerationConfigFormError: Error, LocalizedError {
-    case invalidJSONObject(field: String)
-    case invalidValue(field: String, key: String)
-
-    var errorDescription: String? {
-        switch self {
-        case let .invalidJSONObject(field):
-            return String(format: TextCatalog.shared.text(.errorInvalidJSONObject), field)
-        case let .invalidValue(field, key):
-            return String(format: TextCatalog.shared.text(.errorInvalidJSONValue), field, key)
-        }
-    }
-}
-
-final class GenerationConfigWindowController: NSWindowController, NSWindowDelegate {
+final class GenerationConfigWindowController: NSWindowController, NSWindowDelegate, NSTextFieldDelegate {
     private final class FlippedView: NSView {
         override var isFlipped: Bool { true }
+    }
+
+    private struct CapabilityPanelState {
+        var draft: GenerationCapabilityConfig
+        var isExpanded: Bool
+        var connectionStatus: ConnectionStatus
+        var authToken: String
+    }
+
+    private struct CapabilityPanelViews {
+        let toggleButton: NSButton
+        let headerStatusLabel: NSTextField
+        let contentContainer: NSView
+        let providerPopUp: NSPopUpButton
+        let modelField: NSTextField
+        let baseURLField: NSTextField
+        let authField: NSTextField
+        let connectionButton: NSButton
+        let connectionStatusLabel: NSTextField
+    }
+
+    private enum ConnectionStatus: Equatable {
+        case idle
+        case testing
+        case success
+        case failure(String)
+
+        var text: String? {
+            switch self {
+            case .idle:
+                return nil
+            case .testing:
+                return TextCatalog.shared.text(.generationConfigConnectionTestingStatus)
+            case .success:
+                return TextCatalog.shared.text(.generationConfigConnectionSuccessStatus)
+            case let .failure(reason):
+                return String(
+                    format: TextCatalog.shared.text(.generationConfigConnectionFailureStatus),
+                    reason
+                )
+            }
+        }
+
+        var color: NSColor {
+            switch self {
+            case .idle, .testing:
+                return AvatarPanelTheme.muted
+            case .success:
+                return AvatarPanelTheme.accent
+            case .failure:
+                return AvatarPanelTheme.danger
+            }
+        }
     }
 
     private enum Layout {
         static let windowSize = NSSize(width: 804, height: 520)
         static let contentInset: CGFloat = 12
-        static let cardContentInset: CGFloat = 10
-        static let rootSpacing: CGFloat = 4
-        static let contentSpacing: CGFloat = 4
-        static let tabSpacing: CGFloat = 8
-        static let tabHeight: CGFloat = 30
+        static let rootSpacing: CGFloat = 10
+        static let cardInset: CGFloat = 10
         static let fieldRowSpacing: CGFloat = 10
-        static let labelSpacing: CGFloat = 2
+        static let labelSpacing: CGFloat = 4
         static let fieldHeight: CGFloat = 42
+        static let buttonHeight: CGFloat = 32
+        static let panelSpacing: CGFloat = 10
+        static let panelContentSpacing: CGFloat = 10
     }
 
     private let settingsStore: GenerationSettingsStore
@@ -71,14 +102,12 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
     private let onClose: () -> Void
 
     private(set) var formState: GenerationSettings
-    let statusLabel = AvatarPanelTheme.makeLabel(TextCatalog.shared.text(.generationConfigStatusText), color: AvatarPanelTheme.muted)
 
-    private var capabilityForms: [GenerationCapabilityKind: GenerationCapabilityFormViews] = [:]
+    private var panelStates: [GenerationCapabilityKind: CapabilityPanelState]
+    private var panelViews: [GenerationCapabilityKind: CapabilityPanelViews] = [:]
+    private var panelRequestIDs: [GenerationCapabilityKind: UUID] = [:]
     private var themeObserver: NSObjectProtocol?
-    private var didFinish = false
-    private var selectedCapability: GenerationCapabilityKind = .textDescription
-    private var expandedAdvancedSections: [GenerationCapabilityKind: Bool] =
-        Dictionary(uniqueKeysWithValues: GenerationCapabilityKind.allCases.map { ($0, false) })
+    private var didCloseWindow = false
 
     init(
         settingsStore: GenerationSettingsStore,
@@ -91,6 +120,7 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
         self.generationCoordinator = generationCoordinator
         self.onClose = onClose
         self.formState = (try? settingsStore.load()) ?? .default
+        self.panelStates = GenerationConfigWindowController.makePanelStates(from: self.formState)
 
         let window = NSWindow(
             contentRect: NSRect(origin: .zero, size: Layout.windowSize),
@@ -103,7 +133,6 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
         window.delegate = self
 
         buildUI()
-        loadFormStateIntoFields()
         subscribeToThemeChanges()
     }
 
@@ -126,9 +155,15 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
     }
 
     func windowWillClose(_ notification: Notification) {
-        if !didFinish {
-            onClose()
+        finishIfNeeded()
+    }
+
+    func controlTextDidChange(_ notification: Notification) {
+        guard let field = notification.object as? NSTextField else {
+            return
         }
+
+        updateState(from: field)
     }
 
     private func buildUI() {
@@ -139,14 +174,9 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
             return
         }
 
-        _ = generationCoordinator
-        _ = themeManager
-
         AvatarPanelTheme.styleWindow(window)
+        panelViews.removeAll()
         contentView.subviews.forEach { $0.removeFromSuperview() }
-        capabilityForms.removeAll()
-        statusLabel.textColor = AvatarPanelTheme.muted
-        statusLabel.stringValue = TextCatalog.shared.text(.generationConfigStatusText)
 
         let root = NSStackView()
         root.orientation = .vertical
@@ -154,6 +184,19 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
         root.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(root)
 
+        root.addArrangedSubview(buildHeader())
+        root.addArrangedSubview(buildAccordionCard())
+        root.addArrangedSubview(buildFooter())
+
+        NSLayoutConstraint.activate([
+            root.topAnchor.constraint(equalTo: contentView.topAnchor, constant: Layout.contentInset),
+            root.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: Layout.contentInset),
+            root.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -Layout.contentInset),
+            root.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -Layout.contentInset),
+        ])
+    }
+
+    private func buildHeader() -> NSView {
         let titleLabel = AvatarPanelTheme.makeLabel(
             TextCatalog.shared.text(.generationConfigWindowTitle),
             color: AvatarPanelTheme.accent,
@@ -166,52 +209,14 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
         )
         subtitleLabel.lineBreakMode = .byTruncatingTail
         subtitleLabel.maximumNumberOfLines = 1
+
         let header = NSStackView(views: [titleLabel, subtitleLabel])
         header.orientation = .vertical
-        header.spacing = 0
-
-        statusLabel.font = AvatarPanelTheme.smallFont
-        statusLabel.lineBreakMode = .byTruncatingTail
-        statusLabel.maximumNumberOfLines = 1
-        statusLabel.setContentHuggingPriority(.required, for: .vertical)
-
-        root.addArrangedSubview(header)
-        root.addArrangedSubview(buildTabBar())
-        root.addArrangedSubview(buildDetailContainer())
-        root.addArrangedSubview(statusLabel)
-
-        NSLayoutConstraint.activate([
-            root.topAnchor.constraint(equalTo: contentView.topAnchor, constant: Layout.contentInset),
-            root.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: Layout.contentInset),
-            root.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -Layout.contentInset),
-            root.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -Layout.contentInset),
-        ])
+        header.spacing = 2
+        return header
     }
 
-    private func buildTabBar() -> NSView {
-        let tabs = NSStackView()
-        tabs.orientation = .horizontal
-        tabs.spacing = Layout.tabSpacing
-
-        for capability in GenerationCapabilityKind.allCases {
-            let button = NSButton(title: capability.title, target: self, action: #selector(handleCapabilitySelection(_:)))
-            button.identifier = NSUserInterfaceItemIdentifier(capability.rawValue)
-            button.translatesAutoresizingMaskIntoConstraints = false
-            button.heightAnchor.constraint(equalToConstant: Layout.tabHeight).isActive = true
-
-            if capability == selectedCapability {
-                AvatarPanelTheme.stylePrimaryButton(button)
-            } else {
-                AvatarPanelTheme.styleSecondaryButton(button)
-            }
-
-            tabs.addArrangedSubview(button)
-        }
-
-        return tabs
-    }
-
-    private func buildDetailContainer() -> NSView {
+    private func buildAccordionCard() -> NSView {
         let card = AvatarPanelTheme.makeCard()
         card.translatesAutoresizingMaskIntoConstraints = false
 
@@ -221,265 +226,357 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
         scrollView.borderType = .noBorder
         scrollView.hasVerticalScroller = true
         scrollView.autohidesScrollers = true
-
-        let detailView = buildCapabilityDetail(for: selectedCapability)
-        detailView.translatesAutoresizingMaskIntoConstraints = false
+        AvatarPanelTheme.styleScrollView(scrollView)
 
         let documentView = FlippedView()
         documentView.translatesAutoresizingMaskIntoConstraints = false
-        documentView.addSubview(detailView)
+
+        let stack = NSStackView()
+        stack.orientation = .vertical
+        stack.spacing = Layout.panelSpacing
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        documentView.addSubview(stack)
+
+        for kind in GenerationCapabilityKind.allCases {
+            stack.addArrangedSubview(buildPanel(for: kind))
+        }
+
         scrollView.documentView = documentView
         card.addSubview(scrollView)
 
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: card.topAnchor, constant: Layout.cardContentInset),
-            scrollView.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: Layout.cardContentInset),
-            scrollView.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -Layout.cardContentInset),
-            scrollView.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -Layout.cardContentInset),
-            detailView.topAnchor.constraint(equalTo: documentView.topAnchor),
-            detailView.leadingAnchor.constraint(equalTo: documentView.leadingAnchor),
-            detailView.trailingAnchor.constraint(equalTo: documentView.trailingAnchor),
-            detailView.bottomAnchor.constraint(equalTo: documentView.bottomAnchor),
-            detailView.widthAnchor.constraint(equalTo: scrollView.contentView.widthAnchor),
+            scrollView.topAnchor.constraint(equalTo: card.topAnchor, constant: Layout.cardInset),
+            scrollView.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: Layout.cardInset),
+            scrollView.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -Layout.cardInset),
+            scrollView.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -Layout.cardInset),
+            stack.topAnchor.constraint(equalTo: documentView.topAnchor),
+            stack.leadingAnchor.constraint(equalTo: documentView.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: documentView.trailingAnchor),
+            stack.bottomAnchor.constraint(equalTo: documentView.bottomAnchor),
+            stack.widthAnchor.constraint(equalTo: scrollView.contentView.widthAnchor),
             documentView.widthAnchor.constraint(equalTo: scrollView.contentView.widthAnchor),
         ])
 
         return card
     }
 
-    private func buildCapabilityDetail(for kind: GenerationCapabilityKind) -> NSView {
-        let contentView = FlippedView()
-        contentView.translatesAutoresizingMaskIntoConstraints = false
+    private func buildPanel(for kind: GenerationCapabilityKind) -> NSView {
+        let container = NSStackView()
+        container.orientation = .vertical
+        container.spacing = 6
+        container.translatesAutoresizingMaskIntoConstraints = false
 
-        let stack = NSStackView()
-        stack.orientation = .vertical
-        stack.spacing = Layout.contentSpacing
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(stack)
+        let toggleButton = NSButton(title: kind.title, target: self, action: #selector(handlePanelToggle(_:)))
+        toggleButton.identifier = NSUserInterfaceItemIdentifier(toggleIdentifier(for: kind))
+        toggleButton.alignment = .left
+        toggleButton.translatesAutoresizingMaskIntoConstraints = false
+        toggleButton.heightAnchor.constraint(equalToConstant: Layout.buttonHeight).isActive = true
+        AvatarPanelTheme.styleSecondaryButton(toggleButton)
 
-        let titleLabel = AvatarPanelTheme.makeLabel(kind.title, color: AvatarPanelTheme.accent, font: AvatarPanelTheme.smallFont)
+        let headerStatusLabel = AvatarPanelTheme.makeLabel(
+            "",
+            color: AvatarPanelTheme.muted,
+            font: AvatarPanelTheme.smallFont
+        )
+        headerStatusLabel.identifier = NSUserInterfaceItemIdentifier(headerStatusIdentifier(for: kind))
+
+        let headerSpacer = NSView()
+        headerSpacer.translatesAutoresizingMaskIntoConstraints = false
+        headerSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+
+        let header = NSStackView(views: [toggleButton, headerSpacer, headerStatusLabel])
+        header.orientation = .horizontal
+        header.alignment = .centerY
+        header.spacing = 8
+
+        let contentCard = AvatarPanelTheme.makeCard()
+        contentCard.identifier = NSUserInterfaceItemIdentifier(contentIdentifier(for: kind))
+        contentCard.translatesAutoresizingMaskIntoConstraints = false
+
+        let contentStack = NSStackView()
+        contentStack.orientation = .vertical
+        contentStack.spacing = Layout.panelContentSpacing
+        contentStack.translatesAutoresizingMaskIntoConstraints = false
+        contentCard.addSubview(contentStack)
+
         let descriptionLabel = AvatarPanelTheme.makeLabel(
             kind.detailDescription,
             color: AvatarPanelTheme.muted,
             font: AvatarPanelTheme.smallFont
         )
-        descriptionLabel.lineBreakMode = .byTruncatingTail
-        descriptionLabel.maximumNumberOfLines = 1
-        let detailHeader = NSStackView(views: [titleLabel, descriptionLabel])
-        detailHeader.orientation = .vertical
-        detailHeader.spacing = 1
+        descriptionLabel.lineBreakMode = .byWordWrapping
+        descriptionLabel.maximumNumberOfLines = 0
 
-        let basicLabel = AvatarPanelTheme.makeLabel(
-            TextCatalog.shared.text(.generationConfigBasicSectionTitle),
-            color: AvatarPanelTheme.accent,
+        let providerPopUp = makeProviderPopUp(for: kind)
+        let modelField = makeTextField(
+            placeholder: TextCatalog.shared.text(.generationConfigModelPlaceholder),
+            identifier: modelIdentifier(for: kind)
+        )
+        let baseURLField = makeTextField(
+            placeholder: TextCatalog.shared.text(.generationConfigBaseURLPlaceholder),
+            identifier: baseURLIdentifier(for: kind)
+        )
+        let authField = makeTextField(
+            placeholder: TextCatalog.shared.text(.generationConfigAuthPlaceholder),
+            identifier: authIdentifier(for: kind)
+        )
+
+        let connectionButton = NSButton(
+            title: TextCatalog.shared.text(.generationConfigTestConnectionButton),
+            target: self,
+            action: #selector(handleConnectionTest(_:))
+        )
+        connectionButton.identifier = NSUserInterfaceItemIdentifier(connectionButtonIdentifier(for: kind))
+        connectionButton.translatesAutoresizingMaskIntoConstraints = false
+        connectionButton.heightAnchor.constraint(equalToConstant: Layout.buttonHeight).isActive = true
+        AvatarPanelTheme.styleSecondaryButton(connectionButton)
+
+        let connectionStatusLabel = AvatarPanelTheme.makeLabel(
+            "",
+            color: AvatarPanelTheme.muted,
             font: AvatarPanelTheme.smallFont
         )
+        connectionStatusLabel.identifier = NSUserInterfaceItemIdentifier(connectionStatusIdentifier(for: kind))
+        connectionStatusLabel.lineBreakMode = .byWordWrapping
+        connectionStatusLabel.maximumNumberOfLines = 0
 
-        let providerField = makeField(placeholder: TextCatalog.shared.text(.generationConfigProviderPlaceholder))
-        let modelField = makeField(placeholder: TextCatalog.shared.text(.generationConfigModelPlaceholder))
-        let baseURLField = makeField(placeholder: TextCatalog.shared.text(.generationConfigBaseURLPlaceholder))
-        let authField = makeField(placeholder: TextCatalog.shared.text(.generationConfigAuthPlaceholder))
-        let optionsField = makeField(placeholder: TextCatalog.shared.text(.generationConfigOptionsPlaceholder))
+        let connectionButtonSpacer = NSView()
+        connectionButtonSpacer.translatesAutoresizingMaskIntoConstraints = false
+        connectionButtonSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
-        capabilityForms[kind] = GenerationCapabilityFormViews(
-            providerField: providerField,
-            baseURLField: baseURLField,
-            modelField: modelField,
-            authField: authField,
-            optionsField: optionsField
-        )
+        let connectionRow = NSStackView(views: [connectionButtonSpacer, connectionButton])
+        connectionRow.orientation = .horizontal
+        connectionRow.alignment = .centerY
+        connectionRow.spacing = 8
 
-        let basicStack = NSStackView(views: [
-            makeFieldRow(label: TextCatalog.shared.text(.generationConfigProviderLabel), field: providerField),
-            makeFieldRow(label: TextCatalog.shared.text(.generationConfigModelLabel), field: modelField),
-            makeFieldRow(label: TextCatalog.shared.text(.generationConfigBaseURLLabel), field: baseURLField),
-        ])
-        basicStack.orientation = .vertical
-        basicStack.spacing = Layout.fieldRowSpacing
-
-        let advancedButton = NSButton(
-            title: (expandedAdvancedSections[kind] ?? false)
-                ? TextCatalog.shared.text(.generationConfigHideAdvancedButton)
-                : TextCatalog.shared.text(.generationConfigShowAdvancedButton),
-            target: self,
-            action: #selector(handleAdvancedToggle(_:))
-        )
-        advancedButton.identifier = NSUserInterfaceItemIdentifier("advanced-\(kind.rawValue)")
-        advancedButton.alignment = .left
-        AvatarPanelTheme.styleSecondaryButton(advancedButton)
-        advancedButton.translatesAutoresizingMaskIntoConstraints = false
-        advancedButton.heightAnchor.constraint(equalToConstant: Layout.tabHeight).isActive = true
-
-        stack.addArrangedSubview(detailHeader)
-        stack.addArrangedSubview(basicLabel)
-        stack.addArrangedSubview(basicStack)
-        stack.addArrangedSubview(advancedButton)
-
-        if expandedAdvancedSections[kind] ?? false {
-            let advancedLabel = AvatarPanelTheme.makeLabel(TextCatalog.shared.text(.generationConfigAdvancedSectionTitle), color: AvatarPanelTheme.accent)
-            let advancedStack = NSStackView(views: [
-                makeFieldRow(label: TextCatalog.shared.text(.generationConfigAuthLabel), field: authField),
-                makeFieldRow(label: TextCatalog.shared.text(.generationConfigOptionsLabel), field: optionsField),
-            ])
-            advancedStack.orientation = .vertical
-            advancedStack.spacing = Layout.fieldRowSpacing
-
-            stack.addArrangedSubview(advancedLabel)
-            stack.addArrangedSubview(advancedStack)
-        }
+        contentStack.addArrangedSubview(descriptionLabel)
+        contentStack.addArrangedSubview(makeFieldRow(label: TextCatalog.shared.text(.generationConfigProviderLabel), control: providerPopUp))
+        contentStack.addArrangedSubview(makeFieldRow(label: TextCatalog.shared.text(.generationConfigModelLabel), control: modelField))
+        contentStack.addArrangedSubview(makeFieldRow(label: TextCatalog.shared.text(.generationConfigBaseURLLabel), control: baseURLField))
+        contentStack.addArrangedSubview(makeFieldRow(label: TextCatalog.shared.text(.generationConfigAuthLabel), control: authField))
+        contentStack.addArrangedSubview(connectionRow)
+        contentStack.addArrangedSubview(connectionStatusLabel)
 
         NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: contentView.topAnchor),
-            stack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            stack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+            contentStack.topAnchor.constraint(equalTo: contentCard.topAnchor, constant: Layout.cardInset),
+            contentStack.leadingAnchor.constraint(equalTo: contentCard.leadingAnchor, constant: Layout.cardInset),
+            contentStack.trailingAnchor.constraint(equalTo: contentCard.trailingAnchor, constant: -Layout.cardInset),
+            contentStack.bottomAnchor.constraint(equalTo: contentCard.bottomAnchor, constant: -Layout.cardInset),
         ])
 
-        return contentView
+        container.addArrangedSubview(header)
+        container.addArrangedSubview(contentCard)
+
+        panelViews[kind] = CapabilityPanelViews(
+            toggleButton: toggleButton,
+            headerStatusLabel: headerStatusLabel,
+            contentContainer: contentCard,
+            providerPopUp: providerPopUp,
+            modelField: modelField,
+            baseURLField: baseURLField,
+            authField: authField,
+            connectionButton: connectionButton,
+            connectionStatusLabel: connectionStatusLabel
+        )
+        applyPanelStateToViews(for: kind)
+        return container
     }
 
-    private func makeFieldRow(label: String, field: NSTextField) -> NSView {
-        let titleLabel = AvatarPanelTheme.makeLabel(label, color: AvatarPanelTheme.muted, font: AvatarPanelTheme.smallFont)
-        let row = NSStackView(views: [titleLabel, field])
+    private func buildFooter() -> NSView {
+        let footer = NSStackView()
+        footer.identifier = NSUserInterfaceItemIdentifier(footerIdentifier)
+        footer.orientation = .horizontal
+        footer.alignment = .centerY
+        footer.spacing = 8
+
+        let spacer = NSView()
+        spacer.translatesAutoresizingMaskIntoConstraints = false
+        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+
+        let cancelButton = NSButton(
+            title: TextCatalog.shared.text(.commonCancelButton),
+            target: self,
+            action: #selector(handleCancel)
+        )
+        AvatarPanelTheme.styleSecondaryButton(cancelButton)
+
+        let saveButton = NSButton(
+            title: TextCatalog.shared.text(.commonSaveButton),
+            target: self,
+            action: #selector(handleSave)
+        )
+        AvatarPanelTheme.stylePrimaryButton(saveButton)
+
+        footer.addArrangedSubview(spacer)
+        footer.addArrangedSubview(cancelButton)
+        footer.addArrangedSubview(saveButton)
+        return footer
+    }
+
+    private func makeFieldRow(label: String, control: NSView) -> NSView {
+        let titleLabel = AvatarPanelTheme.makeLabel(
+            label,
+            color: AvatarPanelTheme.muted,
+            font: AvatarPanelTheme.smallFont
+        )
+        let row = NSStackView(views: [titleLabel, control])
         row.orientation = .vertical
         row.spacing = Layout.labelSpacing
         return row
     }
 
-    private func makeField(placeholder: String) -> NSTextField {
+    private func makeTextField(placeholder: String, identifier: String) -> NSTextField {
         let field = NSTextField(string: "")
         field.placeholderString = placeholder
+        field.identifier = NSUserInterfaceItemIdentifier(identifier)
+        field.delegate = self
         AvatarPanelTheme.styleEditableTextField(field)
         field.translatesAutoresizingMaskIntoConstraints = false
         field.heightAnchor.constraint(equalToConstant: Layout.fieldHeight).isActive = true
         return field
     }
 
-    private func loadFormStateIntoFields() {
-        load(config(for: selectedCapability), into: selectedCapability)
+    private func makeProviderPopUp(for kind: GenerationCapabilityKind) -> NSPopUpButton {
+        let button = NSPopUpButton(frame: .zero, pullsDown: false)
+        button.identifier = NSUserInterfaceItemIdentifier(providerIdentifier(for: kind))
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.heightAnchor.constraint(equalToConstant: Layout.fieldHeight).isActive = true
+        button.font = AvatarPanelTheme.bodyFont
+        button.target = self
+        button.action = #selector(handleProviderSelection(_:))
+        button.removeAllItems()
+        button.addItems(withTitles: kind.allowedProviders.map(\.rawValue))
+        button.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        return button
     }
 
-    private func load(_ config: GenerationCapabilityConfig, into kind: GenerationCapabilityKind) {
-        guard let form = capabilityForms[kind] else {
+    private func applyPanelStateToViews(for kind: GenerationCapabilityKind) {
+        guard
+            let state = panelStates[kind],
+            let views = panelViews[kind]
+        else {
             return
         }
 
-        form.providerField.stringValue = config.provider.rawValue
-        form.baseURLField.stringValue = config.baseURL
-        form.modelField.stringValue = config.model
-        form.authField.stringValue = makeJSONObjectString(config.auth)
-        form.optionsField.stringValue = makeJSONObjectString(config.options)
+        views.toggleButton.title = kind.title
+        views.headerStatusLabel.stringValue = state.draft.isConfigured
+            ? TextCatalog.shared.text(.generationConfigConfiguredStatus)
+            : TextCatalog.shared.text(.generationConfigUnconfiguredStatus)
+        views.headerStatusLabel.textColor = state.draft.isConfigured ? AvatarPanelTheme.accent : AvatarPanelTheme.muted
+
+        views.contentContainer.isHidden = !state.isExpanded
+
+        views.providerPopUp.selectItem(withTitle: state.draft.provider.rawValue)
+        views.modelField.stringValue = state.draft.model
+        views.baseURLField.stringValue = state.draft.baseURL
+        views.authField.stringValue = state.authToken
+
+        if let statusText = state.connectionStatus.text {
+            views.connectionStatusLabel.isHidden = false
+            views.connectionStatusLabel.stringValue = statusText
+            views.connectionStatusLabel.textColor = state.connectionStatus.color
+        } else {
+            views.connectionStatusLabel.isHidden = true
+            views.connectionStatusLabel.stringValue = ""
+        }
     }
 
-    private func config(for kind: GenerationCapabilityKind) -> GenerationCapabilityConfig {
+    private func syncAllPanelStatesFromControls() {
+        for kind in GenerationCapabilityKind.allCases {
+            syncPanelStateFromControls(for: kind)
+        }
+    }
+
+    private func syncPanelStateFromControls(for kind: GenerationCapabilityKind) {
+        guard
+            var state = panelStates[kind],
+            let views = panelViews[kind]
+        else {
+            return
+        }
+
+        let selectedProvider = GenerationCapabilityProvider(rawValue: views.providerPopUp.titleOfSelectedItem ?? "")
+            ?? state.draft.provider
+
+        state.draft = GenerationCapabilityConfig(
+            provider: selectedProvider,
+            baseURL: views.baseURLField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines),
+            model: views.modelField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines),
+            auth: GenerationCapabilityConfig.authDictionary(
+                for: selectedProvider,
+                token: views.authField.stringValue
+            ),
+            options: state.draft.options
+        )
+        state.authToken = views.authField.stringValue
+        panelStates[kind] = state
+        applyPanelStateToViews(for: kind)
+    }
+
+    private func resetConnectionStatus(for kind: GenerationCapabilityKind) {
+        guard var state = panelStates[kind] else {
+            return
+        }
+        state.connectionStatus = .idle
+        panelStates[kind] = state
+        applyPanelStateToViews(for: kind)
+    }
+
+    private func updateState(from field: NSTextField) {
+        guard let identifier = field.identifier?.rawValue else {
+            return
+        }
+
+        let components = identifier.split(separator: ".")
+        guard components.count == 3, components[0] == "generationConfig" else {
+            return
+        }
+
+        guard let kind = GenerationCapabilityKind(rawValue: String(components[2])) else {
+            return
+        }
+
+        syncPanelStateFromControls(for: kind)
+        resetConnectionStatus(for: kind)
+    }
+
+    private func persistDraftState() throws -> GenerationSettings {
+        syncAllPanelStatesFromControls()
+        let updatedSettings = formState.applyingVisibleDrafts(
+            textDescription: makeVisibleDraft(for: .textDescription),
+            animationAvatar: makeVisibleDraft(for: .animationAvatar),
+            codeGeneration: makeVisibleDraft(for: .codeGeneration)
+        )
+        try settingsStore.save(updatedSettings)
+        formState = updatedSettings
+        return updatedSettings
+    }
+
+    private func makeVisibleDraft(for kind: GenerationCapabilityKind) -> GenerationCapabilityVisibleDraft {
+        let state = panelStates[kind] ?? CapabilityPanelState(
+            draft: config(for: kind, in: formState),
+            isExpanded: kind == .textDescription,
+            connectionStatus: .idle,
+            authToken: config(for: kind, in: formState).visibleAuthToken
+        )
+
+        return GenerationCapabilityVisibleDraft(
+            provider: state.draft.provider,
+            baseURL: state.draft.baseURL,
+            model: state.draft.model,
+            authToken: state.authToken
+        )
+    }
+
+    private func config(for kind: GenerationCapabilityKind, in settings: GenerationSettings) -> GenerationCapabilityConfig {
         switch kind {
         case .textDescription:
-            return formState.textDescription
+            return settings.textDescription
         case .animationAvatar:
-            return formState.animationAvatar
+            return settings.animationAvatar
         case .codeGeneration:
-            return formState.codeGeneration
+            return settings.codeGeneration
         }
-    }
-
-    private func persistFormState() throws {
-        try syncDraftFromVisibleFields()
-        try settingsStore.save(formState)
-    }
-
-    private func syncDraftFromVisibleFields() throws {
-        formState = GenerationSettings(
-            activeThemeID: formState.activeThemeID,
-            textDescription: try updatedConfig(for: .textDescription, current: formState.textDescription),
-            animationAvatar: try updatedConfig(for: .animationAvatar, current: formState.animationAvatar),
-            codeGeneration: try updatedConfig(for: .codeGeneration, current: formState.codeGeneration)
-        )
-    }
-
-    private func updatedConfig(
-        for kind: GenerationCapabilityKind,
-        current: GenerationCapabilityConfig
-    ) throws -> GenerationCapabilityConfig {
-        guard let form = capabilityForms[kind] else {
-            return current
-        }
-
-        let provider = GenerationCapabilityProvider(
-            rawValue: form.providerField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        ) ?? current.provider
-
-        return GenerationCapabilityConfig(
-            provider: provider,
-            baseURL: form.baseURLField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines),
-            model: form.modelField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines),
-            auth: try parseStringDictionary(from: form.authField.stringValue),
-            options: try parseDoubleDictionary(from: form.optionsField.stringValue)
-        )
-    }
-
-    private func parseStringDictionary(from text: String) throws -> [String: String] {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            return [:]
-        }
-
-        guard let data = trimmed.data(using: .utf8) else {
-            throw GenerationConfigFormError.invalidJSONObject(field: TextCatalog.shared.text(.generationConfigAuthLabel))
-        }
-
-        let object = try JSONSerialization.jsonObject(with: data, options: [])
-        guard let dictionary = object as? [String: Any] else {
-            throw GenerationConfigFormError.invalidJSONObject(field: TextCatalog.shared.text(.generationConfigAuthLabel))
-        }
-
-        var parsed: [String: String] = [:]
-        for (key, value) in dictionary {
-            guard let stringValue = value as? String else {
-                throw GenerationConfigFormError.invalidValue(field: TextCatalog.shared.text(.generationConfigAuthLabel), key: key)
-            }
-            parsed[key] = stringValue
-        }
-        return parsed
-    }
-
-    private func parseDoubleDictionary(from text: String) throws -> [String: Double] {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            return [:]
-        }
-
-        guard let data = trimmed.data(using: .utf8) else {
-            throw GenerationConfigFormError.invalidJSONObject(field: TextCatalog.shared.text(.generationConfigOptionsLabel))
-        }
-
-        let object = try JSONSerialization.jsonObject(with: data, options: [])
-        guard let dictionary = object as? [String: Any] else {
-            throw GenerationConfigFormError.invalidJSONObject(field: TextCatalog.shared.text(.generationConfigOptionsLabel))
-        }
-
-        var parsed: [String: Double] = [:]
-        for (key, value) in dictionary {
-            guard let number = value as? NSNumber else {
-                throw GenerationConfigFormError.invalidValue(field: TextCatalog.shared.text(.generationConfigOptionsLabel), key: key)
-            }
-            parsed[key] = number.doubleValue
-        }
-        return parsed
-    }
-
-    private func makeJSONObjectString<T>(_ dictionary: [String: T]) -> String {
-        guard !dictionary.isEmpty else {
-            return ""
-        }
-
-        guard
-            let data = try? JSONSerialization.data(withJSONObject: dictionary, options: [.sortedKeys]),
-            let string = String(data: data, encoding: .utf8)
-        else {
-            return ""
-        }
-
-        return string
     }
 
     private func subscribeToThemeChanges() {
@@ -492,52 +589,199 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
                 return
             }
 
-            try? self.syncDraftFromVisibleFields()
+            self.syncAllPanelStatesFromControls()
             self.buildUI()
-            self.loadFormStateIntoFields()
         }
     }
 
-    @objc private func handleCapabilitySelection(_ sender: NSButton) {
+    private func finishIfNeeded() {
+        guard !didCloseWindow else {
+            return
+        }
+        didCloseWindow = true
+        onClose()
+    }
+
+    private func closeWindow() {
+        window?.close()
+    }
+
+    private func showError(_ error: Error) {
+        let alert = NSAlert(error: error)
+        alert.beginSheetModal(for: window ?? NSWindow())
+    }
+
+    private func applyConnectionResult(
+        _ result: Result<Void, Error>,
+        for kind: GenerationCapabilityKind
+    ) {
+        guard var state = panelStates[kind] else {
+            return
+        }
+
+        switch result {
+        case .success:
+            state.connectionStatus = .success
+        case let .failure(error):
+            state.connectionStatus = .failure(error.localizedDescription)
+        }
+
+        panelStates[kind] = state
+        applyPanelStateToViews(for: kind)
+    }
+
+    @objc private func handlePanelToggle(_ sender: NSButton) {
         guard
-            let rawValue = sender.identifier?.rawValue,
-            let capability = GenerationCapabilityKind(rawValue: rawValue),
-            capability != selectedCapability
+            let rawValue = sender.identifier?.rawValue.replacingOccurrences(of: "generationConfig.toggle.", with: ""),
+            let kind = GenerationCapabilityKind(rawValue: rawValue),
+            var state = panelStates[kind]
         else {
             return
         }
 
-        do {
-            try syncDraftFromVisibleFields()
-        } catch {
-            statusLabel.stringValue = error.localizedDescription
-            statusLabel.textColor = AvatarPanelTheme.danger
-            return
-        }
-
-        selectedCapability = capability
-        buildUI()
-        loadFormStateIntoFields()
+        syncPanelStateFromControls(for: kind)
+        state = panelStates[kind] ?? state
+        state.isExpanded.toggle()
+        panelStates[kind] = state
+        applyPanelStateToViews(for: kind)
     }
 
-    @objc private func handleAdvancedToggle(_ sender: NSButton) {
+    @objc private func handleProviderSelection(_ sender: NSPopUpButton) {
         guard
-            let rawIdentifier = sender.identifier?.rawValue,
-            let capability = GenerationCapabilityKind(rawValue: rawIdentifier.replacingOccurrences(of: "advanced-", with: ""))
+            let identifier = sender.identifier?.rawValue,
+            let kind = GenerationCapabilityKind(rawValue: identifier.replacingOccurrences(of: "generationConfig.provider.", with: ""))
         else {
             return
         }
 
-        do {
-            try syncDraftFromVisibleFields()
-        } catch {
-            statusLabel.stringValue = error.localizedDescription
-            statusLabel.textColor = AvatarPanelTheme.danger
+        syncPanelStateFromControls(for: kind)
+        resetConnectionStatus(for: kind)
+    }
+
+    @objc private func handleConnectionTest(_ sender: NSButton) {
+        guard
+            let rawValue = sender.identifier?.rawValue.replacingOccurrences(of: "generationConfig.connectionButton.", with: ""),
+            let kind = GenerationCapabilityKind(rawValue: rawValue),
+            var state = panelStates[kind]
+        else {
             return
         }
 
-        expandedAdvancedSections[capability] = !(expandedAdvancedSections[capability] ?? false)
-        buildUI()
-        loadFormStateIntoFields()
+        syncPanelStateFromControls(for: kind)
+        state = panelStates[kind] ?? state
+        state.connectionStatus = .testing
+        panelStates[kind] = state
+        applyPanelStateToViews(for: kind)
+
+        let capabilityDraft = state.draft
+        let requestID = UUID()
+        panelRequestIDs[kind] = requestID
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let result: Result<Void, Error>
+            do {
+                guard let self else {
+                    return
+                }
+                try self.generationCoordinator.testConnection(capabilityDraft)
+                result = .success(())
+            } catch {
+                result = .failure(error)
+            }
+
+            DispatchQueue.main.async { [weak self] in
+                guard
+                    let self,
+                    self.panelRequestIDs[kind] == requestID
+                else {
+                    return
+                }
+
+                self.applyConnectionResult(result, for: kind)
+            }
+        }
+    }
+
+    @objc private func handleCancel() {
+        panelStates = Self.makePanelStates(from: formState)
+        panelRequestIDs.removeAll()
+        closeWindow()
+    }
+
+    @objc private func handleSave() {
+        do {
+            _ = try persistDraftState()
+            closeWindow()
+        } catch {
+            showError(error)
+        }
+    }
+
+    private static func makePanelStates(from settings: GenerationSettings) -> [GenerationCapabilityKind: CapabilityPanelState] {
+        Dictionary(
+            uniqueKeysWithValues: GenerationCapabilityKind.allCases.map { kind in
+                let draft: GenerationCapabilityConfig
+                let isExpanded = kind == .textDescription
+
+                switch kind {
+                case .textDescription:
+                    draft = settings.textDescription
+                case .animationAvatar:
+                    draft = settings.animationAvatar
+                case .codeGeneration:
+                    draft = settings.codeGeneration
+                }
+
+                return (
+                    kind,
+                    CapabilityPanelState(
+                        draft: draft,
+                        isExpanded: isExpanded,
+                        connectionStatus: .idle,
+                        authToken: draft.visibleAuthToken
+                    )
+                )
+            }
+        )
+    }
+
+    private func toggleIdentifier(for kind: GenerationCapabilityKind) -> String {
+        "generationConfig.toggle.\(kind.rawValue)"
+    }
+
+    private func headerStatusIdentifier(for kind: GenerationCapabilityKind) -> String {
+        "generationConfig.headerStatus.\(kind.rawValue)"
+    }
+
+    private func contentIdentifier(for kind: GenerationCapabilityKind) -> String {
+        "generationConfig.content.\(kind.rawValue)"
+    }
+
+    private func providerIdentifier(for kind: GenerationCapabilityKind) -> String {
+        "generationConfig.provider.\(kind.rawValue)"
+    }
+
+    private func modelIdentifier(for kind: GenerationCapabilityKind) -> String {
+        "generationConfig.model.\(kind.rawValue)"
+    }
+
+    private func baseURLIdentifier(for kind: GenerationCapabilityKind) -> String {
+        "generationConfig.baseURL.\(kind.rawValue)"
+    }
+
+    private func authIdentifier(for kind: GenerationCapabilityKind) -> String {
+        "generationConfig.auth.\(kind.rawValue)"
+    }
+
+    private func connectionButtonIdentifier(for kind: GenerationCapabilityKind) -> String {
+        "generationConfig.connectionButton.\(kind.rawValue)"
+    }
+
+    private func connectionStatusIdentifier(for kind: GenerationCapabilityKind) -> String {
+        "generationConfig.connectionStatus.\(kind.rawValue)"
+    }
+
+    private var footerIdentifier: String {
+        "generationConfig.footer"
     }
 }

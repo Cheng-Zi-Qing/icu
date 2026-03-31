@@ -171,3 +171,119 @@ func testGenerationSettingsStoreFallsBackToRepoSettingsAndMigratesWritesToAppSup
         "migration writes should not mutate the repo-backed settings file"
     )
 }
+
+func testGenerationConfigSavePreservesHiddenOptionsWhileWritingPlainAuthToken() throws {
+    let root = try makeTemporaryDirectory()
+    try writeText(
+        at: root.appendingPathComponent("config/settings.json"),
+        contents: #"""
+        {
+          "avatar": {
+            "current_id": "seal"
+          },
+          "timers": {
+            "eye_interval": 1200
+          },
+          "generation": {
+            "text_description": {
+              "provider": "ollama",
+              "base_url": "http://localhost:11434",
+              "model": "ollama-mini",
+              "auth": {
+                "authorization": "Bearer persisted"
+              },
+              "options": {
+                "temperature": 0.7
+              }
+            },
+            "animation_avatar": {
+              "provider": "huggingface",
+              "base_url": "https://api-inference.huggingface.co",
+              "model": "stabilityai/stable-diffusion-xl-base-1.0",
+              "auth": {},
+              "options": {
+                "guidance_scale": 6
+              }
+            },
+            "code_generation": {
+              "provider": "openai-compatible",
+              "base_url": "https://example.invalid/v1",
+              "model": "gpt-4.1-mini",
+              "auth": {
+                "api_key": "sk-old"
+              },
+              "options": {
+                "top_p": 0.8
+              }
+            }
+          }
+        }
+        """#
+    )
+
+    let store = GenerationSettingsStore(repoRootURL: root)
+    let loaded = try store.load()
+    let updated = loaded.applyingVisibleDrafts(
+        textDescription: GenerationCapabilityVisibleDraft(
+            provider: .ollama,
+            baseURL: " http://localhost:11434 ",
+            model: " qwen3.5:32b ",
+            authToken: " Bearer local-token "
+        ),
+        animationAvatar: GenerationCapabilityVisibleDraft(
+            provider: .huggingFace,
+            baseURL: "https://api-inference.huggingface.co",
+            model: "black-forest-labs/FLUX.1-schnell",
+            authToken: " hf_live "
+        ),
+        codeGeneration: GenerationCapabilityVisibleDraft(
+            provider: .openAICompatible,
+            baseURL: "https://example.invalid/v1",
+            model: "gpt-4.1-mini",
+            authToken: " sk-live "
+        )
+    )
+    try store.save(updated)
+
+    let rootObject = try loadJSONObject(at: root.appendingPathComponent("config/settings.json"))
+    guard let generationObject = rootObject["generation"] as? [String: Any] else {
+        throw TestFailure(message: "generation block should be written")
+    }
+
+    let textDescription = generationObject["text_description"] as? [String: Any]
+    let animationAvatar = generationObject["animation_avatar"] as? [String: Any]
+    let codeGeneration = generationObject["code_generation"] as? [String: Any]
+
+    try expect(
+        ((textDescription?["options"] as? [String: Any])?["temperature"] as? NSNumber)?.doubleValue == 0.7,
+        "generation config save should preserve hidden text-description options"
+    )
+    try expect(
+        ((animationAvatar?["options"] as? [String: Any])?["guidance_scale"] as? NSNumber)?.doubleValue == 6,
+        "generation config save should preserve hidden animation options"
+    )
+    try expect(
+        ((codeGeneration?["options"] as? [String: Any])?["top_p"] as? NSNumber)?.doubleValue == 0.8,
+        "generation config save should preserve hidden code-generation options"
+    )
+    try expect(
+        (((textDescription?["auth"] as? [String: Any])?["authorization"]) as? String) == "Bearer local-token",
+        "ollama auth should be written back as a single authorization token string"
+    )
+    try expect(
+        (((animationAvatar?["auth"] as? [String: Any])?["token"]) as? String) == "hf_live",
+        "huggingface auth should be written back as a single token string"
+    )
+    try expect(
+        (((codeGeneration?["auth"] as? [String: Any])?["api_key"]) as? String) == "sk-live",
+        "openai-compatible auth should be written back as a single api_key string"
+    )
+    try expect(
+        ((rootObject["avatar"] as? [String: Any])?["current_id"] as? String) == "seal",
+        "generation config save should remain atomic and preserve unrelated avatar state"
+    )
+    try expect(
+        ((rootObject["timers"] as? [String: Any])?["eye_interval"] as? NSNumber)?.intValue == 1200,
+        "generation config save should remain atomic and preserve unrelated timer state"
+    )
+}

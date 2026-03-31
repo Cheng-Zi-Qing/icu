@@ -30,6 +30,7 @@ swiftc \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Generation/GenerationCapabilityModels.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Generation/GenerationCapabilityRouter.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Generation/GenerationSettingsStore.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Generation/GenerationConnectionTesting.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Generation/GenerationHTTPClient.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Generation/SpeechDraft.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Generation/SpeechGenerationService.swift" \
@@ -100,6 +101,7 @@ swiftc -framework AppKit \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Generation/GenerationCapabilityModels.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Generation/GenerationCapabilityRouter.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Generation/GenerationSettingsStore.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Generation/GenerationConnectionTesting.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Generation/GenerationHTTPClient.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Generation/SpeechDraft.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Generation/SpeechGenerationService.swift" \

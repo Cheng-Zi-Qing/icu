@@ -5,6 +5,7 @@
     "close_button": "关闭",
     "preview_button": "生成预览",
     "regenerate_button": "重新生成",
+    "save_button": "保存",
     "prompt_label": "prompt"
   },
   "menu": {
@@ -37,12 +38,18 @@
     "provider_label": "服务商",
     "model_label": "模型",
     "base_url_label": "接口地址",
-    "auth_label": "认证 JSON",
+    "auth_label": "Auth Token（可选）",
     "options_label": "选项 JSON",
+    "configured_status": "● 已配置",
+    "unconfigured_status": "未配置",
+    "test_connection_button": "测试连接",
+    "connection_testing_status": "连接测试中...",
+    "connection_success_status": "● 已连接",
+    "connection_failure_status": "✕ 连接失败: %@",
     "provider_placeholder": "provider，如 ollama / huggingface / openai-compatible",
     "model_placeholder": "model",
     "base_url_placeholder": "base_url",
-    "auth_placeholder": "auth JSON，如 {\"api_key\":\"sk-xxx\"}",
+    "auth_placeholder": "token / api_key / authorization",
     "options_placeholder": "options JSON，如 {\"temperature\":0.7}"
   },
   "theme_studio": {
