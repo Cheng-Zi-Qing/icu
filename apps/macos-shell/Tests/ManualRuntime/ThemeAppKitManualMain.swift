@@ -9,6 +9,8 @@ struct ThemeAppKitManualMain {
         do {
             try testGenerationConfigWindowUsesInstalledCopyCatalogForVisibleLabels()
             try testAvatarPanelThemeReflectsSharedThemeColors()
+            try testAvatarPickerWindowUsesListPreviewAndFooterActions()
+            try testStudioWindowUsesStableSidebarAndInitialThemeSelection()
             try testAvatarSelectorWindowRestylesWhenThemeChanges()
             try testAvatarSelectorWindowUsesStudioTabsAndThemeBubblePreviewByDefault()
             try testAvatarSelectorThemeTabOmitsModelSummaryAndCrossDomainPanels()

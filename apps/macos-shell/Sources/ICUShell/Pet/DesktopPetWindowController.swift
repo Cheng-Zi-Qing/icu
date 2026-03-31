@@ -131,6 +131,9 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
             case .changeAvatar:
                 avatarCoordinator.presentAvatarPicker()
                 return
+            case .openStudio:
+                avatarCoordinator.presentStudio(target: .theme)
+                return
             case .openGenerationConfig:
                 _ = generationCoordinator.openGenerationConfig()
                 return

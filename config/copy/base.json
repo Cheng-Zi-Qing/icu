@@ -10,6 +10,7 @@
   "menu": {
     "show_pet": "显示桌宠",
     "change_avatar": "更换形象",
+    "open_studio": "创作工坊",
     "generation_config": "生成配置",
     "quit_app": "退出",
     "start_work": "开始工作",

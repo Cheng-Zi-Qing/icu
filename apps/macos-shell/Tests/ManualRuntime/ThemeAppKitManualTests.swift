@@ -1,5 +1,80 @@
 import AppKit
 
+func testAvatarPickerWindowUsesListPreviewAndFooterActions() throws {
+    let previewURL = try makeTinyPNG()
+    let controller = AvatarPickerWindowController(
+        avatars: [
+            AvatarSummary(
+                id: "capybara",
+                name: "水豚",
+                style: "像素",
+                previewURL: previewURL,
+                traits: "稳重",
+                tone: "冷静"
+            )
+        ],
+        currentAvatarID: "capybara",
+        onApply: { _ in },
+        onClose: {}
+    )
+
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "picker content view should exist")
+    }
+
+    _ = try requireLabel(in: contentView, stringValue: "形象列表")
+    _ = try requireLabel(in: contentView, stringValue: "预览与说明")
+    _ = try requireButton(in: contentView, title: "取消")
+    _ = try requireButton(in: contentView, title: "应用")
+    _ = try requireButton(in: contentView, title: "＋ 新建形象…")
+    try expect(
+        allSubviews(in: contentView).contains(where: { $0 is NSTableView }),
+        "picker shell should expose a left avatar list"
+    )
+    try expect(
+        allSubviews(in: contentView).contains(where: { $0 is NSImageView }),
+        "picker shell should expose a right preview image"
+    )
+}
+
+func testStudioWindowUsesStableSidebarAndInitialThemeSelection() throws {
+    let previewURL = try makeTinyPNG()
+    let controller = StudioWindowController(
+        avatars: [
+            AvatarSummary(
+                id: "capybara",
+                name: "水豚",
+                style: "像素",
+                previewURL: previewURL,
+                traits: "稳重",
+                tone: "冷静"
+            )
+        ],
+        currentAvatarID: "capybara",
+        onClose: {}
+    )
+
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "studio content view should exist")
+    }
+
+    _ = try requireButton(in: contentView, title: "主题风格")
+    _ = try requireButton(in: contentView, title: "形象生成")
+    _ = try requireButton(in: contentView, title: "话术")
+    _ = try requireLabel(in: contentView, stringValue: "当前分区：主题风格")
+
+    let speechButton = try requireButton(in: contentView, title: "话术")
+    let speechButtonIdentity = ObjectIdentifier(speechButton)
+    speechButton.performClick(nil)
+
+    _ = try requireLabel(in: contentView, stringValue: "当前分区：话术")
+    let refreshedSpeechButton = try requireButton(in: contentView, title: "话术")
+    try expect(
+        ObjectIdentifier(refreshedSpeechButton) == speechButtonIdentity,
+        "studio sidebar button instances should stay mounted while switching sections"
+    )
+}
+
 func testAvatarPanelThemeReflectsSharedThemeColors() throws {
     let manager = try makeInstalledThemeManager()
     let pack = makeAppKitTestThemePack(id: "wrapper_refresh")

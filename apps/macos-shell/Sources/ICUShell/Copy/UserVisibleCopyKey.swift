@@ -8,6 +8,7 @@ enum UserVisibleCopyKey: String {
 
     case menuShowPet = "menu.show_pet"
     case menuChangeAvatar = "menu.change_avatar"
+    case menuOpenStudio = "menu.open_studio"
     case menuGenerationConfig = "menu.generation_config"
     case menuQuitApp = "menu.quit_app"
     case menuStartWork = "menu.start_work"
@@ -74,6 +75,8 @@ extension UserVisibleCopyKey {
             return "显示桌宠"
         case .menuChangeAvatar:
             return "更换形象"
+        case .menuOpenStudio:
+            return "创作工坊"
         case .menuGenerationConfig:
             return "生成配置"
         case .menuQuitApp:

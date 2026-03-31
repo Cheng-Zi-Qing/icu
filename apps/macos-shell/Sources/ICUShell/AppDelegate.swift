@@ -154,6 +154,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             showPet()
         case .changeAvatar:
             changeAvatar()
+        case .openStudio:
+            avatarCoordinator?.presentStudio(target: .theme)
         case .openGenerationConfig:
             _ = generationCoordinator?.openGenerationConfig()
         case .quitApp:
