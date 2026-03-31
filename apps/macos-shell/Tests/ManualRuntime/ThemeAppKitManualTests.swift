@@ -14,7 +14,8 @@ func testAvatarPickerWindowUsesListPreviewAndFooterActions() throws {
             )
         ],
         currentAvatarID: "capybara",
-        onApply: { _ in },
+        onChoose: { _ in },
+        onCreateNew: {},
         onClose: {}
     )
 
@@ -73,6 +74,189 @@ func testStudioWindowUsesStableSidebarAndInitialThemeSelection() throws {
         ObjectIdentifier(refreshedSpeechButton) == speechButtonIdentity,
         "studio sidebar button instances should stay mounted while switching sections"
     )
+}
+
+func testAvatarPickerSelectionUpdatesPreviewAndCurrentBadge() throws {
+    let capybaraPreviewURL = try makeTinyPNG()
+    let sealPreviewURL = try makeTinyPNG()
+    let controller = AvatarPickerWindowController(
+        avatars: [
+            AvatarSummary(
+                id: "capybara",
+                name: "水豚",
+                style: "像素风",
+                previewURL: capybaraPreviewURL,
+                traits: "慢热稳重",
+                tone: "冷静"
+            ),
+            AvatarSummary(
+                id: "seal",
+                name: "海豹",
+                style: "奶油风",
+                previewURL: sealPreviewURL,
+                traits: "活泼",
+                tone: "轻快"
+            ),
+        ],
+        currentAvatarID: "seal",
+        onChoose: { _ in },
+        onCreateNew: {},
+        onClose: {}
+    )
+
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "picker content view should exist")
+    }
+    contentView.layoutSubtreeIfNeeded()
+
+    let tableView = try requireTableView(in: contentView)
+    let currentRowLabel = try requireTableCellLabel(in: tableView, row: 1)
+    try expect(
+        currentRowLabel.stringValue == "海豹 ●",
+        "currently applied avatar row should display a badge"
+    )
+
+    tableView.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+    controller.tableViewSelectionDidChange(Notification(name: NSTableView.selectionDidChangeNotification, object: tableView))
+
+    _ = try requireLabel(in: contentView, stringValue: "水豚")
+    _ = try requireLabel(in: contentView, stringValue: "风格：像素风")
+    _ = try requireLabel(in: contentView, stringValue: "特质：慢热稳重\n语气：冷静")
+}
+
+func testAvatarPickerDoubleClickAppliesCurrentSelection() throws {
+    let capybaraPreviewURL = try makeTinyPNG()
+    let sealPreviewURL = try makeTinyPNG()
+    var appliedAvatarIDs: [String] = []
+
+    let controller = AvatarPickerWindowController(
+        avatars: [
+            AvatarSummary(
+                id: "capybara",
+                name: "水豚",
+                style: "像素风",
+                previewURL: capybaraPreviewURL,
+                traits: "慢热稳重",
+                tone: "冷静"
+            ),
+            AvatarSummary(
+                id: "seal",
+                name: "海豹",
+                style: "奶油风",
+                previewURL: sealPreviewURL,
+                traits: "活泼",
+                tone: "轻快"
+            ),
+        ],
+        currentAvatarID: "capybara",
+        onChoose: { avatarID in
+            appliedAvatarIDs.append(avatarID)
+        },
+        onCreateNew: {},
+        onClose: {}
+    )
+
+    controller.present()
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "picker content view should exist")
+    }
+    let tableView = try requireTableView(in: contentView)
+    tableView.selectRowIndexes(IndexSet(integer: 1), byExtendingSelection: false)
+    controller.tableViewSelectionDidChange(Notification(name: NSTableView.selectionDidChangeNotification, object: tableView))
+
+    guard
+        let doubleAction = tableView.doubleAction,
+        NSApp.sendAction(doubleAction, to: tableView.target, from: tableView)
+    else {
+        throw TestFailure(message: "double-click action should be wired")
+    }
+
+    try expect(
+        appliedAvatarIDs == ["seal"],
+        "double-clicking a picker row should apply the selected avatar"
+    )
+}
+
+func testAvatarPickerCreateButtonLaunchesStudioAvatarCreateTarget() throws {
+    let previewURL = try makeTinyPNG()
+    var didRequestCreate = false
+    var closeCount = 0
+
+    let controller = AvatarPickerWindowController(
+        avatars: [
+            AvatarSummary(
+                id: "capybara",
+                name: "水豚",
+                style: "像素风",
+                previewURL: previewURL,
+                traits: "慢热稳重",
+                tone: "冷静"
+            )
+        ],
+        currentAvatarID: "capybara",
+        onChoose: { _ in },
+        onCreateNew: {
+            didRequestCreate = true
+        },
+        onClose: {
+            closeCount += 1
+        }
+    )
+
+    controller.present()
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "picker content view should exist")
+    }
+
+    try requireButton(in: contentView, title: "＋ 新建形象…").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    try expect(didRequestCreate, "new-avatar button should request studio avatar-create launch")
+    try expect(closeCount == 0, "create handoff should not use the cancel-only onClose callback")
+}
+
+func testAvatarPickerCancelClosesWithoutApplying() throws {
+    let previewURL = try makeTinyPNG()
+    var appliedAvatarIDs: [String] = []
+    var closeCount = 0
+
+    let controller = AvatarPickerWindowController(
+        avatars: [
+            AvatarSummary(
+                id: "capybara",
+                name: "水豚",
+                style: "像素风",
+                previewURL: previewURL,
+                traits: "慢热稳重",
+                tone: "冷静"
+            )
+        ],
+        currentAvatarID: "capybara",
+        onChoose: { avatarID in
+            appliedAvatarIDs.append(avatarID)
+        },
+        onCreateNew: {},
+        onClose: {
+            closeCount += 1
+        }
+    )
+
+    controller.present()
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "picker content view should exist")
+    }
+
+    try requireButton(in: contentView, title: "取消").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    try expect(appliedAvatarIDs.isEmpty, "cancel should close without applying the avatar")
+    try expect(closeCount == 1, "cancel should route through the onClose lifecycle callback exactly once")
 }
 
 func testAvatarPanelThemeReflectsSharedThemeColors() throws {
@@ -2626,6 +2810,23 @@ func requireActionButton(in root: NSView, title: String) throws -> NSButton {
     }
 
     throw TestFailure(message: "expected actionable button '\(title)' to exist")
+}
+
+func requireTableView(in root: NSView) throws -> NSTableView {
+    if let tableView = allSubviews(in: root).compactMap({ $0 as? NSTableView }).first {
+        return tableView
+    }
+
+    throw TestFailure(message: "expected table view to exist")
+}
+
+func requireTableCellLabel(in tableView: NSTableView, row: Int) throws -> NSTextField {
+    guard let cell = tableView.view(atColumn: 0, row: row, makeIfNecessary: true) as? NSTableCellView,
+          let label = cell.textField else {
+        throw TestFailure(message: "expected table label for row \(row)")
+    }
+
+    return label
 }
 
 func requireTextView(in root: NSView, identifier: String) throws -> NSTextView {

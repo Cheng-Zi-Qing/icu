@@ -34,13 +34,13 @@ final class AvatarCoordinator {
             let controller = AvatarPickerWindowController(
                 avatars: avatars,
                 currentAvatarID: try settingsStore.loadCurrentAvatarID(),
-                onApply: { [weak self] avatarID in
-                    do {
-                        try self?.applyAvatarSelection(avatarID)
-                        self?.pickerController = nil
-                    } catch {
-                        self?.showError(error)
-                    }
+                onChoose: { [weak self] avatarID in
+                    try self?.applyAvatarSelection(avatarID)
+                    self?.pickerController = nil
+                },
+                onCreateNew: { [weak self] in
+                    self?.pickerController = nil
+                    self?.presentStudio(target: .avatarCreate)
                 },
                 onClose: { [weak self] in
                     self?.pickerController = nil

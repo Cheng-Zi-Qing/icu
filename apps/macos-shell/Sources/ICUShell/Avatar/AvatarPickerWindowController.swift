@@ -2,25 +2,31 @@ import AppKit
 
 final class AvatarPickerWindowController: NSWindowController, NSWindowDelegate, NSTableViewDataSource, NSTableViewDelegate {
     private let avatars: [AvatarSummary]
-    private let onApply: (String) -> Void
+    private let currentAvatarID: String?
+    private let onChoose: (String) throws -> Void
+    private let onCreateNew: () -> Void
     private let onClose: () -> Void
 
     private var selectedAvatarID: String?
     private var tableView = NSTableView()
     private var previewImageView = NSImageView()
     private var nameLabel = AvatarPanelTheme.makeTitleLabel("")
-    private var detailLabel = AvatarPanelTheme.makeLabel("", color: AvatarPanelTheme.muted)
+    private var styleLabel = AvatarPanelTheme.makeLabel("", color: AvatarPanelTheme.muted)
+    private var personaLabel = AvatarPanelTheme.makeLabel("", color: AvatarPanelTheme.text)
     private var didFinish = false
 
     init(
         avatars: [AvatarSummary],
         currentAvatarID: String?,
-        onApply: @escaping (String) -> Void,
+        onChoose: @escaping (String) throws -> Void,
+        onCreateNew: @escaping () -> Void,
         onClose: @escaping () -> Void
     ) {
         self.avatars = avatars
+        self.currentAvatarID = currentAvatarID
         self.selectedAvatarID = currentAvatarID ?? avatars.first?.id
-        self.onApply = onApply
+        self.onChoose = onChoose
+        self.onCreateNew = onCreateNew
         self.onClose = onClose
 
         let window = NSWindow(
@@ -75,7 +81,7 @@ final class AvatarPickerWindowController: NSWindowController, NSWindowDelegate, 
         }
 
         let avatar = avatars[row]
-        label.stringValue = avatar.name
+        label.stringValue = avatar.id == currentAvatarID ? "\(avatar.name) ●" : avatar.name
         label.font = AvatarPanelTheme.bodyFont
         label.textColor = AvatarPanelTheme.text
         return cell
@@ -145,6 +151,8 @@ final class AvatarPickerWindowController: NSWindowController, NSWindowDelegate, 
         tableView.addTableColumn(NSTableColumn(identifier: NSUserInterfaceItemIdentifier("avatarPicker.nameColumn")))
         tableView.delegate = self
         tableView.dataSource = self
+        tableView.target = self
+        tableView.doubleAction = #selector(handleApply)
 
         let scrollView = NSScrollView()
         AvatarPanelTheme.styleScrollView(scrollView)
@@ -184,12 +192,16 @@ final class AvatarPickerWindowController: NSWindowController, NSWindowDelegate, 
         previewImageView.layer?.cornerRadius = 6
 
         nameLabel = AvatarPanelTheme.makeTitleLabel("")
-        detailLabel = AvatarPanelTheme.makeLabel("", color: AvatarPanelTheme.muted)
+        styleLabel = AvatarPanelTheme.makeLabel("", color: AvatarPanelTheme.muted)
+        personaLabel = AvatarPanelTheme.makeLabel("", color: AvatarPanelTheme.text)
+        personaLabel.lineBreakMode = .byWordWrapping
+        personaLabel.maximumNumberOfLines = 0
 
         stack.addArrangedSubview(AvatarPanelTheme.makeLabel("预览与说明", color: AvatarPanelTheme.accent))
         stack.addArrangedSubview(previewImageView)
         stack.addArrangedSubview(nameLabel)
-        stack.addArrangedSubview(detailLabel)
+        stack.addArrangedSubview(styleLabel)
+        stack.addArrangedSubview(personaLabel)
 
         NSLayoutConstraint.activate([
             stack.topAnchor.constraint(equalTo: card.topAnchor, constant: 14),
@@ -203,7 +215,7 @@ final class AvatarPickerWindowController: NSWindowController, NSWindowDelegate, 
     }
 
     private func buildFooter() -> NSView {
-        let newAvatarButton = NSButton(title: "＋ 新建形象…", target: nil, action: nil)
+        let newAvatarButton = NSButton(title: "＋ 新建形象…", target: self, action: #selector(handleCreateNew))
         let cancelButton = NSButton(title: "取消", target: self, action: #selector(handleCancel))
         let applyButton = NSButton(title: "应用", target: self, action: #selector(handleApply))
         AvatarPanelTheme.styleSecondaryButton(newAvatarButton)
@@ -250,13 +262,15 @@ final class AvatarPickerWindowController: NSWindowController, NSWindowDelegate, 
         guard let avatar = selectedAvatar() else {
             previewImageView.image = nil
             nameLabel.stringValue = "未选择形象"
-            detailLabel.stringValue = ""
+            styleLabel.stringValue = ""
+            personaLabel.stringValue = ""
             return
         }
 
         previewImageView.image = NSImage(contentsOf: avatar.previewURL)
         nameLabel.stringValue = avatar.name
-        detailLabel.stringValue = avatar.style.isEmpty ? "未标注风格" : "风格：\(avatar.style)"
+        styleLabel.stringValue = avatar.style.isEmpty ? "未标注风格" : "风格：\(avatar.style)"
+        personaLabel.stringValue = "特质：\(avatar.traits.isEmpty ? "未记录" : avatar.traits)\n语气：\(avatar.tone.isEmpty ? "未记录" : avatar.tone)"
     }
 
     @objc private func handleCancel() {
@@ -271,7 +285,19 @@ final class AvatarPickerWindowController: NSWindowController, NSWindowDelegate, 
         }
 
         didFinish = true
-        onApply(avatarID)
+        do {
+            try onChoose(avatarID)
+        } catch {
+            didFinish = false
+            NSAlert(error: error).runModal()
+            return
+        }
+        close()
+    }
+
+    @objc private func handleCreateNew() {
+        didFinish = true
+        onCreateNew()
         close()
     }
 }
