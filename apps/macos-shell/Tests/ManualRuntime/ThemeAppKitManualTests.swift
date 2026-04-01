@@ -743,6 +743,9 @@ func testStudioAvatarTabShowsReferenceCardAndCreationWorkspace() throws {
 
     _ = try requireLabel(in: contentView, stringValue: "当前分区：形象生成")
     _ = try requireLabel(in: contentView, stringValue: "当前已应用形象")
+    _ = try requireLabel(in: contentView, stringValue: "海豹")
+    _ = try requireLabel(in: contentView, stringValue: "风格：奶油风")
+    _ = try requireLabel(in: contentView, stringValue: "特质：活泼\n语气：轻快")
     _ = try requireButton(in: contentView, title: "打开更换形象")
     _ = try requireTextView(in: contentView, identifier: "avatarCreateRawPrompt")
     _ = try requireTextView(in: contentView, identifier: "avatarCreateOptimizedPrompt")
@@ -798,6 +801,9 @@ func testStudioAvatarLaunchTargetUsesSharedWorkspaceWithoutModeChrome() throws {
 
     _ = try requireLabel(in: contentView, stringValue: "当前分区：形象生成")
     _ = try requireLabel(in: contentView, stringValue: "当前已应用形象")
+    _ = try requireLabel(in: contentView, stringValue: "水豚")
+    _ = try requireLabel(in: contentView, stringValue: "风格：像素风")
+    _ = try requireLabel(in: contentView, stringValue: "特质：稳重\n语气：冷静")
     _ = try requireButton(in: contentView, title: "打开更换形象")
     _ = try requireTextView(in: contentView, identifier: "avatarCreateRawPrompt")
     _ = try requireTextView(in: contentView, identifier: "avatarCreateOptimizedPrompt")
