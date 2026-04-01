@@ -15,6 +15,7 @@ The current "更换形象" window is a 1720-line monolith that mixes three unrel
 | 更换形象 layout | Left list + right preview |
 | 生成配置 layout | Accordion panels |
 | 创作工坊 navigation | Left sidebar |
+| 形象生成 tab role | Creation-first workspace with a small current-avatar reference card; existing-avatar browsing stays in 更换形象 |
 | Scope | All three windows — picker, studio, config |
 
 ## Architecture
@@ -120,19 +121,17 @@ Every tab follows the same three-zone pattern:
 
 ### Tab: 形象生成
 
-Two sub-modes, toggled by a segmented control at the top of the content area:
+This tab is a single creation workspace. It no longer has browse/create sub-modes and no longer mirrors the avatar picker's list UI.
 
-**Browse mode** (default)
-- Applied banner: current avatar name + style.
-- Read-only avatar list (same visual as picker, but no Apply button).
-- Link: "切换形象请使用「更换形象」" — opens AvatarPickerWindowController.
-
-**创建新形象 mode**
+- Top reference card: current applied avatar thumbnail + name + style + short persona summary.
+- Reference card includes a secondary button: "打开更换形象" — opens AvatarPickerWindowController without closing StudioWindowController.
 - Prompt zone: raw prompt input.
 - After optimizing, shows three preview image placeholders (idle / working / alert) with ● / ○ status per action.
 - Name field + persona field below previews.
 - Action bar: 优化 prompt → 生成预览 → 重新生成 → 保存并应用.
 - "保存并应用" is enabled only when all three action images are generated and name is non-empty.
+- Saving a new avatar immediately applies it, refreshes the reference card, resets the creation draft, and keeps the user in the same tab ready for another creation pass.
+- If generation or save fails, the current applied avatar remains unchanged; the error only appears in the studio status area.
 
 ### Tab: 话术
 
@@ -231,3 +230,4 @@ Single "保存" button in the footer writes all three capability configs atomica
 - `GenerationConfigWindowController` must not auto-save on tab switch; save is explicit only.
 - Auth field is a plain string — no JSON parsing for auth in the UI layer.
 - `StudioWindowController` sidebar switching must not rebuild the window; only swap the right content view.
+- Existing-avatar browsing and switching are only handled by `AvatarPickerWindowController`; `AvatarStudioContentView` may show current-avatar context but must not duplicate the picker's list-and-apply flow.
