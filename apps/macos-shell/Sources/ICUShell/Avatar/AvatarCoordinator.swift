@@ -40,7 +40,7 @@ final class AvatarCoordinator {
                 },
                 onCreateNew: { [weak self] in
                     self?.pickerController = nil
-                    self?.presentStudio(target: .avatarCreate)
+                    self?.presentStudio(target: .avatarBrowse)
                 },
                 onClose: { [weak self] in
                     self?.pickerController = nil

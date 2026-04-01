@@ -179,44 +179,59 @@ func testAvatarPickerDoubleClickAppliesCurrentSelection() throws {
     )
 }
 
-func testAvatarPickerCreateButtonLaunchesStudioAvatarCreateTarget() throws {
-    let previewURL = try makeTinyPNG()
-    var didRequestCreate = false
-    var closeCount = 0
-
-    let controller = AvatarPickerWindowController(
-        avatars: [
-            AvatarSummary(
-                id: "capybara",
-                name: "水豚",
-                style: "像素风",
-                previewURL: previewURL,
-                traits: "慢热稳重",
-                tone: "冷静"
-            )
-        ],
-        currentAvatarID: "capybara",
-        onChoose: { _ in },
-        onCreateNew: {
-            didRequestCreate = true
-        },
-        onClose: {
-            closeCount += 1
-        }
+func testAvatarPickerCreateButtonLaunchesStudioAvatarWorkspace() throws {
+    let repoRoot = try makeTemporaryDirectory()
+    try writeTestAvatar(
+        repoRoot: repoRoot,
+        id: "capybara",
+        name: "水豚",
+        style: "像素风",
+        traits: "稳重",
+        tone: "冷静"
     )
 
-    controller.present()
+    let settingsStore = AvatarSettingsStore(repoRootURL: repoRoot)
+    try settingsStore.saveCurrentAvatarID("capybara")
+
+    let coordinator = AvatarCoordinator(
+        settingsStore: settingsStore,
+        catalog: AvatarCatalog(repoRootURL: repoRoot),
+        assetStore: AvatarAssetStore(repoRootURL: repoRoot),
+        bridge: AvatarBuilderBridge(scriptURL: try makeBridgeScript(body: "print('{}')"))
+    )
+
+    let existingWindows = Set(NSApp.windows.map { ObjectIdentifier($0) })
+    coordinator.presentAvatarPicker()
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
 
-    guard let contentView = controller.window?.contentView else {
+    let pickerWindow = try requireWindow(
+        in: NSApp.windows.filter { !existingWindows.contains(ObjectIdentifier($0)) },
+        controlledBy: AvatarPickerWindowController.self
+    ).0
+    guard let pickerContentView = pickerWindow.contentView else {
         throw TestFailure(message: "picker content view should exist")
     }
 
-    try requireButton(in: contentView, title: "＋ 新建形象…").performClick(nil)
+    try requireButton(in: pickerContentView, title: "＋ 新建形象…").performClick(nil)
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
 
-    try expect(didRequestCreate, "new-avatar button should request studio avatar-create launch")
-    try expect(closeCount == 0, "create handoff should not use the cancel-only onClose callback")
+    let newWindows = NSApp.windows.filter { !existingWindows.contains(ObjectIdentifier($0)) }
+    defer {
+        newWindows.forEach { $0.close() }
+    }
+
+    let (studioWindow, _) = try requireWindow(in: newWindows, controlledBy: StudioWindowController.self)
+    guard let studioContentView = studioWindow.contentView else {
+        throw TestFailure(message: "studio content view should exist")
+    }
+
+    _ = try requireLabel(in: studioContentView, stringValue: "当前分区：形象生成")
+    _ = try requireLabel(in: studioContentView, stringValue: "当前已应用形象")
+    _ = try requireButton(in: studioContentView, title: "打开更换形象")
+    try expect(
+        allSubviews(in: studioContentView).contains(where: { $0 is NSTableView }) == false,
+        "picker create handoff should open the shared avatar workspace without a read-only list shell"
+    )
 }
 
 func testAvatarPickerCancelClosesWithoutApplying() throws {
@@ -1264,7 +1279,7 @@ func testStudioAvatarWorkspaceSavesAndAppliesGeneratedAvatar() throws {
     )
 }
 
-func testSavingNewAvatarRefreshesPickerAndStudioAvatarLists() throws {
+func testSavingNewAvatarRefreshesPickerListAndStudioReferenceCard() throws {
     let repoRoot = try makeTemporaryDirectory()
     try writeTestAvatar(
         repoRoot: repoRoot,
@@ -1313,7 +1328,7 @@ else:
 
     let existingWindows = Set(NSApp.windows.map { ObjectIdentifier($0) })
     coordinator.presentAvatarPicker()
-    coordinator.presentStudio(target: .avatarCreate)
+    coordinator.presentStudio(target: .avatarBrowse)
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
 
     let newWindows = NSApp.windows.filter { !existingWindows.contains(ObjectIdentifier($0)) }
@@ -1371,11 +1386,39 @@ else:
         pickerRows.contains("Calm Capybara ●"),
         "picker should mark the newly saved avatar as current after coordinator refresh"
     )
+    _ = try requireLabel(in: studioContentView, stringValue: "当前已应用形象")
     _ = try requireLabel(in: studioContentView, stringValue: "Calm Capybara")
     _ = try requireButton(in: studioContentView, title: "打开更换形象")
     try expect(
         allSubviews(in: studioContentView).contains(where: { $0 is NSTableView }) == false,
         "studio should render the single-workspace avatar shell without embedding a picker list table"
+    )
+
+    let studioIdentity = ObjectIdentifier(studioWindow)
+    let pickerWindowCountBefore = newWindows.filter { $0.windowController is AvatarPickerWindowController && $0.isVisible }.count
+    try requireButton(in: studioContentView, title: "打开更换形象").performClick(nil)
+    try expect(
+        waitForCondition(timeout: 0.2) {
+            NSApp.windows.contains(where: {
+                !existingWindows.contains(ObjectIdentifier($0))
+                    && $0.windowController is AvatarPickerWindowController
+                    && $0.isVisible
+            }) && studioWindow.isVisible
+        },
+        "studio reference-card picker action should open picker and keep studio visible"
+    )
+    let pickerWindowCountAfter = NSApp.windows.filter {
+        !existingWindows.contains(ObjectIdentifier($0))
+            && $0.windowController is AvatarPickerWindowController
+            && $0.isVisible
+    }.count
+    try expect(
+        pickerWindowCountAfter >= pickerWindowCountBefore,
+        "studio picker handoff should route through the callback without replacing the existing studio window"
+    )
+    try expect(
+        NSApp.windows.contains(where: { ObjectIdentifier($0) == studioIdentity && $0.isVisible }),
+        "studio window instance should remain visible after opening picker from the reference card"
     )
 }
 
