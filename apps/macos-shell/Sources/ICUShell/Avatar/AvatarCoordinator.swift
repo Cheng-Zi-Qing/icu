@@ -1,6 +1,12 @@
 import AppKit
 
 final class AvatarCoordinator {
+    enum PickerExitAction {
+        case choose
+        case createNew
+        case close
+    }
+
     private let settingsStore: AvatarSettingsStore
     private let catalog: AvatarCatalog
     private let assetStore: AvatarAssetStore
@@ -9,6 +15,8 @@ final class AvatarCoordinator {
     private var pickerController: AvatarPickerWindowController?
     private var studioController: StudioWindowController?
     var onCurrentAvatarChanged: ((String) -> Void)?
+    private(set) var lastPickerExitAction: PickerExitAction?
+    private(set) var lastRequestedStudioTarget: StudioLaunchTarget?
 
     init(
         settingsStore: AvatarSettingsStore,
@@ -35,14 +43,17 @@ final class AvatarCoordinator {
                 avatars: avatars,
                 currentAvatarID: try settingsStore.loadCurrentAvatarID(),
                 onChoose: { [weak self] avatarID in
+                    self?.lastPickerExitAction = .choose
                     try self?.applyAvatarSelection(avatarID)
                     self?.pickerController = nil
                 },
                 onCreateNew: { [weak self] in
+                    self?.lastPickerExitAction = .createNew
                     self?.pickerController = nil
                     self?.presentStudio(target: .avatarBrowse)
                 },
                 onClose: { [weak self] in
+                    self?.lastPickerExitAction = .close
                     self?.pickerController = nil
                 }
             )
@@ -55,6 +66,7 @@ final class AvatarCoordinator {
 
     func presentStudio(target: StudioLaunchTarget = .theme) {
         do {
+            lastRequestedStudioTarget = target
             let avatars = try catalog.loadAvatars()
             guard !avatars.isEmpty else {
                 throw AvatarBuilderBridgeError.executionFailed(command: "load-avatars", details: "no avatars found")

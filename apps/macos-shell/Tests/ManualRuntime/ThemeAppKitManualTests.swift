@@ -215,6 +215,15 @@ func testAvatarPickerCreateButtonLaunchesStudioAvatarWorkspace() throws {
     try requireButton(in: pickerContentView, title: "＋ 新建形象…").performClick(nil)
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
 
+    try expect(
+        coordinator.lastPickerExitAction == .createNew,
+        "picker create button should route through coordinator onCreateNew branch"
+    )
+    try expect(
+        coordinator.lastRequestedStudioTarget == .avatarBrowse,
+        "picker create handoff should request studio avatarBrowse target before controller normalization"
+    )
+
     let newWindows = NSApp.windows.filter { !existingWindows.contains(ObjectIdentifier($0)) }
     defer {
         newWindows.forEach { $0.close() }
