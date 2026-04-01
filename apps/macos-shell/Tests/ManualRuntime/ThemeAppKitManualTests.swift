@@ -982,6 +982,14 @@ func testStudioAvatarWorkspacePreviewGenerationReturnsWithoutBlockingUI() throws
 
     _ = try requireLabel(in: contentView, stringValue: "当前分区：形象生成")
     _ = try requireButton(in: contentView, title: "打开更换形象")
+    try expect(
+        findLabel(in: contentView, stringValue: "当前模式：新建形象") == nil,
+        "studio avatar workspace should not reintroduce legacy mode chrome while preview generation is in flight"
+    )
+    try expect(
+        findButton(in: contentView, title: "返回现有形象") == nil,
+        "studio avatar workspace should not reintroduce return-to-library chrome while preview generation is in flight"
+    )
 
     RunLoop.current.run(until: Date().addingTimeInterval(0.25))
     try expect(
@@ -1107,25 +1115,27 @@ func testStudioAvatarWorkspaceSavesAndAppliesGeneratedAvatar() throws {
     var savedRequests: [InlineAvatarSaveRequest] = []
     var chosenAvatarIDs: [String] = []
     var closeCount = 0
+    let originalAvatar = AvatarSummary(
+        id: "capybara",
+        name: "水豚",
+        style: "像素",
+        previewURL: previewURL,
+        traits: "稳重",
+        tone: "冷静"
+    )
+    let savedAvatar = AvatarSummary(
+        id: "custom_capybara",
+        name: "淡定水豚",
+        style: "定制",
+        previewURL: previewURL,
+        traits: "慢热淡定",
+        tone: "柔和"
+    )
+    var controller: StudioWindowController!
 
-    let controller = StudioWindowController(
+    controller = StudioWindowController(
         avatars: [
-            AvatarSummary(
-                id: "capybara",
-                name: "水豚",
-                style: "像素",
-                previewURL: previewURL,
-                traits: "稳重",
-                tone: "冷静"
-            ),
-            AvatarSummary(
-                id: "custom_capybara",
-                name: "淡定水豚",
-                style: "定制",
-                previewURL: previewURL,
-                traits: "慢热淡定",
-                tone: "柔和"
-            ),
+            originalAvatar,
         ],
         currentAvatarID: "capybara",
         initialTarget: .avatarCreate,
@@ -1150,6 +1160,7 @@ func testStudioAvatarWorkspaceSavesAndAppliesGeneratedAvatar() throws {
         },
         onChooseAvatar: { avatarID in
             chosenAvatarIDs.append(avatarID)
+            controller.updateAvatars([originalAvatar, savedAvatar], currentAvatarID: avatarID)
         },
         onOpenAvatarPicker: {},
         onClose: {
@@ -1217,6 +1228,14 @@ func testStudioAvatarWorkspaceSavesAndAppliesGeneratedAvatar() throws {
     try expect(controller.window?.isVisible == true, "studio should stay open after a successful avatar save/apply")
     _ = try requireLabel(in: contentView, stringValue: "当前分区：形象生成")
     _ = try requireButton(in: contentView, title: "打开更换形象")
+    try expect(
+        findLabel(in: contentView, stringValue: "当前模式：新建形象") == nil,
+        "successful studio avatar save/apply should not reintroduce legacy mode chrome"
+    )
+    try expect(
+        findButton(in: contentView, title: "返回现有形象") == nil,
+        "successful studio avatar save/apply should stay in the shared workspace without return-to-library chrome"
+    )
     _ = try requireLabel(in: contentView, stringValue: "淡定水豚")
     _ = try requireLabel(in: contentView, stringValue: "风格：定制")
     _ = try requireLabel(in: contentView, stringValue: "特质：慢热淡定\n语气：柔和")
