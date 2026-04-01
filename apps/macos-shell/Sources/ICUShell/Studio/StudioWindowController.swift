@@ -58,7 +58,6 @@ final class StudioWindowController: NSWindowController, NSWindowDelegate, NSText
         self.avatarContentView = AvatarStudioContentView(
             avatars: avatars,
             currentAvatarID: currentAvatarID,
-            initialMode: initialTarget == .avatarCreate ? .create : .browse,
             avatarPromptOptimizer: avatarPromptOptimizer,
             avatarPreviewGenerator: avatarPreviewGenerator,
             avatarSaveHandler: avatarSaveHandler,
@@ -192,14 +191,6 @@ final class StudioWindowController: NSWindowController, NSWindowDelegate, NSText
 
     private func setSelectedTarget(_ target: StudioLaunchTarget) {
         let normalizedTarget = StudioWindowController.normalized(target)
-        switch target {
-        case .avatarCreate:
-            avatarContentView.present(mode: .create)
-        case .avatarBrowse:
-            avatarContentView.present(mode: .browse)
-        case .theme, .speech:
-            break
-        }
         selectedTarget = normalizedTarget
         for (sectionTarget, view) in sectionViews {
             view.isHidden = sectionTarget != normalizedTarget

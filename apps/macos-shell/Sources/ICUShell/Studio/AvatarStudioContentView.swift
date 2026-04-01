@@ -1,10 +1,5 @@
 import AppKit
 
-enum AvatarStudioMode: Equatable {
-    case browse
-    case create
-}
-
 final class AvatarStudioContentView: NSView {
     private let avatarPromptOptimizer: ((String) throws -> String)?
     private let avatarPreviewGenerator: ((String) throws -> InlineAvatarPreviewDraft)?
@@ -58,7 +53,6 @@ final class AvatarStudioContentView: NSView {
     init(
         avatars: [AvatarSummary],
         currentAvatarID: String?,
-        initialMode: AvatarStudioMode = .browse,
         avatarPromptOptimizer: ((String) throws -> String)? = nil,
         avatarPreviewGenerator: ((String) throws -> InlineAvatarPreviewDraft)? = nil,
         avatarSaveHandler: ((InlineAvatarSaveRequest) throws -> String)? = nil,
@@ -74,8 +68,6 @@ final class AvatarStudioContentView: NSView {
         self.onOpenAvatarPicker = onOpenAvatarPicker
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
-
-        _ = initialMode
 
         configureTextView(avatarCreateRawPromptView, identifier: "avatarCreateRawPrompt")
         configureTextView(avatarCreateOptimizedPromptView, identifier: "avatarCreateOptimizedPrompt")
@@ -118,10 +110,6 @@ final class AvatarStudioContentView: NSView {
         self.avatars = avatars
         self.currentAvatarID = currentAvatarID
         refreshReferenceAvatarCard()
-    }
-
-    func present(mode: AvatarStudioMode) {
-        _ = mode
     }
 
     private func buildUI() {
