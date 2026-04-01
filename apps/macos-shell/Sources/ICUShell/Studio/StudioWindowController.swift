@@ -136,6 +136,9 @@ final class StudioWindowController: NSWindowController, NSWindowDelegate, NSText
     func updateAvatars(_ avatars: [AvatarSummary], currentAvatarID: String?) {
         self.avatars = avatars
         self.currentAvatarID = currentAvatarID
+        let currentAvatar = avatars.first(where: { $0.id == currentAvatarID }) ?? avatars.first
+        themeContentView.updateCurrentAvatar(currentAvatar)
+        speechContentView.updateCurrentAvatar(currentAvatar)
         avatarContentView.updateAvatars(avatars, currentAvatarID: currentAvatarID)
     }
 

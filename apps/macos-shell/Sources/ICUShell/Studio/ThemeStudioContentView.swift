@@ -1,7 +1,7 @@
 import AppKit
 
 final class ThemeStudioContentView: NSView {
-    private let currentAvatar: AvatarSummary?
+    private var currentAvatar: AvatarSummary?
     private let themePromptOptimizer: ((String) throws -> String)?
     private let themeDraftGenerator: ((String) throws -> ThemePack)?
     private let themeDraftApplier: ((ThemePack) throws -> Void)?
@@ -16,6 +16,7 @@ final class ThemeStudioContentView: NSView {
     private let appliedSummaryValueLabel = AvatarPanelTheme.makeLabel("")
     private let draftSummaryValueLabel = AvatarPanelTheme.makeLabel("")
     private let bubblePreviewValueLabel = AvatarPanelTheme.makeLabel("")
+    private weak var currentAvatarImageView: NSImageView?
     private weak var optimizeButton: NSButton?
     private weak var previewButton: NSButton?
     private weak var applyButton: NSButton?
@@ -79,6 +80,11 @@ final class ThemeStudioContentView: NSView {
         }
 
         refreshUI()
+    }
+
+    func updateCurrentAvatar(_ avatar: AvatarSummary?) {
+        currentAvatar = avatar
+        currentAvatarImageView?.image = avatar.flatMap { NSImage(contentsOf: $0.previewURL) }
     }
 
     private func buildUI() {
@@ -228,6 +234,7 @@ final class ThemeStudioContentView: NSView {
         imageView.imageScaling = .scaleProportionallyUpOrDown
         imageView.image = currentAvatar.flatMap { NSImage(contentsOf: $0.previewURL) }
         imageView.heightAnchor.constraint(equalToConstant: 132).isActive = true
+        currentAvatarImageView = imageView
 
         stack.addArrangedSubview(
             AvatarPanelTheme.makeLabel(

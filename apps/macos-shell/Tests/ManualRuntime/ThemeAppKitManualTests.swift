@@ -1292,6 +1292,133 @@ func testStudioAvatarWorkspaceSavesAndAppliesGeneratedAvatar() throws {
     )
 }
 
+func testSavingNewAvatarRefreshesStudioContextAcrossThemeAndSpeechTabs() throws {
+    let previewsDirectory = try makeTemporaryDirectory()
+    let originalPreviewURL = previewsDirectory.appendingPathComponent("original.png", isDirectory: false)
+    let savedPreviewURL = previewsDirectory.appendingPathComponent("saved.png", isDirectory: false)
+    try makeColorPNG(at: originalPreviewURL, color: NSColor(deviceRed: 1, green: 0, blue: 0, alpha: 1))
+    try makeColorPNG(at: savedPreviewURL, color: NSColor(deviceRed: 0, green: 0, blue: 1, alpha: 1))
+    let idleURL = try makeTinyPNG()
+    let workingURL = try makeTinyPNG()
+    let alertURL = try makeTinyPNG()
+
+    let originalAvatar = AvatarSummary(
+        id: "capybara",
+        name: "水豚",
+        style: "像素",
+        previewURL: originalPreviewURL,
+        traits: "稳重",
+        tone: "冷静"
+    )
+    let savedAvatar = AvatarSummary(
+        id: "custom_capybara",
+        name: "淡定水豚",
+        style: "定制",
+        previewURL: savedPreviewURL,
+        traits: "慢热淡定",
+        tone: "柔和"
+    )
+    var controller: StudioWindowController!
+
+    controller = StudioWindowController(
+        avatars: [originalAvatar],
+        currentAvatarID: "capybara",
+        initialTarget: .avatarCreate,
+        avatarPromptOptimizer: { prompt in
+            "optimized::\(prompt)"
+        },
+        avatarPreviewGenerator: { _ in
+            InlineAvatarPreviewDraft(
+                actionImageURLs: [
+                    "idle": idleURL,
+                    "working": workingURL,
+                    "alert": alertURL,
+                ],
+                suggestedPersona: "稳重、冷静、慢半拍"
+            )
+        },
+        avatarSaveHandler: { _ in
+            "custom_capybara"
+        },
+        onChooseAvatar: { avatarID in
+            controller.updateAvatars([originalAvatar, savedAvatar], currentAvatarID: avatarID)
+        },
+        onOpenAvatarPicker: {},
+        onClose: {}
+    )
+
+    controller.present()
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "studio content view should exist")
+    }
+
+    let currentVisibleImageView: () throws -> NSImageView = {
+        let imageViews = allSubviews(in: contentView)
+            .compactMap { $0 as? NSImageView }
+            .filter { isVisibleForManualTest($0) }
+
+        guard imageViews.count == 1, let imageView = imageViews.first else {
+            throw TestFailure(message: "expected exactly one visible studio preview image")
+        }
+
+        return imageView
+    }
+
+    try requireButton(in: contentView, title: "主题风格").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    let initialThemeImageView = try currentVisibleImageView()
+    try expect(
+        matchesColor(sampleCenterColor(in: initialThemeImageView.image), red: 255, green: 0, blue: 0),
+        "theme tab should start from the currently applied avatar preview"
+    )
+
+    try requireButton(in: contentView, title: "话术").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    let initialSpeechImageView = try currentVisibleImageView()
+    try expect(
+        matchesColor(sampleCenterColor(in: initialSpeechImageView.image), red: 255, green: 0, blue: 0),
+        "speech tab should start from the currently applied avatar preview"
+    )
+
+    try requireButton(in: contentView, title: "形象生成").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    let rawPromptView = try requireTextView(in: contentView, identifier: "avatarCreateRawPrompt")
+    rawPromptView.string = "refresh other tabs"
+    controller.textDidChange(Notification(name: NSText.didChangeNotification, object: rawPromptView))
+
+    try requireActionButton(in: contentView, title: "优化 prompt").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    try requireActionButton(in: contentView, title: "生成预览").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    let nameField = try requireTextField(in: contentView, identifier: "avatarCreateNameField")
+    nameField.stringValue = "淡定水豚"
+    nameField.sendAction(nameField.action, to: nameField.target)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    try requireActionButton(in: contentView, title: "保存并应用").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    try requireButton(in: contentView, title: "主题风格").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    let refreshedThemeImageView = try currentVisibleImageView()
+    try expect(
+        matchesColor(sampleCenterColor(in: refreshedThemeImageView.image), red: 0, green: 0, blue: 255),
+        "theme tab should refresh to the newly applied avatar preview after studio save/apply"
+    )
+
+    try requireButton(in: contentView, title: "话术").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    let refreshedSpeechImageView = try currentVisibleImageView()
+    try expect(
+        matchesColor(sampleCenterColor(in: refreshedSpeechImageView.image), red: 0, green: 0, blue: 255),
+        "speech tab should refresh to the newly applied avatar preview after studio save/apply"
+    )
+}
+
 func testSavingNewAvatarRefreshesPickerListAndStudioReferenceCard() throws {
     let repoRoot = try makeTemporaryDirectory()
     try writeTestAvatar(

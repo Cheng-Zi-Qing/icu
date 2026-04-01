@@ -28,6 +28,7 @@ struct ThemeAppKitManualMain {
             try testStudioAvatarWorkspacePreviewGenerationReturnsWithoutBlockingUI()
             try testStudioAvatarWorkspaceRequiresThreePreviewsAndNameBeforeSave()
             try testStudioAvatarWorkspaceSavesAndAppliesGeneratedAvatar()
+            try testSavingNewAvatarRefreshesStudioContextAcrossThemeAndSpeechTabs()
             try testSavingNewAvatarRefreshesPickerListAndStudioReferenceCard()
             try testLegacyAvatarStudioMonolithSourcesAreDeleted()
             try testDesktopPetViewRefreshesStatusChipWhenThemeChanges()

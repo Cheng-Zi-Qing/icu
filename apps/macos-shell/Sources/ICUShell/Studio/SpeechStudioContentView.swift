@@ -1,7 +1,7 @@
 import AppKit
 
 final class SpeechStudioContentView: NSView {
-    private let currentAvatar: AvatarSummary?
+    private var currentAvatar: AvatarSummary?
     private let speechDraftGenerator: ((String) throws -> SpeechDraft)?
     private let speechDraftApplier: ((SpeechDraft) throws -> Void)?
 
@@ -14,6 +14,7 @@ final class SpeechStudioContentView: NSView {
     private let appliedSummaryValueLabel = AvatarPanelTheme.makeLabel("")
     private let draftSummaryValueLabel = AvatarPanelTheme.makeLabel("")
     private let bubblePreviewValueLabel = AvatarPanelTheme.makeLabel("")
+    private weak var currentAvatarImageView: NSImageView?
     private weak var generateButton: NSButton?
     private weak var regenerateButton: NSButton?
     private weak var applyButton: NSButton?
@@ -66,6 +67,11 @@ final class SpeechStudioContentView: NSView {
 
         speechPrompt = textView.string
         refreshUI()
+    }
+
+    func updateCurrentAvatar(_ avatar: AvatarSummary?) {
+        currentAvatar = avatar
+        currentAvatarImageView?.image = avatar.flatMap { NSImage(contentsOf: $0.previewURL) }
     }
 
     private func buildUI() {
@@ -199,6 +205,7 @@ final class SpeechStudioContentView: NSView {
         imageView.imageScaling = .scaleProportionallyUpOrDown
         imageView.image = currentAvatar.flatMap { NSImage(contentsOf: $0.previewURL) }
         imageView.heightAnchor.constraint(equalToConstant: 132).isActive = true
+        currentAvatarImageView = imageView
 
         stack.addArrangedSubview(
             AvatarPanelTheme.makeLabel(
