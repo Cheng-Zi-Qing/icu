@@ -45,6 +45,10 @@ final class AvatarStudioContentView: NSView {
     private var inlineAvatarPreviewRequestID: UUID?
     private var isInlineAvatarSaveInFlight = false
     private var previewRevision = 0
+    private var appliedAvatarSummaryText = TextCatalog.shared.text(
+        "avatar_studio.empty_summary",
+        fallback: "暂无已应用形象。"
+    )
     private var avatarDraftSummary = TextCatalog.shared.text(
         "avatar_studio.draft_placeholder",
         fallback: "尚未生成新的形象草稿。"
@@ -75,7 +79,7 @@ final class AvatarStudioContentView: NSView {
         configureTextField(avatarCreatePersonaField, identifier: "avatarCreatePersonaField")
 
         buildUI()
-        refreshReferenceAvatarCard()
+        refreshAppliedAvatarSummary()
         updateCreateModeUI()
     }
 
@@ -109,7 +113,7 @@ final class AvatarStudioContentView: NSView {
     func updateAvatars(_ avatars: [AvatarSummary], currentAvatarID: String?) {
         self.avatars = avatars
         self.currentAvatarID = currentAvatarID
-        refreshReferenceAvatarCard()
+        refreshAppliedAvatarSummary()
     }
 
     private func buildUI() {
@@ -445,6 +449,11 @@ final class AvatarStudioContentView: NSView {
         referencePreviewImageView.image = NSImage(contentsOf: avatar.previewURL)
     }
 
+    private func refreshAppliedAvatarSummary() {
+        appliedAvatarSummaryText = currentAvatarSummaryText()
+        refreshReferenceAvatarCard()
+    }
+
     private func inlineAvatarActionStatusLines() -> [String] {
         let availableActions = creationPreviewDraft?.actionImageURLs ?? [:]
         return InlineAvatarCreation.requiredActions.map { action in
@@ -564,7 +573,7 @@ final class AvatarStudioContentView: NSView {
             "avatar_studio.draft_format",
             fallback: "草稿 %d：%@ / %@",
             previewRevision,
-            normalizedPrompt(creationDraftName, fallback: currentAvatarSummaryText()),
+            normalizedPrompt(creationDraftName, fallback: appliedAvatarSummaryText),
             prompt
         )
         statusLabel.stringValue = regenerated
@@ -675,7 +684,7 @@ final class AvatarStudioContentView: NSView {
 
     private func completeSaveAndApply(with avatarID: String) {
         currentAvatarID = avatarID
-        refreshReferenceAvatarCard()
+        refreshAppliedAvatarSummary()
         statusLabel.stringValue = copy("avatar_studio.save_success_status", fallback: "新形象已保存并应用。")
         statusLabel.textColor = AvatarPanelTheme.accent
         resetInlineAvatarCreationDraft()

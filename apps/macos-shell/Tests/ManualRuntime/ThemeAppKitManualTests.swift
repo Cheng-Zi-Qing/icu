@@ -829,7 +829,7 @@ func testStudioAvatarLaunchTargetUsesSharedWorkspaceWithoutModeChrome() throws {
     try expect(openPickerCount == 1, "avatar create launch target should route picker handoff through shared callback")
 }
 
-func testStudioAvatarCreateModeOptimizesRawPromptAndUsesOptimizedPromptForPreview() throws {
+func testStudioAvatarWorkspaceOptimizesRawPromptAndUsesOptimizedPromptForPreview() throws {
     let previewURL = try makeTinyPNG()
     let idleURL = try makeTinyPNG()
     let workingURL = try makeTinyPNG()
@@ -887,7 +887,7 @@ func testStudioAvatarCreateModeOptimizesRawPromptAndUsesOptimizedPromptForPrevie
 
     try expect(
         optimizedPrompts == ["raw capybara prompt"],
-        "studio avatar optimizer should receive the raw prompt from create mode"
+        "studio avatar optimizer should receive the raw prompt from the shared workspace"
     )
     try expect(
         rawPromptView.string == "raw capybara prompt",
@@ -903,7 +903,7 @@ func testStudioAvatarCreateModeOptimizesRawPromptAndUsesOptimizedPromptForPrevie
     )
 }
 
-func testStudioAvatarCreateModePreviewGenerationReturnsWithoutBlockingUI() throws {
+func testStudioAvatarWorkspacePreviewGenerationReturnsWithoutBlockingUI() throws {
     let previewURL = try makeTinyPNG()
     let idleURL = try makeTinyPNG()
     let workingURL = try makeTinyPNG()
@@ -982,10 +982,6 @@ func testStudioAvatarCreateModePreviewGenerationReturnsWithoutBlockingUI() throw
 
     _ = try requireLabel(in: contentView, stringValue: "当前分区：形象生成")
     _ = try requireButton(in: contentView, title: "打开更换形象")
-    try expect(
-        findButton(in: contentView, title: "返回现有形象") == nil,
-        "studio avatar workspace should remain in shared-shell mode while preview generation is still running"
-    )
 
     RunLoop.current.run(until: Date().addingTimeInterval(0.25))
     try expect(
@@ -995,7 +991,7 @@ func testStudioAvatarCreateModePreviewGenerationReturnsWithoutBlockingUI() throw
     try expect(controller.window?.isVisible == true, "studio should remain open after background preview completes")
 }
 
-func testStudioAvatarCreateModeRequiresThreePreviewsAndNameBeforeSave() throws {
+func testStudioAvatarWorkspaceRequiresThreePreviewsAndNameBeforeSave() throws {
     let previewURL = try makeTinyPNG()
     let idleURL = try makeTinyPNG()
     let workingURL = try makeTinyPNG()
@@ -1053,7 +1049,7 @@ func testStudioAvatarCreateModeRequiresThreePreviewsAndNameBeforeSave() throws {
     let regenerateButton = try requireActionButton(in: contentView, title: "重新生成")
     let saveButton = try requireActionButton(in: contentView, title: "保存并应用")
 
-    try expect(optimizeButton.isEnabled == true, "studio avatar optimize button should stay enabled in create mode")
+    try expect(optimizeButton.isEnabled == true, "studio avatar optimize button should stay enabled in the workspace")
     try expect(previewButton.isEnabled == false, "studio avatar preview button should stay disabled until optimized prompt exists")
     try expect(regenerateButton.isEnabled == false, "studio avatar regenerate button should stay disabled before any preview")
     try expect(saveButton.isEnabled == false, "studio avatar save button should stay disabled before preview and name")
@@ -1101,7 +1097,7 @@ func testStudioAvatarCreateModeRequiresThreePreviewsAndNameBeforeSave() throws {
     )
 }
 
-func testStudioAvatarCreateModeSavesAndAppliesGeneratedAvatar() throws {
+func testStudioAvatarWorkspaceSavesAndAppliesGeneratedAvatar() throws {
     let previewURL = try makeTinyPNG()
     let idleURL = try makeTinyPNG()
     let workingURL = try makeTinyPNG()
@@ -1121,7 +1117,15 @@ func testStudioAvatarCreateModeSavesAndAppliesGeneratedAvatar() throws {
                 previewURL: previewURL,
                 traits: "稳重",
                 tone: "冷静"
-            )
+            ),
+            AvatarSummary(
+                id: "custom_capybara",
+                name: "淡定水豚",
+                style: "定制",
+                previewURL: previewURL,
+                traits: "慢热淡定",
+                tone: "柔和"
+            ),
         ],
         currentAvatarID: "capybara",
         initialTarget: .avatarCreate,
@@ -1213,9 +1217,31 @@ func testStudioAvatarCreateModeSavesAndAppliesGeneratedAvatar() throws {
     try expect(controller.window?.isVisible == true, "studio should stay open after a successful avatar save/apply")
     _ = try requireLabel(in: contentView, stringValue: "当前分区：形象生成")
     _ = try requireButton(in: contentView, title: "打开更换形象")
+    _ = try requireLabel(in: contentView, stringValue: "淡定水豚")
+    _ = try requireLabel(in: contentView, stringValue: "风格：定制")
+    _ = try requireLabel(in: contentView, stringValue: "特质：慢热淡定\n语气：柔和")
+    let rawPromptViewAfterSave = try requireTextView(in: contentView, identifier: "avatarCreateRawPrompt")
+    let optimizedPromptViewAfterSave = try requireTextView(in: contentView, identifier: "avatarCreateOptimizedPrompt")
+    let nameFieldAfterSave = try requireTextField(in: contentView, identifier: "avatarCreateNameField")
+    let personaFieldAfterSave = try requireTextField(in: contentView, identifier: "avatarCreatePersonaField")
+    try expect(rawPromptViewAfterSave.string.isEmpty, "successful save should clear the workspace raw prompt draft")
+    try expect(optimizedPromptViewAfterSave.string.isEmpty, "successful save should clear the workspace optimized prompt draft")
+    try expect(nameFieldAfterSave.stringValue.isEmpty, "successful save should clear the workspace avatar name draft")
+    try expect(personaFieldAfterSave.stringValue.isEmpty, "successful save should clear the workspace persona draft")
+    let optimizeButtonAfterSave = try requireActionButton(in: contentView, title: "优化 prompt")
+    let previewButtonAfterSave = try requireActionButton(in: contentView, title: "生成预览")
+    let saveButtonAfterSave = try requireActionButton(in: contentView, title: "保存并应用")
     try expect(
-        findButton(in: contentView, title: "返回现有形象") == nil,
-        "successful studio avatar save/apply should stay in the shared avatar workspace"
+        optimizeButtonAfterSave.isEnabled,
+        "workspace should remain ready for the next creation pass after save"
+    )
+    try expect(
+        previewButtonAfterSave.isEnabled == false,
+        "workspace should require a fresh optimized prompt before the next preview pass"
+    )
+    try expect(
+        saveButtonAfterSave.isEnabled == false,
+        "workspace should require new preview output before the next save"
     )
 }
 

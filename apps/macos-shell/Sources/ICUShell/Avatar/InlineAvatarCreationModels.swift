@@ -2,6 +2,10 @@ import Foundation
 
 enum InlineAvatarCreation {
     static let requiredActions = ["idle", "working", "alert"]
+
+    static func hasAllRequiredActions(in actionImageURLs: [String: URL]) -> Bool {
+        requiredActions.allSatisfy { actionImageURLs[$0] != nil }
+    }
 }
 
 enum InlineAvatarCreationStage: Equatable {
@@ -16,7 +20,7 @@ struct InlineAvatarPreviewDraft: Equatable {
     var suggestedPersona: String
 
     var hasRequiredActionImages: Bool {
-        InlineAvatarCreation.requiredActions.allSatisfy { actionImageURLs[$0] != nil }
+        InlineAvatarCreation.hasAllRequiredActions(in: actionImageURLs)
     }
 }
 
