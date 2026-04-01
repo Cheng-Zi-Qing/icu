@@ -1344,13 +1344,15 @@ else:
     coordinator.presentStudio(target: .avatarBrowse)
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
 
-    let newWindows = NSApp.windows.filter { !existingWindows.contains(ObjectIdentifier($0)) }
     defer {
-        newWindows.forEach { $0.close() }
+        NSApp.windows
+            .filter { !existingWindows.contains(ObjectIdentifier($0)) }
+            .forEach { $0.close() }
     }
 
-    let (pickerWindow, _) = try requireWindow(in: newWindows, controlledBy: AvatarPickerWindowController.self)
-    let (studioWindow, studioController) = try requireWindow(in: newWindows, controlledBy: StudioWindowController.self)
+    let initialNewWindows = NSApp.windows.filter { !existingWindows.contains(ObjectIdentifier($0)) }
+    let (pickerWindow, _) = try requireWindow(in: initialNewWindows, controlledBy: AvatarPickerWindowController.self)
+    let (studioWindow, studioController) = try requireWindow(in: initialNewWindows, controlledBy: StudioWindowController.self)
     guard
         let pickerContentView = pickerWindow.contentView,
         let studioContentView = studioWindow.contentView
