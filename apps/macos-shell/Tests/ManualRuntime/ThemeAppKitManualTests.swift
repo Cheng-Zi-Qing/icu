@@ -702,7 +702,7 @@ func testStudioWindowPreservesPerTabDraftsWhileSwitchingSidebarItems() throws {
     _ = try requireLabel(in: contentView, stringValue: speechDraft.previewSummaryText())
 }
 
-func testStudioAvatarBrowseModeShowsReadOnlyListAndPickerLink() throws {
+func testStudioAvatarTabShowsReferenceCardAndCreationWorkspace() throws {
     let capybaraPreviewURL = try makeTinyPNG()
     let sealPreviewURL = try makeTinyPNG()
     var openPickerCount = 0
@@ -743,25 +743,34 @@ func testStudioAvatarBrowseModeShowsReadOnlyListAndPickerLink() throws {
 
     _ = try requireLabel(in: contentView, stringValue: "当前分区：形象生成")
     _ = try requireLabel(in: contentView, stringValue: "当前已应用形象")
-    _ = try requireLabel(in: contentView, stringValue: "形象列表")
+    _ = try requireButton(in: contentView, title: "打开更换形象")
+    _ = try requireTextView(in: contentView, identifier: "avatarCreateRawPrompt")
+    _ = try requireTextView(in: contentView, identifier: "avatarCreateOptimizedPrompt")
+    _ = try requireButton(in: contentView, title: "优化 prompt")
+    _ = try requireButton(in: contentView, title: "生成预览")
+    _ = try requireButton(in: contentView, title: "重新生成")
+    _ = try requireButton(in: contentView, title: "保存并应用")
 
-    let tableView = try requireTableView(in: contentView)
-    try expect(tableView.numberOfRows == 2, "studio browse mode should expose a read-only avatar list")
     try expect(
         findLabel(in: contentView, stringValue: "当前模式：新建形象") == nil,
-        "studio browse mode should not start in create mode"
+        "studio avatar tab should no longer render create-mode status chrome"
     )
     try expect(
-        findButton(in: contentView, title: "保存并应用") == nil,
-        "studio browse mode should not expose save/apply controls"
+        findButton(in: contentView, title: "返回现有形象") == nil,
+        "studio avatar tab should no longer render return-to-library chrome"
+    )
+    try expect(
+        allSubviews(in: contentView).contains(where: { $0 is NSTableView }) == false,
+        "studio avatar tab should no longer duplicate the picker list UI"
     )
 
-    try requireButton(in: contentView, title: "切换形象请使用「更换形象」").performClick(nil)
-    try expect(openPickerCount == 1, "studio browse mode picker link should route through the injected picker callback")
+    try requireButton(in: contentView, title: "打开更换形象").performClick(nil)
+    try expect(openPickerCount == 1, "studio avatar tab should hand off picker navigation via the shared callback")
 }
 
-func testStudioAvatarCreateModeLaunchTargetStartsInCreateState() throws {
+func testStudioAvatarLaunchTargetUsesSharedWorkspaceWithoutModeChrome() throws {
     let previewURL = try makeTinyPNG()
+    var openPickerCount = 0
 
     let controller = StudioWindowController(
         avatars: [
@@ -777,7 +786,9 @@ func testStudioAvatarCreateModeLaunchTargetStartsInCreateState() throws {
         currentAvatarID: "capybara",
         initialTarget: .avatarCreate,
         onChooseAvatar: { _ in },
-        onOpenAvatarPicker: {},
+        onOpenAvatarPicker: {
+            openPickerCount += 1
+        },
         onClose: {}
     )
 
@@ -785,16 +796,31 @@ func testStudioAvatarCreateModeLaunchTargetStartsInCreateState() throws {
         throw TestFailure(message: "studio content view should exist")
     }
 
-    _ = try requireLabel(in: contentView, stringValue: "当前模式：新建形象")
-    _ = try requireButton(in: contentView, title: "返回现有形象")
-    _ = try requireButton(in: contentView, title: "保存并应用")
+    _ = try requireLabel(in: contentView, stringValue: "当前分区：形象生成")
+    _ = try requireLabel(in: contentView, stringValue: "当前已应用形象")
+    _ = try requireButton(in: contentView, title: "打开更换形象")
     _ = try requireTextView(in: contentView, identifier: "avatarCreateRawPrompt")
     _ = try requireTextView(in: contentView, identifier: "avatarCreateOptimizedPrompt")
+    _ = try requireButton(in: contentView, title: "优化 prompt")
+    _ = try requireButton(in: contentView, title: "生成预览")
+    _ = try requireButton(in: contentView, title: "重新生成")
+    _ = try requireButton(in: contentView, title: "保存并应用")
 
     try expect(
-        findButton(in: contentView, title: "切换形象请使用「更换形象」") == nil,
-        "avatar create launch target should skip browse-mode picker link chrome"
+        findLabel(in: contentView, stringValue: "当前模式：新建形象") == nil,
+        "avatar create launch target should no longer render create-mode title chrome"
     )
+    try expect(
+        findButton(in: contentView, title: "返回现有形象") == nil,
+        "avatar create launch target should no longer render return-to-library chrome"
+    )
+    try expect(
+        allSubviews(in: contentView).contains(where: { $0 is NSTableView }) == false,
+        "avatar create launch target should use shared workspace instead of embedded picker list"
+    )
+
+    try requireButton(in: contentView, title: "打开更换形象").performClick(nil)
+    try expect(openPickerCount == 1, "avatar create launch target should route picker handoff through shared callback")
 }
 
 func testStudioAvatarCreateModeOptimizesRawPromptAndUsesOptimizedPromptForPreview() throws {
@@ -948,13 +974,12 @@ func testStudioAvatarCreateModePreviewGenerationReturnsWithoutBlockingUI() throw
     try expect(regenerateButtonWhileGenerating.isEnabled == false, "studio avatar regenerate button should disable while generation is in flight")
     try expect(saveButtonWhileGenerating.isEnabled == false, "studio avatar save button should disable while generation is in flight")
 
-    try requireActionButton(in: contentView, title: "返回现有形象").performClick(nil)
-    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    _ = try requireLabel(in: contentView, stringValue: "当前分区：形象生成")
+    _ = try requireButton(in: contentView, title: "打开更换形象")
     try expect(
-        findLabel(in: contentView, stringValue: "当前模式：新建形象") == nil,
-        "studio avatar browse mode should remain responsive while preview generation is still running"
+        findButton(in: contentView, title: "返回现有形象") == nil,
+        "studio avatar workspace should remain in shared-shell mode while preview generation is still running"
     )
-    _ = try requireButton(in: contentView, title: "切换形象请使用「更换形象」")
 
     RunLoop.current.run(until: Date().addingTimeInterval(0.25))
     try expect(
@@ -1180,11 +1205,12 @@ func testStudioAvatarCreateModeSavesAndAppliesGeneratedAvatar() throws {
     )
     try expect(closeCount == 0, "successful studio avatar save/apply should finish without calling onClose")
     try expect(controller.window?.isVisible == true, "studio should stay open after a successful avatar save/apply")
+    _ = try requireLabel(in: contentView, stringValue: "当前分区：形象生成")
+    _ = try requireButton(in: contentView, title: "打开更换形象")
     try expect(
-        findLabel(in: contentView, stringValue: "当前模式：新建形象") == nil,
-        "successful studio avatar save/apply should return to browse mode"
+        findButton(in: contentView, title: "返回现有形象") == nil,
+        "successful studio avatar save/apply should stay in the shared avatar workspace"
     )
-    _ = try requireButton(in: contentView, title: "切换形象请使用「更换形象」")
 }
 
 func testSavingNewAvatarRefreshesPickerAndStudioAvatarLists() throws {
@@ -1281,34 +1307,25 @@ else:
     )
 
     let pickerTableView = try requireTableView(in: pickerContentView)
-    let studioTableView = try requireTableView(in: studioContentView)
     try expect(
         waitForCondition(timeout: 0.2) { pickerTableView.numberOfRows == 3 },
         "picker should refresh to include the newly saved avatar without reopening"
-    )
-    try expect(
-        waitForCondition(timeout: 0.2) { studioTableView.numberOfRows == 3 },
-        "studio browse list should refresh to include the newly saved avatar without reopening"
     )
 
     pickerContentView.layoutSubtreeIfNeeded()
     studioContentView.layoutSubtreeIfNeeded()
 
     let pickerRows = try tableRowStrings(in: pickerTableView)
-    let studioRows = try tableRowStrings(in: studioTableView)
     try expect(
         pickerRows.contains("Calm Capybara ●"),
         "picker should mark the newly saved avatar as current after coordinator refresh"
     )
+    _ = try requireLabel(in: studioContentView, stringValue: "Calm Capybara")
+    _ = try requireButton(in: studioContentView, title: "打开更换形象")
     try expect(
-        studioRows.contains(where: { $0.contains("Calm Capybara") }),
-        "studio browse list should include the newly saved avatar after coordinator refresh"
+        allSubviews(in: studioContentView).contains(where: { $0 is NSTableView }) == false,
+        "studio should render the single-workspace avatar shell without embedding a picker list table"
     )
-    try expect(
-        findLabel(in: studioContentView, stringValue: "当前模式：新建形象") == nil,
-        "studio should return to browse mode after save/apply refreshes shared avatar data"
-    )
-    _ = try requireButton(in: studioContentView, title: "切换形象请使用「更换形象」")
 }
 
 func testAvatarPanelThemeReflectsSharedThemeColors() throws {

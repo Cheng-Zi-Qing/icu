@@ -97,6 +97,7 @@
     "draft_placeholder": "尚未生成新的形象草稿。",
     "prompt_hint": "描述你想生成的形象、动作和动画关键词。",
     "add_custom_button": "新增自定义形象",
+    "open_picker_button": "打开更换形象",
     "create_mode_title": "当前模式：新建形象",
     "return_to_library_button": "返回现有形象",
     "save_and_apply_button": "保存并应用",

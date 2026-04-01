@@ -1,6 +1,11 @@
 import AppKit
 
-final class AvatarStudioContentView: NSView, NSTableViewDataSource, NSTableViewDelegate {
+enum AvatarStudioMode: Equatable {
+    case browse
+    case create
+}
+
+final class AvatarStudioContentView: NSView {
     private let avatarPromptOptimizer: ((String) throws -> String)?
     private let avatarPreviewGenerator: ((String) throws -> InlineAvatarPreviewDraft)?
     private let avatarSaveHandler: ((InlineAvatarSaveRequest) throws -> String)?
@@ -9,29 +14,17 @@ final class AvatarStudioContentView: NSView, NSTableViewDataSource, NSTableViewD
 
     private var avatars: [AvatarSummary]
     private var currentAvatarID: String?
-    private var selectedAvatarID: String?
-    private var mode: AvatarStudioMode = .browse
 
     private let sectionLabel = AvatarPanelTheme.makeTitleLabel("当前分区：形象生成")
     private let statusLabel = AvatarPanelTheme.makeLabel(
         TextCatalog.shared.text("avatar_studio.status_ready", fallback: "先生成预览，确认满意后再应用。"),
         color: AvatarPanelTheme.muted
     )
-    private let modeControl = NSSegmentedControl(labels: ["浏览现有形象", "创建新形象"], trackingMode: .selectOne, target: nil, action: nil)
 
-    private let appliedSummaryValueLabel = AvatarPanelTheme.makeLabel("")
-    private let browseContainer = NSView()
-    private let createContainer = NSView()
-    private let createModeLabel = AvatarPanelTheme.makeLabel(
-        TextCatalog.shared.text("avatar_studio.create_mode_title", fallback: "当前模式：新建形象"),
-        color: AvatarPanelTheme.accent
-    )
-
-    private var tableView = NSTableView()
-    private var previewImageView = NSImageView()
-    private var nameLabel = AvatarPanelTheme.makeTitleLabel("")
-    private var styleLabel = AvatarPanelTheme.makeLabel("", color: AvatarPanelTheme.muted)
-    private var traitsLabel = AvatarPanelTheme.makeLabel("")
+    private var referencePreviewImageView = NSImageView()
+    private var referenceNameLabel = AvatarPanelTheme.makeTitleLabel("")
+    private var referenceStyleLabel = AvatarPanelTheme.makeLabel("", color: AvatarPanelTheme.muted)
+    private var referenceTraitsLabel = AvatarPanelTheme.makeLabel("")
     private weak var openPickerButton: NSButton?
 
     private let avatarCreateRawPromptView = NSTextView()
@@ -44,7 +37,6 @@ final class AvatarStudioContentView: NSView, NSTableViewDataSource, NSTableViewD
     private weak var avatarCreateOptimizeButton: NSButton?
     private weak var avatarCreatePreviewButton: NSButton?
     private weak var avatarCreateRegenerateButton: NSButton?
-    private weak var avatarCreateReturnButton: NSButton?
     private weak var avatarCreateSaveButton: NSButton?
 
     private var creationRawPrompt = ""
@@ -58,7 +50,6 @@ final class AvatarStudioContentView: NSView, NSTableViewDataSource, NSTableViewD
     private var inlineAvatarPreviewRequestID: UUID?
     private var isInlineAvatarSaveInFlight = false
     private var previewRevision = 0
-    private var appliedAvatarSummary = ""
     private var avatarDraftSummary = TextCatalog.shared.text(
         "avatar_studio.draft_placeholder",
         fallback: "尚未生成新的形象草稿。"
@@ -76,8 +67,6 @@ final class AvatarStudioContentView: NSView, NSTableViewDataSource, NSTableViewD
     ) {
         self.avatars = avatars
         self.currentAvatarID = currentAvatarID
-        self.selectedAvatarID = currentAvatarID ?? avatars.first?.id
-        self.mode = initialMode
         self.avatarPromptOptimizer = avatarPromptOptimizer
         self.avatarPreviewGenerator = avatarPreviewGenerator
         self.avatarSaveHandler = avatarSaveHandler
@@ -86,16 +75,16 @@ final class AvatarStudioContentView: NSView, NSTableViewDataSource, NSTableViewD
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
 
+        _ = initialMode
+
         configureTextView(avatarCreateRawPromptView, identifier: "avatarCreateRawPrompt")
         configureTextView(avatarCreateOptimizedPromptView, identifier: "avatarCreateOptimizedPrompt")
         configureTextField(avatarCreateNameField, identifier: "avatarCreateNameField")
         configureTextField(avatarCreatePersonaField, identifier: "avatarCreatePersonaField")
 
         buildUI()
-        refreshAppliedAvatarSummary()
-        refreshBrowsePreview()
+        refreshReferenceAvatarCard()
         updateCreateModeUI()
-        updateModePresentation()
     }
 
     @available(*, unavailable)
@@ -128,92 +117,23 @@ final class AvatarStudioContentView: NSView, NSTableViewDataSource, NSTableViewD
     func updateAvatars(_ avatars: [AvatarSummary], currentAvatarID: String?) {
         self.avatars = avatars
         self.currentAvatarID = currentAvatarID
-        self.selectedAvatarID = currentAvatarID ?? avatars.first?.id
-        refreshAppliedAvatarSummary()
-        tableView.reloadData()
-        restoreSelection()
-        refreshBrowsePreview()
-        if mode == .create {
-            updateCreateModeUI()
-        }
+        refreshReferenceAvatarCard()
     }
 
     func present(mode: AvatarStudioMode) {
-        switch mode {
-        case .browse:
-            enterBrowseMode(resetDraft: false)
-        case .create:
-            enterCreateMode(resetDraft: false)
-        }
-    }
-
-    func numberOfRows(in tableView: NSTableView) -> Int {
-        avatars.count
-    }
-
-    func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-        let identifier = NSUserInterfaceItemIdentifier("studio.avatar.cell")
-        let cell = (tableView.makeView(withIdentifier: identifier, owner: self) as? NSTableCellView) ?? NSTableCellView()
-        cell.identifier = identifier
-
-        let label: NSTextField
-        if let existing = cell.textField {
-            label = existing
-        } else {
-            label = AvatarPanelTheme.makeLabel("")
-            label.translatesAutoresizingMaskIntoConstraints = false
-            cell.addSubview(label)
-            cell.textField = label
-            NSLayoutConstraint.activate([
-                label.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 12),
-                label.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -12),
-                label.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-            ])
-        }
-
-        let avatar = avatars[row]
-        let styleSuffix = avatar.style.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "" : " (\(avatar.style))"
-        let currentBadge = avatar.id == currentAvatarID ? " ●" : ""
-        label.stringValue = "\(avatar.name)\(styleSuffix)\(currentBadge)"
-        label.textColor = AvatarPanelTheme.text
-        label.font = AvatarPanelTheme.bodyFont
-        return cell
-    }
-
-    func tableViewSelectionDidChange(_ notification: Notification) {
-        if avatars.indices.contains(tableView.selectedRow) {
-            selectedAvatarID = avatars[tableView.selectedRow].id
-        }
-        refreshBrowsePreview()
+        _ = mode
     }
 
     private func buildUI() {
-        modeControl.target = self
-        modeControl.action = #selector(handleModeChanged)
-        modeControl.segmentStyle = .rounded
-
         let root = NSStackView()
         root.orientation = .vertical
         root.spacing = 14
         root.translatesAutoresizingMaskIntoConstraints = false
         addSubview(root)
 
-        let header = NSStackView(views: [sectionLabel, modeControl])
-        header.orientation = .vertical
-        header.spacing = 8
-
-        root.addArrangedSubview(header)
-        root.addArrangedSubview(
-            makeInfoCard(
-                title: copy("avatar_studio.applied_summary_title", fallback: "当前已应用形象"),
-                valueLabel: appliedSummaryValueLabel
-            )
-        )
-
-        buildBrowseContainer()
-        buildCreateContainer()
-        root.addArrangedSubview(browseContainer)
-        root.addArrangedSubview(createContainer)
+        root.addArrangedSubview(sectionLabel)
+        root.addArrangedSubview(buildReferenceCard())
+        buildCreateContainer(in: root)
         root.addArrangedSubview(statusLabel)
 
         NSLayoutConstraint.activate([
@@ -224,56 +144,69 @@ final class AvatarStudioContentView: NSView, NSTableViewDataSource, NSTableViewD
         ])
     }
 
-    private func buildBrowseContainer() {
-        browseContainer.translatesAutoresizingMaskIntoConstraints = false
+    private func buildReferenceCard() -> NSView {
+        let card = AvatarPanelTheme.makeCard()
+        let root = NSStackView()
+        root.orientation = .vertical
+        root.spacing = 10
+        root.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(root)
 
-        let stack = NSStackView()
-        stack.orientation = .vertical
-        stack.spacing = 12
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        browseContainer.addSubview(stack)
+        root.addArrangedSubview(
+            AvatarPanelTheme.makeLabel(
+                copy("avatar_studio.applied_summary_title", fallback: "当前已应用形象"),
+                color: AvatarPanelTheme.accent
+            )
+        )
 
-        let listCard = AvatarPanelTheme.makeCard()
-        let detailCard = AvatarPanelTheme.makeCard()
-        buildAvatarListCard(in: listCard)
-        buildAvatarDetailCard(in: detailCard)
-
-        let row = NSStackView(views: [listCard, detailCard])
+        let row = NSStackView()
         row.orientation = .horizontal
-        row.spacing = 16
-        row.distribution = .fillEqually
-        row.heightAnchor.constraint(greaterThanOrEqualToConstant: 280).isActive = true
+        row.spacing = 12
+        row.alignment = .top
 
-        let pickerLinkButton = NSButton(
-            title: "切换形象请使用「更换形象」",
+        let imageFrame = NSView()
+        imageFrame.translatesAutoresizingMaskIntoConstraints = false
+        AvatarPanelTheme.styleImageFrame(imageFrame)
+        imageFrame.widthAnchor.constraint(equalToConstant: 120).isActive = true
+        imageFrame.heightAnchor.constraint(equalToConstant: 120).isActive = true
+        referencePreviewImageView.translatesAutoresizingMaskIntoConstraints = false
+        referencePreviewImageView.imageScaling = .scaleProportionallyUpOrDown
+        imageFrame.addSubview(referencePreviewImageView)
+        NSLayoutConstraint.activate([
+            referencePreviewImageView.centerXAnchor.constraint(equalTo: imageFrame.centerXAnchor),
+            referencePreviewImageView.centerYAnchor.constraint(equalTo: imageFrame.centerYAnchor),
+            referencePreviewImageView.widthAnchor.constraint(lessThanOrEqualToConstant: 108),
+            referencePreviewImageView.heightAnchor.constraint(lessThanOrEqualToConstant: 108),
+        ])
+        row.addArrangedSubview(imageFrame)
+
+        let infoStack = NSStackView(views: [referenceNameLabel, referenceStyleLabel, referenceTraitsLabel])
+        infoStack.orientation = .vertical
+        infoStack.spacing = 8
+        row.addArrangedSubview(infoStack)
+
+        root.addArrangedSubview(row)
+
+        let openPickerButton = NSButton(
+            title: copy("avatar_studio.open_picker_button", fallback: "打开更换形象"),
             target: self,
             action: #selector(handleOpenPicker)
         )
-        pickerLinkButton.isBordered = false
-        pickerLinkButton.contentTintColor = AvatarPanelTheme.accent
-        pickerLinkButton.alignment = .left
-        openPickerButton = pickerLinkButton
-
-        stack.addArrangedSubview(row)
-        stack.addArrangedSubview(pickerLinkButton)
+        AvatarPanelTheme.styleSecondaryButton(openPickerButton)
+        openPickerButton.widthAnchor.constraint(equalToConstant: 132).isActive = true
+        self.openPickerButton = openPickerButton
+        root.addArrangedSubview(openPickerButton)
 
         NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: browseContainer.topAnchor),
-            stack.leadingAnchor.constraint(equalTo: browseContainer.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: browseContainer.trailingAnchor),
-            stack.bottomAnchor.constraint(equalTo: browseContainer.bottomAnchor),
+            root.topAnchor.constraint(equalTo: card.topAnchor, constant: 16),
+            root.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 16),
+            root.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
+            root.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -16),
         ])
+        return card
     }
 
-    private func buildCreateContainer() {
-        createContainer.translatesAutoresizingMaskIntoConstraints = false
-
-        let stack = NSStackView()
-        stack.orientation = .vertical
-        stack.spacing = 12
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        createContainer.addSubview(stack)
-
+    private func buildCreateContainer(in root: NSStackView) {
         createActionStatusLabel = AvatarPanelTheme.makeLabel(
             avatarDraftSummary,
             color: AvatarPanelTheme.text
@@ -282,8 +215,7 @@ final class AvatarStudioContentView: NSView, NSTableViewDataSource, NSTableViewD
         avatarCreateNameField.placeholderString = copy("avatar_studio.create_name_placeholder", fallback: "例如：淡定水豚")
         avatarCreatePersonaField.placeholderString = copy("avatar_studio.create_persona_placeholder", fallback: "预览后会自动填入建议人设，可继续编辑。")
 
-        stack.addArrangedSubview(createModeLabel)
-        stack.addArrangedSubview(
+        root.addArrangedSubview(
             makePromptSection(
                 title: copy("avatar_studio.create_prompt_title", fallback: "原始 prompt"),
                 hint: copy("avatar_studio.create_prompt_hint", fallback: "描述你想生成的形象、动作和动画关键词。"),
@@ -291,7 +223,7 @@ final class AvatarStudioContentView: NSView, NSTableViewDataSource, NSTableViewD
                 minHeight: 96
             )
         )
-        stack.addArrangedSubview(
+        root.addArrangedSubview(
             makePromptSection(
                 title: copy("avatar_studio.create_optimized_prompt_title", fallback: "优化后 prompt"),
                 hint: copy("avatar_studio.create_optimized_prompt_hint", fallback: "优化后的 prompt 会用于生成 idle / working / alert 三组预览。"),
@@ -299,17 +231,10 @@ final class AvatarStudioContentView: NSView, NSTableViewDataSource, NSTableViewD
                 minHeight: 96
             )
         )
-        stack.addArrangedSubview(makeActionPreviewCard())
-        stack.addArrangedSubview(makeFieldCard())
-        stack.addArrangedSubview(createActionStatusLabel)
-        stack.addArrangedSubview(makeCreateActionBar())
-
-        NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: createContainer.topAnchor),
-            stack.leadingAnchor.constraint(equalTo: createContainer.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: createContainer.trailingAnchor),
-            stack.bottomAnchor.constraint(equalTo: createContainer.bottomAnchor),
-        ])
+        root.addArrangedSubview(makeActionPreviewCard())
+        root.addArrangedSubview(makeFieldCard())
+        root.addArrangedSubview(createActionStatusLabel)
+        root.addArrangedSubview(makeCreateActionBar())
     }
 
     private func configureTextView(_ textView: NSTextView, identifier: String) {
@@ -324,29 +249,6 @@ final class AvatarStudioContentView: NSView, NSTableViewDataSource, NSTableViewD
         textField.identifier = NSUserInterfaceItemIdentifier(identifier)
         textField.target = self
         textField.action = #selector(handleFieldAction(_:))
-    }
-
-    private func makeInfoCard(title: String, valueLabel: NSTextField) -> NSView {
-        let card = AvatarPanelTheme.makeCard()
-        let stack = NSStackView()
-        stack.orientation = .vertical
-        stack.spacing = 8
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        card.addSubview(stack)
-
-        valueLabel.lineBreakMode = .byWordWrapping
-        valueLabel.maximumNumberOfLines = 0
-
-        stack.addArrangedSubview(AvatarPanelTheme.makeLabel(title, color: AvatarPanelTheme.accent))
-        stack.addArrangedSubview(valueLabel)
-
-        NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: card.topAnchor, constant: 16),
-            stack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 16),
-            stack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
-            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -16),
-        ])
-        return card
     }
 
     private func makePromptSection(
@@ -387,86 +289,6 @@ final class AvatarStudioContentView: NSView, NSTableViewDataSource, NSTableViewD
         textView.isHorizontallyResizable = false
         scrollView.heightAnchor.constraint(greaterThanOrEqualToConstant: minHeight).isActive = true
         return scrollView
-    }
-
-    private func buildAvatarListCard(in card: NSView) {
-        let title = AvatarPanelTheme.makeLabel(copy("avatar_studio.list_title", fallback: "形象列表"), color: AvatarPanelTheme.accent)
-        title.translatesAutoresizingMaskIntoConstraints = false
-        card.addSubview(title)
-
-        let scrollView = NSScrollView()
-        scrollView.translatesAutoresizingMaskIntoConstraints = false
-        AvatarPanelTheme.styleScrollView(scrollView)
-        card.addSubview(scrollView)
-
-        tableView = NSTableView()
-        let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("studio.avatar.name"))
-        column.width = 280
-        tableView.addTableColumn(column)
-        tableView.headerView = nil
-        tableView.delegate = self
-        tableView.dataSource = self
-        tableView.rowHeight = 32
-        tableView.selectionHighlightStyle = .regular
-        tableView.backgroundColor = AvatarPanelTheme.input
-        scrollView.documentView = tableView
-        scrollView.hasVerticalScroller = true
-
-        NSLayoutConstraint.activate([
-            title.topAnchor.constraint(equalTo: card.topAnchor, constant: 16),
-            title.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 16),
-            title.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
-            scrollView.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 12),
-            scrollView.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 16),
-            scrollView.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
-            scrollView.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -16),
-        ])
-
-        restoreSelection()
-    }
-
-    private func buildAvatarDetailCard(in card: NSView) {
-        previewImageView = NSImageView()
-        previewImageView.imageScaling = .scaleProportionallyUpOrDown
-        nameLabel = AvatarPanelTheme.makeTitleLabel("")
-        styleLabel = AvatarPanelTheme.makeLabel("", color: AvatarPanelTheme.muted)
-        traitsLabel = AvatarPanelTheme.makeLabel("")
-
-        let title = AvatarPanelTheme.makeLabel(copy("avatar_studio.detail_title", fallback: "预览与说明"), color: AvatarPanelTheme.accent)
-        title.translatesAutoresizingMaskIntoConstraints = false
-        card.addSubview(title)
-
-        let imageFrame = NSView()
-        imageFrame.translatesAutoresizingMaskIntoConstraints = false
-        AvatarPanelTheme.styleImageFrame(imageFrame)
-        card.addSubview(imageFrame)
-
-        previewImageView.translatesAutoresizingMaskIntoConstraints = false
-        imageFrame.addSubview(previewImageView)
-
-        let infoStack = NSStackView(views: [nameLabel, styleLabel, traitsLabel])
-        infoStack.orientation = .vertical
-        infoStack.spacing = 8
-        infoStack.translatesAutoresizingMaskIntoConstraints = false
-        card.addSubview(infoStack)
-
-        NSLayoutConstraint.activate([
-            title.topAnchor.constraint(equalTo: card.topAnchor, constant: 16),
-            title.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 16),
-            title.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
-            imageFrame.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 12),
-            imageFrame.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 16),
-            imageFrame.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
-            imageFrame.heightAnchor.constraint(equalToConstant: 190),
-            previewImageView.centerXAnchor.constraint(equalTo: imageFrame.centerXAnchor),
-            previewImageView.centerYAnchor.constraint(equalTo: imageFrame.centerYAnchor),
-            previewImageView.widthAnchor.constraint(lessThanOrEqualToConstant: 180),
-            previewImageView.heightAnchor.constraint(lessThanOrEqualToConstant: 180),
-            infoStack.topAnchor.constraint(equalTo: imageFrame.bottomAnchor, constant: 16),
-            infoStack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 16),
-            infoStack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
-            infoStack.bottomAnchor.constraint(lessThanOrEqualTo: card.bottomAnchor, constant: -16),
-        ])
     }
 
     private func makeActionPreviewCard() -> NSView {
@@ -573,11 +395,6 @@ final class AvatarStudioContentView: NSView, NSTableViewDataSource, NSTableViewD
             target: self,
             action: #selector(handleRegeneratePreview)
         )
-        let returnButton = NSButton(
-            title: copy("avatar_studio.return_to_library_button", fallback: "返回现有形象"),
-            target: self,
-            action: #selector(handleReturnToAvatarLibrary)
-        )
         let saveAndApplyButton = NSButton(
             title: copy("avatar_studio.save_and_apply_button", fallback: "保存并应用"),
             target: self,
@@ -587,41 +404,22 @@ final class AvatarStudioContentView: NSView, NSTableViewDataSource, NSTableViewD
         AvatarPanelTheme.styleSecondaryButton(optimizeButton)
         AvatarPanelTheme.styleSecondaryButton(previewButton)
         AvatarPanelTheme.styleSecondaryButton(regenerateButton)
-        AvatarPanelTheme.styleSecondaryButton(returnButton)
         AvatarPanelTheme.stylePrimaryButton(saveAndApplyButton)
 
         optimizeButton.widthAnchor.constraint(equalToConstant: 110).isActive = true
         previewButton.widthAnchor.constraint(equalToConstant: 110).isActive = true
         regenerateButton.widthAnchor.constraint(equalToConstant: 110).isActive = true
-        returnButton.widthAnchor.constraint(equalToConstant: 132).isActive = true
         saveAndApplyButton.widthAnchor.constraint(equalToConstant: 110).isActive = true
 
         avatarCreateOptimizeButton = optimizeButton
         avatarCreatePreviewButton = previewButton
         avatarCreateRegenerateButton = regenerateButton
-        avatarCreateReturnButton = returnButton
         avatarCreateSaveButton = saveAndApplyButton
 
-        let stack = NSStackView(views: [NSView(), optimizeButton, previewButton, regenerateButton, returnButton, saveAndApplyButton])
+        let stack = NSStackView(views: [NSView(), optimizeButton, previewButton, regenerateButton, saveAndApplyButton])
         stack.orientation = .horizontal
         stack.spacing = 12
         return stack
-    }
-
-    private func restoreSelection() {
-        if let selectedAvatarID, let row = avatars.firstIndex(where: { $0.id == selectedAvatarID }) {
-            tableView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
-        } else if !avatars.isEmpty {
-            tableView.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
-            selectedAvatarID = avatars[0].id
-        }
-    }
-
-    private func currentAvatarSummary() -> AvatarSummary? {
-        if let selectedAvatarID {
-            return avatars.first(where: { $0.id == selectedAvatarID })
-        }
-        return avatars.first
     }
 
     private func currentAppliedAvatarSummary() -> AvatarSummary? {
@@ -640,28 +438,23 @@ final class AvatarStudioContentView: NSView, NSTableViewDataSource, NSTableViewD
         return "\(avatar.name) / \(styleValue)"
     }
 
-    private func refreshAppliedAvatarSummary() {
-        appliedAvatarSummary = currentAvatarSummaryText()
-        appliedSummaryValueLabel.stringValue = appliedAvatarSummary
-    }
-
-    private func refreshBrowsePreview() {
-        guard let avatar = currentAvatarSummary() else {
-            nameLabel.stringValue = copy("avatar_studio.no_selection_title", fallback: "未选择形象")
-            styleLabel.stringValue = ""
-            traitsLabel.stringValue = ""
-            previewImageView.image = nil
+    private func refreshReferenceAvatarCard() {
+        guard let avatar = currentAppliedAvatarSummary() else {
+            referenceNameLabel.stringValue = copy("avatar_studio.no_selection_title", fallback: "未选择形象")
+            referenceStyleLabel.stringValue = ""
+            referenceTraitsLabel.stringValue = copy("avatar_studio.empty_summary", fallback: "暂无已应用形象。")
+            referencePreviewImageView.image = nil
             return
         }
 
-        nameLabel.stringValue = avatar.name
+        referenceNameLabel.stringValue = avatar.name
         let styleValue = avatar.style.isEmpty ? copy("avatar_studio.missing_style", fallback: "未标注") : avatar.style
-        styleLabel.stringValue = formatCopy("avatar_studio.style_format", fallback: "风格：%@", styleValue)
+        referenceStyleLabel.stringValue = formatCopy("avatar_studio.style_format", fallback: "风格：%@", styleValue)
         let toneText = avatar.tone.isEmpty ? "" : formatCopy("avatar_studio.tone_format", fallback: "\n语气：%@", avatar.tone)
-        traitsLabel.stringValue = avatar.traits.isEmpty
+        referenceTraitsLabel.stringValue = avatar.traits.isEmpty
             ? copy("avatar_studio.no_persona", fallback: "这个形象还没有 persona 摘要。")
             : formatCopy("avatar_studio.traits_format", fallback: "特质：%@%@", avatar.traits, toneText)
-        previewImageView.image = NSImage(contentsOf: avatar.previewURL)
+        referencePreviewImageView.image = NSImage(contentsOf: avatar.previewURL)
     }
 
     private func inlineAvatarActionStatusLines() -> [String] {
@@ -688,48 +481,6 @@ final class AvatarStudioContentView: NSView, NSTableViewDataSource, NSTableViewD
         }
 
         updateAvatarCreateActionButtonStates()
-    }
-
-    private func updateModePresentation() {
-        modeControl.selectedSegment = mode == .browse ? 0 : 1
-        browseContainer.isHidden = mode != .browse
-        createContainer.isHidden = mode != .create
-        let isCreateMode = mode == .create
-        createModeLabel.stringValue = isCreateMode ? copy("avatar_studio.create_mode_title", fallback: "当前模式：新建形象") : ""
-        openPickerButton?.title = isCreateMode ? "" : "切换形象请使用「更换形象」"
-        avatarCreateOptimizeButton?.title = isCreateMode ? copy("avatar_studio.create_optimize_button", fallback: "优化 prompt") : ""
-        avatarCreatePreviewButton?.title = isCreateMode ? TextCatalog.shared.text(.commonPreviewButton) : ""
-        avatarCreateRegenerateButton?.title = isCreateMode ? TextCatalog.shared.text(.commonRegenerateButton) : ""
-        avatarCreateReturnButton?.title = isCreateMode ? copy("avatar_studio.return_to_library_button", fallback: "返回现有形象") : ""
-        avatarCreateSaveButton?.title = isCreateMode ? copy("avatar_studio.save_and_apply_button", fallback: "保存并应用") : ""
-        avatarCreateOptimizeButton?.action = isCreateMode ? #selector(handleOptimizeInlineAvatarPrompt) : nil
-        avatarCreatePreviewButton?.action = isCreateMode ? #selector(handleGeneratePreview) : nil
-        avatarCreateRegenerateButton?.action = isCreateMode ? #selector(handleRegeneratePreview) : nil
-        avatarCreateReturnButton?.action = isCreateMode ? #selector(handleReturnToAvatarLibrary) : nil
-        avatarCreateSaveButton?.action = isCreateMode ? #selector(handleSaveAndApplyInlineAvatar) : nil
-    }
-
-    private func enterCreateMode(resetDraft: Bool = true) {
-        if resetDraft {
-            resetInlineAvatarCreationDraft()
-        }
-        mode = .create
-        statusLabel.stringValue = copy("avatar_studio.status_ready", fallback: "先生成预览，确认满意后再应用。")
-        statusLabel.textColor = AvatarPanelTheme.muted
-        updateCreateModeUI()
-        updateModePresentation()
-    }
-
-    private func enterBrowseMode(resetDraft: Bool = false) {
-        if resetDraft {
-            resetInlineAvatarCreationDraft()
-        }
-        mode = .browse
-        refreshAppliedAvatarSummary()
-        refreshBrowsePreview()
-        statusLabel.stringValue = copy("avatar_studio.status_ready", fallback: "先生成预览，确认满意后再应用。")
-        statusLabel.textColor = AvatarPanelTheme.muted
-        updateModePresentation()
     }
 
     private func hasNonEmptyInlineAvatarOptimizedPrompt() -> Bool {
@@ -762,10 +513,10 @@ final class AvatarStudioContentView: NSView, NSTableViewDataSource, NSTableViewD
     private func updateAvatarCreateActionButtonStates() {
         let hasName = !normalizedPrompt(creationDraftName, fallback: "").isEmpty
         let isBusy = isInlineAvatarPreviewInFlight || isInlineAvatarSaveInFlight
-        avatarCreateOptimizeButton?.isEnabled = mode == .create && !isBusy
-        avatarCreatePreviewButton?.isEnabled = mode == .create && !isBusy && hasNonEmptyInlineAvatarOptimizedPrompt()
-        avatarCreateRegenerateButton?.isEnabled = mode == .create && !isBusy && creationPreviewDraft != nil
-        avatarCreateSaveButton?.isEnabled = mode == .create && !isBusy && creationStage == .previewReady && hasName
+        avatarCreateOptimizeButton?.isEnabled = !isBusy
+        avatarCreatePreviewButton?.isEnabled = !isBusy && hasNonEmptyInlineAvatarOptimizedPrompt()
+        avatarCreateRegenerateButton?.isEnabled = !isBusy && creationPreviewDraft != nil
+        avatarCreateSaveButton?.isEnabled = !isBusy && creationStage == .previewReady && hasName
     }
 
     private func renderOptimizedInlineAvatarPrompt() throws {
@@ -935,12 +686,11 @@ final class AvatarStudioContentView: NSView, NSTableViewDataSource, NSTableViewD
     }
 
     private func completeSaveAndApply(with avatarID: String) {
-        refreshAppliedAvatarSummary()
+        currentAvatarID = avatarID
+        refreshReferenceAvatarCard()
         statusLabel.stringValue = copy("avatar_studio.save_success_status", fallback: "新形象已保存并应用。")
         statusLabel.textColor = AvatarPanelTheme.accent
-        enterBrowseMode(resetDraft: true)
-        currentAvatarID = avatarID
-        refreshAppliedAvatarSummary()
+        resetInlineAvatarCreationDraft()
     }
 
     private func showGenerationError(_ error: Error) {
@@ -965,14 +715,6 @@ final class AvatarStudioContentView: NSView, NSTableViewDataSource, NSTableViewD
         String(format: copy(key, fallback: fallback), arguments: arguments)
     }
 
-    @objc private func handleModeChanged() {
-        if modeControl.selectedSegment == 1 {
-            enterCreateMode()
-        } else {
-            enterBrowseMode(resetDraft: true)
-        }
-    }
-
     @objc private func handleOpenPicker() {
         onOpenAvatarPicker()
     }
@@ -995,10 +737,6 @@ final class AvatarStudioContentView: NSView, NSTableViewDataSource, NSTableViewD
 
     @objc private func handleRegeneratePreview() {
         startInlineAvatarPreview(regenerated: true)
-    }
-
-    @objc private func handleReturnToAvatarLibrary() {
-        enterBrowseMode(resetDraft: true)
     }
 
     @objc private func handleSaveAndApplyInlineAvatar() {
