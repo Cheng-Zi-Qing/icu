@@ -60,7 +60,7 @@ swiftc \
 "$TMP_DIR/runtime-tests"
 
 echo "[check_native_shell] Running AppKit theme tests..."
-swiftc -framework AppKit \
+swiftc -framework AppKit -D MANUAL_RUNTIME_TESTS \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Copy/UserVisibleCopyKey.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Copy/TextCatalog.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Copy/UserFacingErrorCopy.swift" \

@@ -1,11 +1,13 @@
 import AppKit
 
 final class AvatarCoordinator {
+#if MANUAL_RUNTIME_TESTS
     enum PickerExitAction {
         case choose
         case createNew
         case close
     }
+#endif
 
     private let settingsStore: AvatarSettingsStore
     private let catalog: AvatarCatalog
@@ -15,8 +17,10 @@ final class AvatarCoordinator {
     private var pickerController: AvatarPickerWindowController?
     private var studioController: StudioWindowController?
     var onCurrentAvatarChanged: ((String) -> Void)?
+#if MANUAL_RUNTIME_TESTS
     private(set) var lastPickerExitAction: PickerExitAction?
     private(set) var lastRequestedStudioTarget: StudioLaunchTarget?
+#endif
 
     init(
         settingsStore: AvatarSettingsStore,
@@ -43,17 +47,23 @@ final class AvatarCoordinator {
                 avatars: avatars,
                 currentAvatarID: try settingsStore.loadCurrentAvatarID(),
                 onChoose: { [weak self] avatarID in
+#if MANUAL_RUNTIME_TESTS
                     self?.lastPickerExitAction = .choose
+#endif
                     try self?.applyAvatarSelection(avatarID)
                     self?.pickerController = nil
                 },
                 onCreateNew: { [weak self] in
+#if MANUAL_RUNTIME_TESTS
                     self?.lastPickerExitAction = .createNew
+#endif
                     self?.pickerController = nil
                     self?.presentStudio(target: .avatarBrowse)
                 },
                 onClose: { [weak self] in
+#if MANUAL_RUNTIME_TESTS
                     self?.lastPickerExitAction = .close
+#endif
                     self?.pickerController = nil
                 }
             )
@@ -66,7 +76,9 @@ final class AvatarCoordinator {
 
     func presentStudio(target: StudioLaunchTarget = .theme) {
         do {
+#if MANUAL_RUNTIME_TESTS
             lastRequestedStudioTarget = target
+#endif
             let avatars = try catalog.loadAvatars()
             guard !avatars.isEmpty else {
                 throw AvatarBuilderBridgeError.executionFailed(command: "load-avatars", details: "no avatars found")
