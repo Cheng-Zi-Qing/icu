@@ -1501,6 +1501,9 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
             return
         }
 
+        if selectedTab == .avatar, tab != .avatar {
+            isAvatarBrowsePromptExpanded = false
+        }
         selectedTab = tab
         renderSelectedTab()
     }
@@ -1661,6 +1664,7 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
             return
         }
 
+        isAvatarBrowsePromptExpanded = false
         resetInlineAvatarCreationDraft()
         statusLabel.stringValue = copy("avatar_studio.status_ready", fallback: "先生成预览，确认满意后再应用。")
         statusLabel.textColor = AvatarPanelTheme.muted
@@ -1669,6 +1673,7 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
     }
 
     @objc private func handleReturnToAvatarLibrary() {
+        isAvatarBrowsePromptExpanded = false
         resetInlineAvatarCreationDraft()
         statusLabel.stringValue = copy("avatar_studio.status_ready", fallback: "先生成预览，确认满意后再应用。")
         statusLabel.textColor = AvatarPanelTheme.muted
@@ -1688,6 +1693,9 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
     @objc private func handleToggleAvatarBrowsePrompt(_ sender: NSButton) {
         isAvatarBrowsePromptExpanded.toggle()
         renderSelectedTab()
+        if isAvatarBrowsePromptExpanded {
+            window?.makeFirstResponder(avatarPromptView)
+        }
     }
 
     @objc private func handleInlineAvatarFieldAction(_ sender: NSTextField) {

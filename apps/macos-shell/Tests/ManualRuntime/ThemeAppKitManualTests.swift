@@ -201,7 +201,12 @@ func testAvatarSelectorAvatarTabCollapsesPromptSectionByDefault() throws {
 
     let showPromptButton = try requireActionButton(in: contentView, title: "编辑 prompt")
     showPromptButton.performClick(nil)
-    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    let didShowPromptEditor = waitForCondition(timeout: 0.5) {
+        allSubviews(in: contentView)
+            .compactMap { $0 as? NSTextView }
+            .first(where: { $0.identifier?.rawValue == "avatarPrompt" && !$0.isHidden }) != nil
+    }
+    try expect(didShowPromptEditor, "browse prompt editor should show after clicking edit prompt")
 
     try expect(
         allSubviews(in: contentView)
@@ -209,6 +214,77 @@ func testAvatarSelectorAvatarTabCollapsesPromptSectionByDefault() throws {
             .first(where: { $0.identifier?.rawValue == "avatarPrompt" && !$0.isHidden }) != nil,
         "browse prompt editor should show after clicking edit prompt"
     )
+}
+
+func testAvatarSelectorAvatarBrowsePromptResetsAndFocusesAfterTransitions() throws {
+    let previewURL = try makeTinyPNG()
+    let controller = AvatarSelectorWindowController(
+        avatars: [
+            AvatarSummary(
+                id: "capybara",
+                name: "水豚",
+                style: "像素",
+                previewURL: previewURL,
+                traits: "稳重",
+                tone: "冷静"
+            )
+        ],
+        currentAvatarID: "capybara",
+        onChoose: { _ in },
+        onClose: {}
+    )
+
+    controller.present()
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    guard
+        let window = controller.window,
+        let contentView = window.contentView
+    else {
+        throw TestFailure(message: "selector content view should exist")
+    }
+
+    try requireButton(in: contentView, title: "桌宠形象动画").performClick(nil)
+    try requireActionButton(in: contentView, title: "编辑 prompt").performClick(nil)
+
+    let didShowPromptEditor = waitForCondition(timeout: 0.5) {
+        allSubviews(in: contentView)
+            .compactMap { $0 as? NSTextView }
+            .first(where: { $0.identifier?.rawValue == "avatarPrompt" && !$0.isHidden }) != nil
+    }
+    try expect(didShowPromptEditor, "browse prompt editor should show after expanding")
+
+    let focusedPromptEditor = (window.firstResponder as? NSTextView)?.identifier?.rawValue == "avatarPrompt"
+    try expect(focusedPromptEditor, "expanding browse prompt should focus the prompt editor")
+
+    try requireButton(in: contentView, title: "新增自定义形象").performClick(nil)
+    try requireActionButton(in: contentView, title: "返回现有形象").performClick(nil)
+
+    let didCollapseAfterReturningBrowse = waitForCondition(timeout: 0.5) {
+        allSubviews(in: contentView)
+            .compactMap { $0 as? NSTextView }
+            .first(where: { $0.identifier?.rawValue == "avatarPrompt" && !$0.isHidden }) == nil
+    }
+    try expect(
+        didCollapseAfterReturningBrowse,
+        "browse prompt editor should collapse when returning from create mode"
+    )
+    _ = try requireActionButton(in: contentView, title: "编辑 prompt")
+
+    try requireActionButton(in: contentView, title: "编辑 prompt").performClick(nil)
+    try requireButton(in: contentView, title: "话术").performClick(nil)
+    try requireButton(in: contentView, title: "桌宠形象动画").performClick(nil)
+
+    let didCollapseAfterTabSwitch = waitForCondition(timeout: 0.5) {
+        allSubviews(in: contentView)
+            .compactMap { $0 as? NSTextView }
+            .first(where: { $0.identifier?.rawValue == "avatarPrompt" && !$0.isHidden }) == nil
+    }
+    try expect(
+        didCollapseAfterTabSwitch,
+        "browse prompt editor should collapse when leaving and returning to avatar tab"
+    )
+    _ = try requireActionButton(in: contentView, title: "编辑 prompt")
 }
 
 func testAvatarSelectorAvatarTabEntersInlineCreateMode() throws {
