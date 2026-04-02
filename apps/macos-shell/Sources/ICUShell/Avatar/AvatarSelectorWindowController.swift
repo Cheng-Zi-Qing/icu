@@ -848,6 +848,16 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
             target: self,
             action: #selector(handleRegeneratePreview)
         )
+        let nextStepButton = NSButton(
+            title: copy("avatar_studio.create_next_step_button", fallback: "下一步"),
+            target: self,
+            action: #selector(handleGoToInlineAvatarMetadataStep)
+        )
+        let backStepButton = NSButton(
+            title: copy("avatar_studio.create_back_step_button", fallback: "返回上一步"),
+            target: self,
+            action: #selector(handleSelectInlineAvatarPromptStep)
+        )
         let returnButton = NSButton(
             title: copy("avatar_studio.return_to_library_button", fallback: "返回现有形象"),
             target: self,
@@ -861,6 +871,8 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         AvatarPanelTheme.styleSecondaryButton(optimizeButton)
         AvatarPanelTheme.styleSecondaryButton(previewButton)
         AvatarPanelTheme.styleSecondaryButton(regenerateButton)
+        AvatarPanelTheme.styleSecondaryButton(nextStepButton)
+        AvatarPanelTheme.styleSecondaryButton(backStepButton)
         AvatarPanelTheme.styleSecondaryButton(returnButton)
         AvatarPanelTheme.stylePrimaryButton(saveAndApplyButton)
 
@@ -868,11 +880,20 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         stack.orientation = .horizontal
         stack.spacing = 12
         stack.addArrangedSubview(NSView())
-        stack.addArrangedSubview(optimizeButton)
-        stack.addArrangedSubview(previewButton)
-        stack.addArrangedSubview(regenerateButton)
-        stack.addArrangedSubview(returnButton)
-        stack.addArrangedSubview(saveAndApplyButton)
+        switch creationStep {
+        case .promptAndPreview:
+            stack.addArrangedSubview(optimizeButton)
+            stack.addArrangedSubview(previewButton)
+            stack.addArrangedSubview(regenerateButton)
+            if canOpenMetadataStep() {
+                stack.addArrangedSubview(nextStepButton)
+            }
+            stack.addArrangedSubview(returnButton)
+        case .metadataAndSave:
+            stack.addArrangedSubview(backStepButton)
+            stack.addArrangedSubview(returnButton)
+            stack.addArrangedSubview(saveAndApplyButton)
+        }
 
         avatarCreateOptimizeButton = optimizeButton
         avatarCreatePreviewButton = previewButton
@@ -883,6 +904,8 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         optimizeButton.widthAnchor.constraint(equalToConstant: 110).isActive = true
         previewButton.widthAnchor.constraint(equalToConstant: 110).isActive = true
         regenerateButton.widthAnchor.constraint(equalToConstant: 110).isActive = true
+        nextStepButton.widthAnchor.constraint(equalToConstant: 88).isActive = true
+        backStepButton.widthAnchor.constraint(equalToConstant: 110).isActive = true
         returnButton.widthAnchor.constraint(equalToConstant: 132).isActive = true
         saveAndApplyButton.widthAnchor.constraint(equalToConstant: 110).isActive = true
         return stack
@@ -1008,8 +1031,6 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         let stepsRow = NSStackView(views: [promptStepButton, metadataStepButton, NSView()])
         stepsRow.orientation = .horizontal
         stepsRow.spacing = 10
-        promptStepButton.widthAnchor.constraint(equalToConstant: 180).isActive = true
-        metadataStepButton.widthAnchor.constraint(equalToConstant: 180).isActive = true
 
         let promptTitle = AvatarPanelTheme.makeLabel(
             copy("avatar_studio.create_prompt_title", fallback: "原始 prompt"),
@@ -1746,6 +1767,10 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
 
         creationStep = .metadataAndSave
         renderSelectedTab()
+    }
+
+    @objc private func handleGoToInlineAvatarMetadataStep() {
+        handleSelectInlineAvatarMetadataStep()
     }
 
     @objc private func handleToggleAvatarBrowsePrompt(_ sender: NSButton) {

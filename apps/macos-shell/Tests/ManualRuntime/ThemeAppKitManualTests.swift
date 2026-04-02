@@ -318,7 +318,10 @@ func testAvatarSelectorAvatarTabEntersInlineCreateMode() throws {
 
     _ = try requireLabel(in: contentView, stringValue: "当前模式：新建形象")
     _ = try requireButton(in: contentView, title: "返回现有形象")
-    _ = try requireButton(in: contentView, title: "保存并应用")
+    try expect(
+        findButton(in: contentView, title: "保存并应用") == nil,
+        "step 1 create mode should defer save until metadata step"
+    )
     _ = try requireLabel(in: contentView, stringValue: "形象列表")
     try expect(
         controller.window?.isVisible == true,
@@ -551,6 +554,78 @@ func testAvatarSelectorInlineCreateModeBlocksMetadataStepUntilPreviewReady() thr
     try expect(metadataStepButtonAfterPreview.isEnabled == true, "metadata step should unlock when preview-ready")
 }
 
+func testAvatarSelectorInlineCreateModeUsesNextAndBackStepNavigationButtons() throws {
+    let previewURL = try makeTinyPNG()
+    let idleURL = try makeTinyPNG()
+    let workingURL = try makeTinyPNG()
+    let alertURL = try makeTinyPNG()
+    let controller = AvatarSelectorWindowController(
+        avatars: [
+            AvatarSummary(
+                id: "capybara",
+                name: "水豚",
+                style: "像素",
+                previewURL: previewURL,
+                traits: "稳重",
+                tone: "冷静"
+            )
+        ],
+        currentAvatarID: "capybara",
+        avatarPromptOptimizer: { prompt in
+            "optimized::\(prompt)"
+        },
+        avatarPreviewGenerator: { _ in
+            InlineAvatarPreviewDraft(
+                actionImageURLs: [
+                    "idle": idleURL,
+                    "working": workingURL,
+                    "alert": alertURL,
+                ],
+                suggestedPersona: "稳重、冷静、慢半拍"
+            )
+        },
+        onChoose: { _ in },
+        onClose: {}
+    )
+
+    controller.present()
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "selector content view should exist")
+    }
+
+    try requireButton(in: contentView, title: "桌宠形象动画").performClick(nil)
+    try requireButton(in: contentView, title: "新增自定义形象").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    try expect(
+        findButton(in: contentView, title: "下一步") == nil,
+        "step 1 action bar should hide next-step navigation before preview-ready"
+    )
+
+    let rawPromptView = try requireTextView(in: contentView, identifier: "avatarCreateRawPrompt")
+    rawPromptView.string = "next/back step navigation prompt"
+    controller.textDidChange(Notification(name: NSText.didChangeNotification, object: rawPromptView))
+    try requireActionButton(in: contentView, title: "优化 prompt").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    try requireActionButton(in: contentView, title: "生成预览").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    let nextStepButton = try requireActionButton(in: contentView, title: "下一步")
+    nextStepButton.performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    _ = try requireTextField(in: contentView, identifier: "avatarCreateNameField")
+    _ = try requireTextField(in: contentView, identifier: "avatarCreatePersonaField")
+    _ = try requireActionButton(in: contentView, title: "返回上一步")
+    _ = try requireActionButton(in: contentView, title: "保存并应用")
+    try expect(
+        findButton(in: contentView, title: "下一步") == nil,
+        "step 2 action bar should not keep the next-step action"
+    )
+}
+
 func testAvatarSelectorInlineCreateModeOptimizesRawPromptAndUsesOptimizedPromptForPreview() throws {
     let previewURL = try makeTinyPNG()
     let idleURL = try makeTinyPNG()
@@ -704,10 +779,12 @@ func testAvatarSelectorInlineCreateModePreviewGenerationReturnsWithoutBlockingUI
 
     let previewButtonWhileGenerating = try requireActionButton(in: contentView, title: "生成预览")
     let regenerateButtonWhileGenerating = try requireActionButton(in: contentView, title: "重新生成")
-    let saveButtonWhileGenerating = try requireActionButton(in: contentView, title: "保存并应用")
     try expect(previewButtonWhileGenerating.isEnabled == false, "preview button should disable while generation is in flight")
     try expect(regenerateButtonWhileGenerating.isEnabled == false, "regenerate button should disable while generation is in flight")
-    try expect(saveButtonWhileGenerating.isEnabled == false, "save button should disable while generation is in flight")
+    try expect(
+        findButton(in: contentView, title: "保存并应用") == nil,
+        "step 1 action bar should not surface save while generation is in flight"
+    )
 
     try requireActionButton(in: contentView, title: "返回现有形象").performClick(nil)
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
@@ -786,12 +863,11 @@ func testAvatarSelectorInlineCreateModeRequiresThreePreviewsAndNameBeforeSave() 
     let optimizeButton = try requireActionButton(in: contentView, title: "优化 prompt")
     let previewButton = try requireActionButton(in: contentView, title: "生成预览")
     let regenerateButton = try requireActionButton(in: contentView, title: "重新生成")
-    let saveButton = try requireActionButton(in: contentView, title: "保存并应用")
 
     try expect(optimizeButton.isEnabled == true, "avatar optimize button should stay enabled in create mode")
     try expect(previewButton.isEnabled == false, "avatar preview button should stay disabled until optimized prompt exists")
     try expect(regenerateButton.isEnabled == false, "avatar regenerate button should stay disabled before any preview")
-    try expect(saveButton.isEnabled == false, "avatar save button should stay disabled before preview and name")
+    try expect(findButton(in: contentView, title: "保存并应用") == nil, "step 1 action bar should hide save before metadata step")
 
     let rawPromptView = try requireTextView(in: contentView, identifier: "avatarCreateRawPrompt")
     rawPromptView.string = "raw prompt for gating"
@@ -800,20 +876,18 @@ func testAvatarSelectorInlineCreateModeRequiresThreePreviewsAndNameBeforeSave() 
     try requireActionButton(in: contentView, title: "优化 prompt").performClick(nil)
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
     let previewButtonAfterOptimize = try requireActionButton(in: contentView, title: "生成预览")
-    let saveButtonAfterOptimize = try requireActionButton(in: contentView, title: "保存并应用")
     try expect(
         previewButtonAfterOptimize.isEnabled == true,
         "avatar preview button should enable after optimization"
     )
     try expect(
-        saveButtonAfterOptimize.isEnabled == false,
-        "avatar save button should still wait for preview"
+        findButton(in: contentView, title: "保存并应用") == nil,
+        "step 1 action bar should keep save hidden after optimization"
     )
 
     try requireActionButton(in: contentView, title: "生成预览").performClick(nil)
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
     let regenerateButtonAfterPreview = try requireActionButton(in: contentView, title: "重新生成")
-    let saveButtonAfterPreview = try requireActionButton(in: contentView, title: "保存并应用")
     let metadataStepButton = try requireActionButton(in: contentView, title: "Step 2 · 名称与保存")
     try expect(
         regenerateButtonAfterPreview.isEnabled == true,
@@ -821,8 +895,8 @@ func testAvatarSelectorInlineCreateModeRequiresThreePreviewsAndNameBeforeSave() 
     )
     try expect(metadataStepButton.isEnabled == false, "metadata step should stay locked when one action preview is missing")
     try expect(
-        saveButtonAfterPreview.isEnabled == false,
-        "avatar save button should stay disabled when one action preview is missing"
+        findButton(in: contentView, title: "保存并应用") == nil,
+        "step 1 action bar should keep save hidden until the metadata step"
     )
 
     try requireActionButton(in: contentView, title: "重新生成").performClick(nil)
