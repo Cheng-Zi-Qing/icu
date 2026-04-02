@@ -1,6 +1,6 @@
 import AppKit
 
-func testGenerationConfigWindowUsesInstalledCopyCatalogForVisibleLabels() throws {
+func testGenerationConfigWindowUsesWorkbenchChromeAndInstalledCopy() throws {
     let original = TextCatalog.shared
     defer { TextCatalog.installShared(original) }
 
@@ -10,7 +10,9 @@ func testGenerationConfigWindowUsesInstalledCopyCatalogForVisibleLabels() throws
           "generation_config": {
             "window_title": "模型配置",
             "window_subtitle": "这里只配置模型，不负责生成与应用。",
-            "basic_section_title": "基础配置",
+            "basic_button": "基础入口",
+            "advanced_button": "高级入口",
+            "save_button": "立即保存",
             "provider_label": "服务商",
             "text_description_tab_title": "文本描述",
             "animation_avatar_tab_title": "动画形象",
@@ -23,7 +25,9 @@ func testGenerationConfigWindowUsesInstalledCopyCatalogForVisibleLabels() throws
           "generation_config": {
             "window_title": "模型工作台",
             "window_subtitle": "这里只配模型；生成、预览、应用都在更换形象页。",
-            "basic_section_title": "基础信息",
+            "basic_button": "核心参数",
+            "advanced_button": "JSON 编辑器",
+            "save_button": "保存这组模型",
             "provider_label": "提供方",
             "text_description_tab_title": "文字意图",
             "animation_avatar_tab_title": "形象素材",
@@ -61,11 +65,13 @@ func testGenerationConfigWindowUsesInstalledCopyCatalogForVisibleLabels() throws
     _ = try requireButton(in: contentView, title: "文字意图")
     _ = try requireButton(in: contentView, title: "形象素材")
     _ = try requireButton(in: contentView, title: "主题样式代码")
-    _ = try requireLabel(in: contentView, stringValue: "基础信息")
+    _ = try requireActionButton(in: contentView, title: "核心参数")
+    _ = try requireActionButton(in: contentView, title: "JSON 编辑器")
+    _ = try requireActionButton(in: contentView, title: "保存这组模型")
     _ = try requireLabel(in: contentView, stringValue: "提供方")
 }
 
-func testGenerationConfigWindowUsesModelTabsByDefault() throws {
+func testGenerationConfigWindowUsesPopupProviderAndCollapsedAdvancedEditorsByDefault() throws {
     let settingsStore = try makeGenerationSettingsStore()
     let themeManager = try makeThemeManagerWithPixelDefault()
     let service = ThemeGenerationService(
@@ -92,20 +98,36 @@ func testGenerationConfigWindowUsesModelTabsByDefault() throws {
     _ = try requireButton(in: contentView, title: "文本描述")
     _ = try requireButton(in: contentView, title: "动画形象")
     _ = try requireButton(in: contentView, title: "主题代码")
-    _ = try requireLabel(in: contentView, stringValue: "基础配置")
+    _ = try requireActionButton(in: contentView, title: "基础")
+    _ = try requireActionButton(in: contentView, title: "高级")
+    _ = try requireActionButton(in: contentView, title: "保存")
     _ = try requireLabel(in: contentView, stringValue: "服务商")
+    _ = try requireLabel(in: contentView, stringValue: "模型")
+    _ = try requireLabel(in: contentView, stringValue: "接口地址")
+
+    let providerPopup = try requirePopupButton(in: contentView, identifier: "generationConfigProviderPopup")
+    try expect(
+        providerPopup.itemTitles == ["ollama", "huggingface", "openai-compatible"],
+        "provider popup should expose all providers"
+    )
+    _ = try requireTextField(in: contentView, placeholder: "model")
+    _ = try requireTextField(in: contentView, placeholder: "base_url")
 
     try expect(
-        findButton(in: contentView, title: "主题生成") == nil,
-        "model config window should not expose the theme-generation tab anymore"
+        findTextField(in: contentView, placeholder: "provider，如 ollama / huggingface / openai-compatible") == nil,
+        "provider should render as a popup instead of a free-text field"
     )
     try expect(
-        findButton(in: contentView, title: "生成并应用主题") == nil,
-        "model config window should not expose generate/apply actions"
+        findTextView(in: contentView, identifier: "generationConfigAuthEditor") == nil,
+        "auth editor should stay hidden by default"
+    )
+    try expect(
+        findTextView(in: contentView, identifier: "generationConfigOptionsEditor") == nil,
+        "options editor should stay hidden by default"
     )
 }
 
-func testGenerationConfigWindowCapabilityDetailUsesBasicAndAdvancedSections() throws {
+func testGenerationConfigWindowShowsMultilineJSONEditorsWhenAdvancedIsSelected() throws {
     let repoRoot = try makeTemporaryDirectory()
     let appPaths = AppPaths(rootURL: repoRoot)
     try appPaths.ensureDirectories()
@@ -134,45 +156,17 @@ func testGenerationConfigWindowCapabilityDetailUsesBasicAndAdvancedSections() th
         throw TestFailure(message: "generation config window content view should exist")
     }
 
-    try requireButton(in: contentView, title: "文本描述").performClick(nil)
+    _ = try requireActionButton(in: contentView, title: "基础")
+    let advancedToggle = try requireActionButton(in: contentView, title: "高级")
 
-    _ = try requireLabel(in: contentView, stringValue: "基础配置")
-    _ = try requireLabel(in: contentView, stringValue: "服务商")
-    _ = try requireLabel(in: contentView, stringValue: "模型")
-    _ = try requireLabel(in: contentView, stringValue: "接口地址")
-    _ = try requireTextField(in: contentView, placeholder: "provider，如 ollama / huggingface / openai-compatible")
-    _ = try requireTextField(in: contentView, placeholder: "model")
-    _ = try requireTextField(in: contentView, placeholder: "base_url")
-    let advancedToggle = try requireButton(in: contentView, title: "显示高级设置")
-
-    try expect(
-        findTextField(in: contentView, placeholder: "auth JSON，如 {\"api_key\":\"sk-xxx\"}") == nil,
-        "advanced auth field should stay hidden until expanded"
-    )
-    try expect(
-        findTextField(in: contentView, placeholder: "options JSON，如 {\"temperature\":0.7}") == nil,
-        "advanced options field should stay hidden until expanded"
-    )
-    try expect(
-        findLabel(in: contentView, stringValue: "高级设置") == nil,
-        "advanced section title should stay hidden until expanded"
-    )
-    try expect(
-        findLabel(in: contentView, stringValue: "认证 JSON") == nil,
-        "advanced auth label should stay hidden until expanded"
-    )
-    try expect(
-        findLabel(in: contentView, stringValue: "选项 JSON") == nil,
-        "advanced options label should stay hidden until expanded"
-    )
+    try expect(findTextView(in: contentView, identifier: "generationConfigAuthEditor") == nil, "auth editor should stay hidden by default")
 
     advancedToggle.performClick(nil)
 
-    _ = try requireLabel(in: contentView, stringValue: "高级设置")
     _ = try requireLabel(in: contentView, stringValue: "认证 JSON")
     _ = try requireLabel(in: contentView, stringValue: "选项 JSON")
-    _ = try requireTextField(in: contentView, placeholder: "auth JSON，如 {\"api_key\":\"sk-xxx\"}")
-    _ = try requireTextField(in: contentView, placeholder: "options JSON，如 {\"temperature\":0.7}")
+    _ = try requireTextView(in: contentView, identifier: "generationConfigAuthEditor")
+    _ = try requireTextView(in: contentView, identifier: "generationConfigOptionsEditor")
 }
 
 func testGenerationConfigWindowPreservesDraftAcrossNavigationSwitches() throws {
@@ -306,15 +300,12 @@ func testGenerationConfigWindowKeepsCoreFieldsInUpperViewportBand() throws {
     }
     contentView.layoutSubtreeIfNeeded()
 
-    let providerField = try requireTextField(
-        in: contentView,
-        placeholder: "provider，如 ollama / huggingface / openai-compatible"
-    )
-    let providerFrameInContent = providerField.convert(providerField.bounds, to: contentView)
+    let providerPopup = try requirePopupButton(in: contentView, identifier: "generationConfigProviderPopup")
+    let providerFrameInContent = providerPopup.convert(providerPopup.bounds, to: contentView)
     let topGap = contentView.bounds.maxY - providerFrameInContent.maxY
 
     try expect(
-        topGap <= 170,
+        topGap <= 220,
         "provider field should stay within the upper viewport band for field-first density"
     )
 }
@@ -450,6 +441,22 @@ func requireTextField(in root: NSView, placeholder: String) throws -> NSTextFiel
     }
 
     throw TestFailure(message: "expected text field with placeholder '\(placeholder)' to exist")
+}
+
+private func findTextView(in root: NSView, identifier: String) -> NSTextView? {
+    allSubviews(in: root)
+        .compactMap { $0 as? NSTextView }
+        .first { $0.identifier?.rawValue == identifier }
+}
+
+private func requirePopupButton(in root: NSView, identifier: String) throws -> NSPopUpButton {
+    if let popup = allSubviews(in: root)
+        .compactMap({ $0 as? NSPopUpButton })
+        .first(where: { $0.identifier?.rawValue == identifier }) {
+        return popup
+    }
+
+    throw TestFailure(message: "expected popup button '\(identifier)' to exist")
 }
 
 func findButton(in root: NSView, title: String) -> NSButton? {

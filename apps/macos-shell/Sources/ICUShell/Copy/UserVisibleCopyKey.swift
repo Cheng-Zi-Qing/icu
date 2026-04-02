@@ -30,6 +30,10 @@ enum UserVisibleCopyKey: String {
     case generationConfigAdvancedSectionTitle = "generation_config.advanced_section_title"
     case generationConfigShowAdvancedButton = "generation_config.show_advanced_button"
     case generationConfigHideAdvancedButton = "generation_config.hide_advanced_button"
+    case generationConfigBasicButton = "generation_config.basic_button"
+    case generationConfigAdvancedButton = "generation_config.advanced_button"
+    case generationConfigSaveButton = "generation_config.save_button"
+    case generationConfigSaveSuccessStatus = "generation_config.save_success_status"
     case generationConfigProviderLabel = "generation_config.provider_label"
     case generationConfigModelLabel = "generation_config.model_label"
     case generationConfigBaseURLLabel = "generation_config.base_url_label"
@@ -116,6 +120,14 @@ extension UserVisibleCopyKey {
             return "显示高级设置"
         case .generationConfigHideAdvancedButton:
             return "隐藏高级设置"
+        case .generationConfigBasicButton:
+            return "基础"
+        case .generationConfigAdvancedButton:
+            return "高级"
+        case .generationConfigSaveButton:
+            return "保存"
+        case .generationConfigSaveSuccessStatus:
+            return "模型配置已保存。"
         case .generationConfigProviderLabel:
             return "服务商"
         case .generationConfigModelLabel:

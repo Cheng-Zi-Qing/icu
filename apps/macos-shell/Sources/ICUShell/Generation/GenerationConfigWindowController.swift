@@ -26,11 +26,11 @@ extension GenerationCapabilityKind {
 }
 
 struct GenerationCapabilityFormViews {
-    let providerField: NSTextField
+    let providerPopup: NSPopUpButton
     let baseURLField: NSTextField
     let modelField: NSTextField
-    let authField: NSTextField
-    let optionsField: NSTextField
+    let authTextView: NSTextView
+    let optionsTextView: NSTextView
 }
 
 enum GenerationConfigFormError: Error, LocalizedError {
@@ -55,14 +55,23 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
     private enum Layout {
         static let windowSize = NSSize(width: 804, height: 520)
         static let contentInset: CGFloat = 12
-        static let cardContentInset: CGFloat = 10
-        static let rootSpacing: CGFloat = 4
-        static let contentSpacing: CGFloat = 4
-        static let tabSpacing: CGFloat = 8
-        static let tabHeight: CGFloat = 30
+        static let rootSpacing: CGFloat = 8
+        static let bodySpacing: CGFloat = 12
+        static let headerSpacing: CGFloat = 1
+        static let headerBottomSpacing: CGFloat = 2
+        static let railWidth: CGFloat = 148
+        static let railSpacing: CGFloat = 8
+        static let cardInset: CGFloat = 12
+        static let workbenchSpacing: CGFloat = 12
+        static let modeSpacing: CGFloat = 8
+        static let navigationButtonHeight: CGFloat = 34
+        static let modeButtonHeight: CGFloat = 30
+        static let saveButtonHeight: CGFloat = 34
         static let fieldRowSpacing: CGFloat = 10
-        static let labelSpacing: CGFloat = 2
+        static let labelSpacing: CGFloat = 3
         static let fieldHeight: CGFloat = 42
+        static let editorHeight: CGFloat = 112
+        static let sectionSpacing: CGFloat = 12
     }
 
     private let settingsStore: GenerationSettingsStore
@@ -146,7 +155,9 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
         contentView.subviews.forEach { $0.removeFromSuperview() }
         capabilityForms.removeAll()
         statusLabel.textColor = AvatarPanelTheme.muted
-        statusLabel.stringValue = TextCatalog.shared.text(.generationConfigStatusText)
+        if statusLabel.stringValue.isEmpty {
+            statusLabel.stringValue = TextCatalog.shared.text(.generationConfigStatusText)
+        }
 
         let root = NSStackView()
         root.orientation = .vertical
@@ -168,7 +179,14 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
         subtitleLabel.maximumNumberOfLines = 1
         let header = NSStackView(views: [titleLabel, subtitleLabel])
         header.orientation = .vertical
-        header.spacing = 0
+        header.spacing = Layout.headerSpacing
+        header.setCustomSpacing(Layout.headerBottomSpacing, after: subtitleLabel)
+
+        let body = NSStackView(views: [buildCapabilityRail(), buildWorkbench()])
+        body.orientation = .horizontal
+        body.alignment = .top
+        body.spacing = Layout.bodySpacing
+        body.distribution = .fill
 
         statusLabel.font = AvatarPanelTheme.smallFont
         statusLabel.lineBreakMode = .byTruncatingTail
@@ -176,8 +194,7 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
         statusLabel.setContentHuggingPriority(.required, for: .vertical)
 
         root.addArrangedSubview(header)
-        root.addArrangedSubview(buildTabBar())
-        root.addArrangedSubview(buildDetailContainer())
+        root.addArrangedSubview(body)
         root.addArrangedSubview(statusLabel)
 
         NSLayoutConstraint.activate([
@@ -188,16 +205,23 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
         ])
     }
 
-    private func buildTabBar() -> NSView {
-        let tabs = NSStackView()
-        tabs.orientation = .horizontal
-        tabs.spacing = Layout.tabSpacing
+    private func buildCapabilityRail() -> NSView {
+        let card = AvatarPanelTheme.makeCard()
+        card.translatesAutoresizingMaskIntoConstraints = false
+        card.widthAnchor.constraint(equalToConstant: Layout.railWidth).isActive = true
+
+        let stack = NSStackView()
+        stack.orientation = .vertical
+        stack.spacing = Layout.railSpacing
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(stack)
 
         for capability in GenerationCapabilityKind.allCases {
             let button = NSButton(title: capability.title, target: self, action: #selector(handleCapabilitySelection(_:)))
             button.identifier = NSUserInterfaceItemIdentifier(capability.rawValue)
             button.translatesAutoresizingMaskIntoConstraints = false
-            button.heightAnchor.constraint(equalToConstant: Layout.tabHeight).isActive = true
+            button.heightAnchor.constraint(equalToConstant: Layout.navigationButtonHeight).isActive = true
+            button.lineBreakMode = .byTruncatingTail
 
             if capability == selectedCapability {
                 AvatarPanelTheme.stylePrimaryButton(button)
@@ -205,22 +229,87 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
                 AvatarPanelTheme.styleSecondaryButton(button)
             }
 
-            tabs.addArrangedSubview(button)
+            stack.addArrangedSubview(button)
         }
 
-        return tabs
+        stack.addArrangedSubview(NSView())
+
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: card.topAnchor, constant: Layout.cardInset),
+            stack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: Layout.cardInset),
+            stack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -Layout.cardInset),
+            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -Layout.cardInset),
+        ])
+
+        return card
     }
 
-    private func buildDetailContainer() -> NSView {
+    private func buildWorkbench() -> NSView {
         let card = AvatarPanelTheme.makeCard()
         card.translatesAutoresizingMaskIntoConstraints = false
 
+        let stack = NSStackView()
+        stack.orientation = .vertical
+        stack.spacing = Layout.workbenchSpacing
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(stack)
+
+        stack.addArrangedSubview(buildEditorModeBar())
+        stack.addArrangedSubview(buildWorkbenchContent())
+        stack.addArrangedSubview(buildSaveButton())
+
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: card.topAnchor, constant: Layout.cardInset),
+            stack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: Layout.cardInset),
+            stack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -Layout.cardInset),
+            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -Layout.cardInset),
+        ])
+
+        return card
+    }
+
+    private func buildEditorModeBar() -> NSView {
+        let showingAdvanced = expandedAdvancedSections[selectedCapability] ?? false
+        let basicButton = NSButton(
+            title: TextCatalog.shared.text(.generationConfigBasicButton),
+            target: self,
+            action: #selector(handleEditorModeSelection(_:))
+        )
+        basicButton.identifier = NSUserInterfaceItemIdentifier("generationConfigModeBasic")
+
+        let advancedButton = NSButton(
+            title: TextCatalog.shared.text(.generationConfigAdvancedButton),
+            target: self,
+            action: #selector(handleEditorModeSelection(_:))
+        )
+        advancedButton.identifier = NSUserInterfaceItemIdentifier("generationConfigModeAdvanced")
+
+        [basicButton, advancedButton].forEach { button in
+            button.translatesAutoresizingMaskIntoConstraints = false
+            button.heightAnchor.constraint(equalToConstant: Layout.modeButtonHeight).isActive = true
+        }
+
+        if showingAdvanced {
+            AvatarPanelTheme.styleSecondaryButton(basicButton)
+            AvatarPanelTheme.stylePrimaryButton(advancedButton)
+        } else {
+            AvatarPanelTheme.stylePrimaryButton(basicButton)
+            AvatarPanelTheme.styleSecondaryButton(advancedButton)
+        }
+
+        let row = NSStackView(views: [basicButton, advancedButton, NSView()])
+        row.orientation = .horizontal
+        row.spacing = Layout.modeSpacing
+        return row
+    }
+
+    private func buildWorkbenchContent() -> NSView {
         let scrollView = NSScrollView()
+        AvatarPanelTheme.styleScrollView(scrollView)
         scrollView.translatesAutoresizingMaskIntoConstraints = false
-        scrollView.drawsBackground = false
-        scrollView.borderType = .noBorder
         scrollView.hasVerticalScroller = true
         scrollView.autohidesScrollers = true
+        scrollView.drawsBackground = false
 
         let detailView = buildCapabilityDetail(for: selectedCapability)
         detailView.translatesAutoresizingMaskIntoConstraints = false
@@ -229,13 +318,9 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
         documentView.translatesAutoresizingMaskIntoConstraints = false
         documentView.addSubview(detailView)
         scrollView.documentView = documentView
-        card.addSubview(scrollView)
+        scrollView.heightAnchor.constraint(greaterThanOrEqualToConstant: 320).isActive = true
 
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: card.topAnchor, constant: Layout.cardContentInset),
-            scrollView.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: Layout.cardContentInset),
-            scrollView.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -Layout.cardContentInset),
-            scrollView.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -Layout.cardContentInset),
             detailView.topAnchor.constraint(equalTo: documentView.topAnchor),
             detailView.leadingAnchor.constraint(equalTo: documentView.leadingAnchor),
             detailView.trailingAnchor.constraint(equalTo: documentView.trailingAnchor),
@@ -244,16 +329,36 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
             documentView.widthAnchor.constraint(equalTo: scrollView.contentView.widthAnchor),
         ])
 
-        return card
+        return scrollView
     }
 
     private func buildCapabilityDetail(for kind: GenerationCapabilityKind) -> NSView {
         let contentView = FlippedView()
         contentView.translatesAutoresizingMaskIntoConstraints = false
 
+        let providerPopup = makeProviderPopup()
+        let modelField = makeField(
+            placeholder: TextCatalog.shared.text(.generationConfigModelPlaceholder),
+            identifier: "generationConfigModelField"
+        )
+        let baseURLField = makeField(
+            placeholder: TextCatalog.shared.text(.generationConfigBaseURLPlaceholder),
+            identifier: "generationConfigBaseURLField"
+        )
+        let authTextView = makeEditorTextView(identifier: "generationConfigAuthEditor")
+        let optionsTextView = makeEditorTextView(identifier: "generationConfigOptionsEditor")
+
+        capabilityForms[kind] = GenerationCapabilityFormViews(
+            providerPopup: providerPopup,
+            baseURLField: baseURLField,
+            modelField: modelField,
+            authTextView: authTextView,
+            optionsTextView: optionsTextView
+        )
+
         let stack = NSStackView()
         stack.orientation = .vertical
-        stack.spacing = Layout.contentSpacing
+        stack.spacing = Layout.sectionSpacing
         stack.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(stack)
 
@@ -263,69 +368,31 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
             color: AvatarPanelTheme.muted,
             font: AvatarPanelTheme.smallFont
         )
-        descriptionLabel.lineBreakMode = .byTruncatingTail
-        descriptionLabel.maximumNumberOfLines = 1
-        let detailHeader = NSStackView(views: [titleLabel, descriptionLabel])
-        detailHeader.orientation = .vertical
-        detailHeader.spacing = 1
+        descriptionLabel.lineBreakMode = .byWordWrapping
+        descriptionLabel.maximumNumberOfLines = 0
+        let header = NSStackView(views: [titleLabel, descriptionLabel])
+        header.orientation = .vertical
+        header.spacing = Layout.headerSpacing
 
-        let basicLabel = AvatarPanelTheme.makeLabel(
-            TextCatalog.shared.text(.generationConfigBasicSectionTitle),
-            color: AvatarPanelTheme.accent,
-            font: AvatarPanelTheme.smallFont
-        )
-
-        let providerField = makeField(placeholder: TextCatalog.shared.text(.generationConfigProviderPlaceholder))
-        let modelField = makeField(placeholder: TextCatalog.shared.text(.generationConfigModelPlaceholder))
-        let baseURLField = makeField(placeholder: TextCatalog.shared.text(.generationConfigBaseURLPlaceholder))
-        let authField = makeField(placeholder: TextCatalog.shared.text(.generationConfigAuthPlaceholder))
-        let optionsField = makeField(placeholder: TextCatalog.shared.text(.generationConfigOptionsPlaceholder))
-
-        capabilityForms[kind] = GenerationCapabilityFormViews(
-            providerField: providerField,
-            baseURLField: baseURLField,
-            modelField: modelField,
-            authField: authField,
-            optionsField: optionsField
-        )
-
-        let basicStack = NSStackView(views: [
-            makeFieldRow(label: TextCatalog.shared.text(.generationConfigProviderLabel), field: providerField),
-            makeFieldRow(label: TextCatalog.shared.text(.generationConfigModelLabel), field: modelField),
-            makeFieldRow(label: TextCatalog.shared.text(.generationConfigBaseURLLabel), field: baseURLField),
+        let coreFields = NSStackView(views: [
+            makeFieldRow(label: TextCatalog.shared.text(.generationConfigProviderLabel), control: providerPopup),
+            makeFieldRow(label: TextCatalog.shared.text(.generationConfigModelLabel), control: modelField),
+            makeFieldRow(label: TextCatalog.shared.text(.generationConfigBaseURLLabel), control: baseURLField),
         ])
-        basicStack.orientation = .vertical
-        basicStack.spacing = Layout.fieldRowSpacing
+        coreFields.orientation = .vertical
+        coreFields.spacing = Layout.fieldRowSpacing
 
-        let advancedButton = NSButton(
-            title: (expandedAdvancedSections[kind] ?? false)
-                ? TextCatalog.shared.text(.generationConfigHideAdvancedButton)
-                : TextCatalog.shared.text(.generationConfigShowAdvancedButton),
-            target: self,
-            action: #selector(handleAdvancedToggle(_:))
-        )
-        advancedButton.identifier = NSUserInterfaceItemIdentifier("advanced-\(kind.rawValue)")
-        advancedButton.alignment = .left
-        AvatarPanelTheme.styleSecondaryButton(advancedButton)
-        advancedButton.translatesAutoresizingMaskIntoConstraints = false
-        advancedButton.heightAnchor.constraint(equalToConstant: Layout.tabHeight).isActive = true
-
-        stack.addArrangedSubview(detailHeader)
-        stack.addArrangedSubview(basicLabel)
-        stack.addArrangedSubview(basicStack)
-        stack.addArrangedSubview(advancedButton)
+        stack.addArrangedSubview(header)
+        stack.addArrangedSubview(coreFields)
 
         if expandedAdvancedSections[kind] ?? false {
-            let advancedLabel = AvatarPanelTheme.makeLabel(TextCatalog.shared.text(.generationConfigAdvancedSectionTitle), color: AvatarPanelTheme.accent)
-            let advancedStack = NSStackView(views: [
-                makeFieldRow(label: TextCatalog.shared.text(.generationConfigAuthLabel), field: authField),
-                makeFieldRow(label: TextCatalog.shared.text(.generationConfigOptionsLabel), field: optionsField),
+            let advancedFields = NSStackView(views: [
+                makeEditorRow(label: TextCatalog.shared.text(.generationConfigAuthLabel), textView: authTextView),
+                makeEditorRow(label: TextCatalog.shared.text(.generationConfigOptionsLabel), textView: optionsTextView),
             ])
-            advancedStack.orientation = .vertical
-            advancedStack.spacing = Layout.fieldRowSpacing
-
-            stack.addArrangedSubview(advancedLabel)
-            stack.addArrangedSubview(advancedStack)
+            advancedFields.orientation = .vertical
+            advancedFields.spacing = Layout.fieldRowSpacing
+            stack.addArrangedSubview(advancedFields)
         }
 
         NSLayoutConstraint.activate([
@@ -338,21 +405,79 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
         return contentView
     }
 
-    private func makeFieldRow(label: String, field: NSTextField) -> NSView {
+    private func buildSaveButton() -> NSView {
+        let saveButton = NSButton(
+            title: TextCatalog.shared.text(.generationConfigSaveButton),
+            target: self,
+            action: #selector(handleSave)
+        )
+        saveButton.translatesAutoresizingMaskIntoConstraints = false
+        saveButton.heightAnchor.constraint(equalToConstant: Layout.saveButtonHeight).isActive = true
+        AvatarPanelTheme.stylePrimaryButton(saveButton)
+
+        let row = NSStackView(views: [NSView(), saveButton])
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = Layout.modeSpacing
+        return row
+    }
+
+    private func makeFieldRow(label: String, control: NSView) -> NSView {
         let titleLabel = AvatarPanelTheme.makeLabel(label, color: AvatarPanelTheme.muted, font: AvatarPanelTheme.smallFont)
-        let row = NSStackView(views: [titleLabel, field])
+        let row = NSStackView(views: [titleLabel, control])
         row.orientation = .vertical
         row.spacing = Layout.labelSpacing
         return row
     }
 
-    private func makeField(placeholder: String) -> NSTextField {
+    private func makeEditorRow(label: String, textView: NSTextView) -> NSView {
+        makeFieldRow(label: label, control: makeEditorScrollView(for: textView))
+    }
+
+    private func makeProviderPopup() -> NSPopUpButton {
+        let popup = NSPopUpButton()
+        popup.translatesAutoresizingMaskIntoConstraints = false
+        popup.identifier = NSUserInterfaceItemIdentifier("generationConfigProviderPopup")
+        popup.font = AvatarPanelTheme.bodyFont
+        popup.addItems(withTitles: [
+            GenerationCapabilityProvider.ollama.rawValue,
+            GenerationCapabilityProvider.huggingFace.rawValue,
+            GenerationCapabilityProvider.openAICompatible.rawValue,
+        ])
+        popup.heightAnchor.constraint(equalToConstant: Layout.fieldHeight).isActive = true
+        return popup
+    }
+
+    private func makeField(placeholder: String, identifier: String) -> NSTextField {
         let field = NSTextField(string: "")
         field.placeholderString = placeholder
+        field.identifier = NSUserInterfaceItemIdentifier(identifier)
         AvatarPanelTheme.styleEditableTextField(field)
         field.translatesAutoresizingMaskIntoConstraints = false
         field.heightAnchor.constraint(equalToConstant: Layout.fieldHeight).isActive = true
         return field
+    }
+
+    private func makeEditorTextView(identifier: String) -> NSTextView {
+        let textView = NSTextView()
+        AvatarPanelTheme.styleTextView(textView)
+        textView.identifier = NSUserInterfaceItemIdentifier(identifier)
+        textView.isVerticallyResizable = true
+        textView.isHorizontallyResizable = false
+        textView.minSize = NSSize(width: 0, height: Layout.editorHeight)
+        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        return textView
+    }
+
+    private func makeEditorScrollView(for textView: NSTextView) -> NSScrollView {
+        let scrollView = NSScrollView()
+        AvatarPanelTheme.styleScrollView(scrollView)
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.hasVerticalScroller = true
+        scrollView.autohidesScrollers = true
+        scrollView.documentView = textView
+        scrollView.heightAnchor.constraint(greaterThanOrEqualToConstant: Layout.editorHeight).isActive = true
+        return scrollView
     }
 
     private func loadFormStateIntoFields() {
@@ -364,11 +489,11 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
             return
         }
 
-        form.providerField.stringValue = config.provider.rawValue
+        form.providerPopup.selectItem(withTitle: config.provider.rawValue)
         form.baseURLField.stringValue = config.baseURL
         form.modelField.stringValue = config.model
-        form.authField.stringValue = makeJSONObjectString(config.auth)
-        form.optionsField.stringValue = makeJSONObjectString(config.options)
+        form.authTextView.string = makeJSONObjectString(config.auth)
+        form.optionsTextView.string = makeJSONObjectString(config.options)
     }
 
     private func config(for kind: GenerationCapabilityKind) -> GenerationCapabilityConfig {
@@ -404,16 +529,15 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
             return current
         }
 
-        let provider = GenerationCapabilityProvider(
-            rawValue: form.providerField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        ) ?? current.provider
+        let selectedProviderTitle = form.providerPopup.titleOfSelectedItem?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let provider = GenerationCapabilityProvider(rawValue: selectedProviderTitle) ?? current.provider
 
         return GenerationCapabilityConfig(
             provider: provider,
             baseURL: form.baseURLField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines),
             model: form.modelField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines),
-            auth: try parseStringDictionary(from: form.authField.stringValue),
-            options: try parseDoubleDictionary(from: form.optionsField.stringValue)
+            auth: try parseStringDictionary(from: form.authTextView.string),
+            options: try parseDoubleDictionary(from: form.optionsTextView.string)
         )
     }
 
@@ -520,11 +644,8 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
         loadFormStateIntoFields()
     }
 
-    @objc private func handleAdvancedToggle(_ sender: NSButton) {
-        guard
-            let rawIdentifier = sender.identifier?.rawValue,
-            let capability = GenerationCapabilityKind(rawValue: rawIdentifier.replacingOccurrences(of: "advanced-", with: ""))
-        else {
+    @objc private func handleEditorModeSelection(_ sender: NSButton) {
+        guard let identifier = sender.identifier?.rawValue else {
             return
         }
 
@@ -536,8 +657,19 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
             return
         }
 
-        expandedAdvancedSections[capability] = !(expandedAdvancedSections[capability] ?? false)
+        expandedAdvancedSections[selectedCapability] = (identifier == "generationConfigModeAdvanced")
         buildUI()
         loadFormStateIntoFields()
+    }
+
+    @objc private func handleSave() {
+        do {
+            try persistFormState()
+            statusLabel.stringValue = TextCatalog.shared.text(.generationConfigSaveSuccessStatus)
+            statusLabel.textColor = AvatarPanelTheme.accent
+        } catch {
+            statusLabel.stringValue = error.localizedDescription
+            statusLabel.textColor = AvatarPanelTheme.danger
+        }
     }
 }
