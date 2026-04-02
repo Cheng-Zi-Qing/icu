@@ -478,6 +478,57 @@ func testGenerationConfigWindowSaveFailureKeepsAdvancedDraftVisibleForRepair() t
     _ = try requireTextView(in: contentView, identifier: "generationConfigOptionsEditor")
 }
 
+func testGenerationConfigWindowRejectsBooleanOptionsAndKeepsDraftVisibleForRepair() throws {
+    let repoRoot = try makeTemporaryDirectory()
+    let appPaths = AppPaths(rootURL: repoRoot)
+    try appPaths.ensureDirectories()
+    let settingsStore = GenerationSettingsStore(repoRootURL: repoRoot)
+    try settingsStore.save(makeValidGenerationSettings())
+    let themeManager = try ThemeManager(appPaths: appPaths, settingsStore: settingsStore)
+    ThemeManager.installShared(themeManager)
+
+    let service = ThemeGenerationService(
+        transport: StubGenerationTransport(
+            results: [
+                .success(#"{\"name\":\"Moss Pixel\",\"summary\":\"掌机感、苔藓绿、低饱和\"}"#),
+                .success(validThemePackJSONString(id: "moss_pixel"))
+            ]
+        ),
+        settingsStore: settingsStore,
+        themeManager: themeManager
+    )
+    let coordinator = GenerationCoordinator(
+        settingsStore: settingsStore,
+        themeManager: themeManager,
+        generationService: service
+    )
+
+    let controller = coordinator.openGenerationConfig()
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "generation config window content view should exist")
+    }
+
+    try requireActionButton(in: contentView, title: "高级").performClick(nil)
+
+    let optionsEditor = try requireTextView(in: contentView, identifier: "generationConfigOptionsEditor")
+    updateTextView(optionsEditor, value: #"{"stream":true}"#)
+
+    try requireActionButton(in: contentView, title: "保存").performClick(nil)
+
+    _ = try requireLabel(in: contentView, stringValue: "选项 JSON 中的字段 'stream' 格式不正确。")
+    let optionsEditorAfterFailedSave = try requireTextView(in: contentView, identifier: "generationConfigOptionsEditor")
+    try expect(
+        optionsEditorAfterFailedSave.string == #"{"stream":true}"#,
+        "boolean options should stay visible after a failed save so the user can repair them"
+    )
+
+    let persistedSettings = try settingsStore.load()
+    try expect(
+        persistedSettings.textDescription.options["stream"] == nil,
+        "failed saves should not silently persist boolean options as 1.0 or 0.0"
+    )
+}
+
 func testGenerationConfigWindowPreservesInvalidJSONDraftAcrossThemeChange() throws {
     let repoRoot = try makeTemporaryDirectory()
     let appPaths = AppPaths(rootURL: repoRoot)

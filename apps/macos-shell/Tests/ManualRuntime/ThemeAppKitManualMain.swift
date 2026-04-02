@@ -72,6 +72,7 @@ struct ThemeAppKitManualMain {
             try testGenerationConfigWindowKeepsCoreFieldsHighWhenDetailCopyGetsLong()
             try testGenerationConfigWindowSavePersistsPopupAndAdvancedDraftsAndMarksLaterEditsUnsaved()
             try testGenerationConfigWindowSaveFailureKeepsAdvancedDraftVisibleForRepair()
+            try testGenerationConfigWindowRejectsBooleanOptionsAndKeepsDraftVisibleForRepair()
             try testGenerationConfigWindowPreservesInvalidJSONDraftAcrossThemeChange()
             try testGenerationCoordinatorReusesConfigWindowController()
             try testGenerationConfigWindowLoadsSavedSettingsAndRestylesOnThemeChange()

@@ -667,6 +667,9 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
             guard let number = value as? NSNumber else {
                 throw GenerationConfigFormError.invalidValue(field: TextCatalog.shared.text(.generationConfigOptionsLabel), key: key)
             }
+            if CFGetTypeID(number) == CFBooleanGetTypeID() {
+                throw GenerationConfigFormError.invalidValue(field: TextCatalog.shared.text(.generationConfigOptionsLabel), key: key)
+            }
             parsed[key] = number.doubleValue
         }
         return parsed
