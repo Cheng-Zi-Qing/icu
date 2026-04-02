@@ -904,8 +904,6 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         optimizeButton.widthAnchor.constraint(equalToConstant: 110).isActive = true
         previewButton.widthAnchor.constraint(equalToConstant: 110).isActive = true
         regenerateButton.widthAnchor.constraint(equalToConstant: 110).isActive = true
-        nextStepButton.widthAnchor.constraint(equalToConstant: 88).isActive = true
-        backStepButton.widthAnchor.constraint(equalToConstant: 110).isActive = true
         returnButton.widthAnchor.constraint(equalToConstant: 132).isActive = true
         saveAndApplyButton.widthAnchor.constraint(equalToConstant: 110).isActive = true
         return stack

@@ -613,16 +613,60 @@ func testAvatarSelectorInlineCreateModeUsesNextAndBackStepNavigationButtons() th
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
 
     let nextStepButton = try requireActionButton(in: contentView, title: "下一步")
+    try expect(
+        nextStepButton.constraints.contains(where: { constraint in
+            constraint.firstAttribute == .width
+                && constraint.relation == .equal
+                && abs(constraint.constant - 88) < 0.5
+        }) == false,
+        "next-step button should size from localized content without fixed width constraints"
+    )
     nextStepButton.performClick(nil)
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
 
     _ = try requireTextField(in: contentView, identifier: "avatarCreateNameField")
     _ = try requireTextField(in: contentView, identifier: "avatarCreatePersonaField")
-    _ = try requireActionButton(in: contentView, title: "返回上一步")
+    let backStepButton = try requireActionButton(in: contentView, title: "返回上一步")
+    try expect(
+        backStepButton.constraints.contains(where: { constraint in
+            constraint.firstAttribute == .width
+                && constraint.relation == .equal
+                && abs(constraint.constant - 110) < 0.5
+        }) == false,
+        "back-step button should size from localized content without fixed width constraints"
+    )
     _ = try requireActionButton(in: contentView, title: "保存并应用")
     try expect(
         findButton(in: contentView, title: "下一步") == nil,
         "step 2 action bar should not keep the next-step action"
+    )
+
+    backStepButton.performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    _ = try requireActionButton(in: contentView, title: "下一步")
+    _ = try requireActionButton(in: contentView, title: "生成预览")
+    try expect(
+        findButton(in: contentView, title: "保存并应用") == nil,
+        "step 1 action bar should hide the save action after navigating back"
+    )
+    try expect(
+        allSubviews(in: contentView)
+            .compactMap { $0 as? NSTextView }
+            .contains(where: { $0.identifier?.rawValue == "avatarCreateRawPrompt" }),
+        "step 1 prompt editor should reappear after navigating back"
+    )
+    try expect(
+        allSubviews(in: contentView)
+            .compactMap { $0 as? NSTextField }
+            .contains(where: { $0.identifier?.rawValue == "avatarCreateNameField" }) == false,
+        "step 2 name field should be hidden again after navigating back"
+    )
+    try expect(
+        allSubviews(in: contentView)
+            .compactMap { $0 as? NSTextField }
+            .contains(where: { $0.identifier?.rawValue == "avatarCreatePersonaField" }) == false,
+        "step 2 persona field should be hidden again after navigating back"
     )
 }
 
