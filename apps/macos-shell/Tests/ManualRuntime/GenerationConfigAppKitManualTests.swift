@@ -529,6 +529,10 @@ func testGenerationConfigWindowPreservesInvalidJSONDraftAcrossThemeChange() thro
         authEditorAfterThemeChange.string == #"{"api_key":}"#,
         "theme-driven rebuilds should preserve invalid JSON drafts for recovery"
     )
+    try expect(
+        hexString(controller.window?.backgroundColor) == "#351B31",
+        "theme-driven rebuilds should still restyle the window even when invalid JSON is visible"
+    )
 }
 
 func testGenerationCoordinatorReusesConfigWindowController() throws {

@@ -52,6 +52,14 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
         override var isFlipped: Bool { true }
     }
 
+    private struct VisibleCapabilityDraft {
+        let providerTitle: String
+        let model: String
+        let baseURL: String
+        let auth: String
+        let options: String
+    }
+
     private enum StatusState {
         case neutral
         case success(String)
@@ -504,6 +512,32 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
         form.optionsTextView.string = makeJSONObjectString(config.options)
     }
 
+    private func captureVisibleDraft(for kind: GenerationCapabilityKind) -> VisibleCapabilityDraft? {
+        guard let form = capabilityForms[kind] else {
+            return nil
+        }
+
+        return VisibleCapabilityDraft(
+            providerTitle: form.providerPopup.titleOfSelectedItem ?? GenerationCapabilityProvider.ollama.rawValue,
+            model: form.modelField.stringValue,
+            baseURL: form.baseURLField.stringValue,
+            auth: form.authTextView.string,
+            options: form.optionsTextView.string
+        )
+    }
+
+    private func applyVisibleDraft(_ draft: VisibleCapabilityDraft, to kind: GenerationCapabilityKind) {
+        guard let form = capabilityForms[kind] else {
+            return
+        }
+
+        form.providerPopup.selectItem(withTitle: draft.providerTitle)
+        form.modelField.stringValue = draft.model
+        form.baseURLField.stringValue = draft.baseURL
+        form.authTextView.string = draft.auth
+        form.optionsTextView.string = draft.options
+    }
+
     private func applyStatusState() {
         switch statusState {
         case .neutral:
@@ -663,14 +697,19 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
                 return
             }
 
+            let visibleDraft = self.captureVisibleDraft(for: self.selectedCapability)
             do {
                 try self.syncDraftFromVisibleFields()
+                self.buildUI()
+                self.loadFormStateIntoFields()
             } catch {
                 self.setErrorStatus(error.localizedDescription)
-                return
+                self.buildUI()
+                self.loadFormStateIntoFields()
+                if let visibleDraft {
+                    self.applyVisibleDraft(visibleDraft, to: self.selectedCapability)
+                }
             }
-            self.buildUI()
-            self.loadFormStateIntoFields()
         }
     }
 
