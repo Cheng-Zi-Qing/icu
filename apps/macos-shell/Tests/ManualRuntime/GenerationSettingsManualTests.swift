@@ -171,3 +171,38 @@ func testGenerationSettingsStoreFallsBackToRepoSettingsAndMigratesWritesToAppSup
         "migration writes should not mutate the repo-backed settings file"
     )
 }
+
+func testGenerationSettingsStoreIgnoresBooleanOptionsWhenLoading() throws {
+    let root = try makeTemporaryDirectory()
+    try writeText(
+        at: root.appendingPathComponent("config/settings.json"),
+        contents: #"""
+        {
+          "generation": {
+            "text_description": {
+              "provider": "ollama",
+              "base_url": "http://localhost:11434",
+              "model": "qwen3.5:35b",
+              "auth": {},
+              "options": {
+                "temperature": 0.7,
+                "stream": true
+              }
+            }
+          }
+        }
+        """#
+    )
+
+    let store = GenerationSettingsStore(repoRootURL: root)
+    let loaded = try store.load()
+
+    try expect(
+        loaded.textDescription.options["temperature"] == 0.7,
+        "store should keep real numeric options when loading settings"
+    )
+    try expect(
+        loaded.textDescription.options["stream"] == nil,
+        "store should ignore boolean options instead of coercing them to 1.0 or 0.0"
+    )
+}

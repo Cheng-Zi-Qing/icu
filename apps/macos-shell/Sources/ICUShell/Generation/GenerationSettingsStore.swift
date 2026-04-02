@@ -108,7 +108,7 @@ final class GenerationSettingsStore {
         let optionsObject = object["options"] as? [String: Any] ?? [:]
         var options: [String: Double] = [:]
         for (key, value) in optionsObject {
-            if let number = value as? NSNumber {
+            if let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID() {
                 options[key] = number.doubleValue
             }
         }
