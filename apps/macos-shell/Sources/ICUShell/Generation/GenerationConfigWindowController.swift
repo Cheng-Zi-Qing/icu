@@ -47,9 +47,15 @@ enum GenerationConfigFormError: Error, LocalizedError {
     }
 }
 
-final class GenerationConfigWindowController: NSWindowController, NSWindowDelegate {
+final class GenerationConfigWindowController: NSWindowController, NSWindowDelegate, NSTextFieldDelegate, NSTextViewDelegate {
     private final class FlippedView: NSView {
         override var isFlipped: Bool { true }
+    }
+
+    private enum StatusState {
+        case neutral
+        case success(String)
+        case error(String)
     }
 
     private enum Layout {
@@ -86,6 +92,7 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
     private var themeObserver: NSObjectProtocol?
     private var didFinish = false
     private var selectedCapability: GenerationCapabilityKind = .textDescription
+    private var statusState: StatusState = .neutral
     private var expandedAdvancedSections: [GenerationCapabilityKind: Bool] =
         Dictionary(uniqueKeysWithValues: GenerationCapabilityKind.allCases.map { ($0, false) })
 
@@ -154,10 +161,6 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
         AvatarPanelTheme.styleWindow(window)
         contentView.subviews.forEach { $0.removeFromSuperview() }
         capabilityForms.removeAll()
-        statusLabel.textColor = AvatarPanelTheme.muted
-        if statusLabel.stringValue.isEmpty {
-            statusLabel.stringValue = TextCatalog.shared.text(.generationConfigStatusText)
-        }
 
         let root = NSStackView()
         root.orientation = .vertical
@@ -192,6 +195,7 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
         statusLabel.lineBreakMode = .byTruncatingTail
         statusLabel.maximumNumberOfLines = 1
         statusLabel.setContentHuggingPriority(.required, for: .vertical)
+        applyStatusState()
 
         root.addArrangedSubview(header)
         root.addArrangedSubview(body)
@@ -368,8 +372,8 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
             color: AvatarPanelTheme.muted,
             font: AvatarPanelTheme.smallFont
         )
-        descriptionLabel.lineBreakMode = .byWordWrapping
-        descriptionLabel.maximumNumberOfLines = 0
+        descriptionLabel.lineBreakMode = .byTruncatingTail
+        descriptionLabel.maximumNumberOfLines = 2
         let header = NSStackView(views: [titleLabel, descriptionLabel])
         header.orientation = .vertical
         header.spacing = Layout.headerSpacing
@@ -439,6 +443,8 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
         popup.translatesAutoresizingMaskIntoConstraints = false
         popup.identifier = NSUserInterfaceItemIdentifier("generationConfigProviderPopup")
         popup.font = AvatarPanelTheme.bodyFont
+        popup.target = self
+        popup.action = #selector(handleProviderChange(_:))
         popup.addItems(withTitles: [
             GenerationCapabilityProvider.ollama.rawValue,
             GenerationCapabilityProvider.huggingFace.rawValue,
@@ -452,6 +458,7 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
         let field = NSTextField(string: "")
         field.placeholderString = placeholder
         field.identifier = NSUserInterfaceItemIdentifier(identifier)
+        field.delegate = self
         AvatarPanelTheme.styleEditableTextField(field)
         field.translatesAutoresizingMaskIntoConstraints = false
         field.heightAnchor.constraint(equalToConstant: Layout.fieldHeight).isActive = true
@@ -462,6 +469,7 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
         let textView = NSTextView()
         AvatarPanelTheme.styleTextView(textView)
         textView.identifier = NSUserInterfaceItemIdentifier(identifier)
+        textView.delegate = self
         textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = false
         textView.minSize = NSSize(width: 0, height: Layout.editorHeight)
@@ -494,6 +502,35 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
         form.modelField.stringValue = config.model
         form.authTextView.string = makeJSONObjectString(config.auth)
         form.optionsTextView.string = makeJSONObjectString(config.options)
+    }
+
+    private func applyStatusState() {
+        switch statusState {
+        case .neutral:
+            statusLabel.stringValue = TextCatalog.shared.text(.generationConfigStatusText)
+            statusLabel.textColor = AvatarPanelTheme.muted
+        case let .success(message):
+            statusLabel.stringValue = message
+            statusLabel.textColor = AvatarPanelTheme.accent
+        case let .error(message):
+            statusLabel.stringValue = message
+            statusLabel.textColor = AvatarPanelTheme.danger
+        }
+    }
+
+    private func setNeutralStatus() {
+        statusState = .neutral
+        applyStatusState()
+    }
+
+    private func setSuccessStatus(_ message: String) {
+        statusState = .success(message)
+        applyStatusState()
+    }
+
+    private func setErrorStatus(_ message: String) {
+        statusState = .error(message)
+        applyStatusState()
     }
 
     private func config(for kind: GenerationCapabilityKind) -> GenerationCapabilityConfig {
@@ -551,7 +588,12 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
             throw GenerationConfigFormError.invalidJSONObject(field: TextCatalog.shared.text(.generationConfigAuthLabel))
         }
 
-        let object = try JSONSerialization.jsonObject(with: data, options: [])
+        let object: Any
+        do {
+            object = try JSONSerialization.jsonObject(with: data, options: [])
+        } catch {
+            throw GenerationConfigFormError.invalidJSONObject(field: TextCatalog.shared.text(.generationConfigAuthLabel))
+        }
         guard let dictionary = object as? [String: Any] else {
             throw GenerationConfigFormError.invalidJSONObject(field: TextCatalog.shared.text(.generationConfigAuthLabel))
         }
@@ -576,7 +618,12 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
             throw GenerationConfigFormError.invalidJSONObject(field: TextCatalog.shared.text(.generationConfigOptionsLabel))
         }
 
-        let object = try JSONSerialization.jsonObject(with: data, options: [])
+        let object: Any
+        do {
+            object = try JSONSerialization.jsonObject(with: data, options: [])
+        } catch {
+            throw GenerationConfigFormError.invalidJSONObject(field: TextCatalog.shared.text(.generationConfigOptionsLabel))
+        }
         guard let dictionary = object as? [String: Any] else {
             throw GenerationConfigFormError.invalidJSONObject(field: TextCatalog.shared.text(.generationConfigOptionsLabel))
         }
@@ -616,7 +663,12 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
                 return
             }
 
-            try? self.syncDraftFromVisibleFields()
+            do {
+                try self.syncDraftFromVisibleFields()
+            } catch {
+                self.setErrorStatus(error.localizedDescription)
+                return
+            }
             self.buildUI()
             self.loadFormStateIntoFields()
         }
@@ -634,8 +686,7 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
         do {
             try syncDraftFromVisibleFields()
         } catch {
-            statusLabel.stringValue = error.localizedDescription
-            statusLabel.textColor = AvatarPanelTheme.danger
+            setErrorStatus(error.localizedDescription)
             return
         }
 
@@ -652,8 +703,7 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
         do {
             try syncDraftFromVisibleFields()
         } catch {
-            statusLabel.stringValue = error.localizedDescription
-            statusLabel.textColor = AvatarPanelTheme.danger
+            setErrorStatus(error.localizedDescription)
             return
         }
 
@@ -665,11 +715,25 @@ final class GenerationConfigWindowController: NSWindowController, NSWindowDelega
     @objc private func handleSave() {
         do {
             try persistFormState()
-            statusLabel.stringValue = TextCatalog.shared.text(.generationConfigSaveSuccessStatus)
-            statusLabel.textColor = AvatarPanelTheme.accent
+            setSuccessStatus(TextCatalog.shared.text(.generationConfigSaveSuccessStatus))
         } catch {
-            statusLabel.stringValue = error.localizedDescription
-            statusLabel.textColor = AvatarPanelTheme.danger
+            setErrorStatus(error.localizedDescription)
         }
+    }
+
+    @objc private func handleProviderChange(_ sender: NSPopUpButton) {
+        guard sender.identifier?.rawValue == "generationConfigProviderPopup" else {
+            return
+        }
+
+        setNeutralStatus()
+    }
+
+    func controlTextDidChange(_ obj: Notification) {
+        setNeutralStatus()
+    }
+
+    func textDidChange(_ notification: Notification) {
+        setNeutralStatus()
     }
 }
