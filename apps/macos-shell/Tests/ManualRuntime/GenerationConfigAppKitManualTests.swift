@@ -128,14 +128,6 @@ func testGenerationConfigWindowUsesPopupProviderAndCollapsedAdvancedEditorsByDef
 }
 
 func testGenerationConfigWindowShowsMultilineJSONEditorsWhenAdvancedIsSelected() throws {
-    func requireTextView(in root: NSView, identifier: String) throws -> NSTextView {
-        if let textView = findTextView(in: root, identifier: identifier) {
-            return textView
-        }
-
-        throw TestFailure(message: "expected text view '\(identifier)' to exist")
-    }
-
     let repoRoot = try makeTemporaryDirectory()
     let appPaths = AppPaths(rootURL: repoRoot)
     try appPaths.ensureDirectories()
@@ -463,6 +455,14 @@ private func findTextView(in root: NSView, identifier: String) -> NSTextView? {
     allSubviews(in: root)
         .compactMap { $0 as? NSTextView }
         .first { $0.identifier?.rawValue == identifier }
+}
+
+private func requireTextView(in root: NSView, identifier: String) throws -> NSTextView {
+    if let textView = findTextView(in: root, identifier: identifier) {
+        return textView
+    }
+
+    throw TestFailure(message: "expected text view '\(identifier)' to exist")
 }
 
 private func requirePopupButton(in root: NSView, identifier: String) throws -> NSPopUpButton {

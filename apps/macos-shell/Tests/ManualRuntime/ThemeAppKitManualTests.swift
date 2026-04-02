@@ -3013,7 +3013,7 @@ func requireActionButton(in root: NSView, title: String) throws -> NSButton {
     throw TestFailure(message: "expected actionable button '\(title)' to exist")
 }
 
-func requireTextView(in root: NSView, identifier: String) throws -> NSTextView {
+private func requireTextView(in root: NSView, identifier: String) throws -> NSTextView {
     if let textView = allSubviews(in: root)
         .compactMap({ $0 as? NSTextView })
         .first(where: { $0.identifier?.rawValue == identifier }) {
