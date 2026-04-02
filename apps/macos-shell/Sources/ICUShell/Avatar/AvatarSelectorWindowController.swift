@@ -84,6 +84,7 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
     private var creationDraftPersona = ""
     private var previousSuggestedPersona = ""
     private var creationStage: InlineAvatarCreationStage = .empty
+    private var creationStep: InlineAvatarCreationStep = .promptAndPreview
     private var isInlineAvatarPreviewInFlight = false
     private var inlineAvatarPreviewRequestID: UUID?
     private var isInlineAvatarSaveInFlight = false
@@ -986,6 +987,30 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
             copy("avatar_studio.create_mode_title", fallback: "当前模式：新建形象"),
             color: AvatarPanelTheme.accent
         )
+        let promptStepButton = NSButton(
+            title: copy("avatar_studio.create_step_prompt_button", fallback: "Step 1 · Prompt 与生成"),
+            target: self,
+            action: #selector(handleSelectInlineAvatarPromptStep)
+        )
+        let metadataStepButton = NSButton(
+            title: copy("avatar_studio.create_step_metadata_button", fallback: "Step 2 · 名称与保存"),
+            target: self,
+            action: #selector(handleSelectInlineAvatarMetadataStep)
+        )
+        if creationStep == .promptAndPreview {
+            AvatarPanelTheme.stylePrimaryButton(promptStepButton)
+            AvatarPanelTheme.styleSecondaryButton(metadataStepButton)
+        } else {
+            AvatarPanelTheme.styleSecondaryButton(promptStepButton)
+            AvatarPanelTheme.stylePrimaryButton(metadataStepButton)
+        }
+        metadataStepButton.isEnabled = canOpenMetadataStep()
+        let stepsRow = NSStackView(views: [promptStepButton, metadataStepButton, NSView()])
+        stepsRow.orientation = .horizontal
+        stepsRow.spacing = 10
+        promptStepButton.widthAnchor.constraint(equalToConstant: 180).isActive = true
+        metadataStepButton.widthAnchor.constraint(equalToConstant: 180).isActive = true
+
         let promptTitle = AvatarPanelTheme.makeLabel(
             copy("avatar_studio.create_prompt_title", fallback: "原始 prompt"),
             color: AvatarPanelTheme.accent
@@ -1016,36 +1041,42 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         avatarCreatePersonaField.placeholderString = copy("avatar_studio.create_persona_placeholder", fallback: "预览后会自动填入建议人设，可继续编辑。")
 
         stack.addArrangedSubview(modeLabel)
-        stack.addArrangedSubview(promptTitle)
-        stack.addArrangedSubview(
-            AvatarPanelTheme.makeLabel(
-                copy("avatar_studio.create_prompt_hint", fallback: "描述你想生成的形象、动作和动画关键词。"),
-                color: AvatarPanelTheme.muted,
-                font: AvatarPanelTheme.smallFont
+        stack.addArrangedSubview(stepsRow)
+
+        switch creationStep {
+        case .promptAndPreview:
+            stack.addArrangedSubview(promptTitle)
+            stack.addArrangedSubview(
+                AvatarPanelTheme.makeLabel(
+                    copy("avatar_studio.create_prompt_hint", fallback: "描述你想生成的形象、动作和动画关键词。"),
+                    color: AvatarPanelTheme.muted,
+                    font: AvatarPanelTheme.smallFont
+                )
             )
-        )
-        stack.addArrangedSubview(makeTextScrollView(textView: avatarCreateRawPromptView, minHeight: 96))
-        stack.addArrangedSubview(optimizedPromptTitle)
-        stack.addArrangedSubview(
-            AvatarPanelTheme.makeLabel(
-                copy("avatar_studio.create_optimized_prompt_hint", fallback: "优化后的 prompt 会用于生成 idle / working / alert 三组预览。"),
-                color: AvatarPanelTheme.muted,
-                font: AvatarPanelTheme.smallFont
+            stack.addArrangedSubview(makeTextScrollView(textView: avatarCreateRawPromptView, minHeight: 96))
+            stack.addArrangedSubview(optimizedPromptTitle)
+            stack.addArrangedSubview(
+                AvatarPanelTheme.makeLabel(
+                    copy("avatar_studio.create_optimized_prompt_hint", fallback: "优化后的 prompt 会用于生成 idle / working / alert 三组预览。"),
+                    color: AvatarPanelTheme.muted,
+                    font: AvatarPanelTheme.smallFont
+                )
             )
-        )
-        stack.addArrangedSubview(makeTextScrollView(textView: avatarCreateOptimizedPromptView, minHeight: 96))
-        stack.addArrangedSubview(actionsTitle)
-        stack.addArrangedSubview(
-            makeInfoCard(
-                title: copy("avatar_studio.create_actions_title", fallback: "动作生成"),
-                lines: inlineAvatarActionStatusLines()
+            stack.addArrangedSubview(makeTextScrollView(textView: avatarCreateOptimizedPromptView, minHeight: 96))
+            stack.addArrangedSubview(actionsTitle)
+            stack.addArrangedSubview(
+                makeInfoCard(
+                    title: copy("avatar_studio.create_actions_title", fallback: "动作生成"),
+                    lines: inlineAvatarActionStatusLines()
+                )
             )
-        )
-        stack.addArrangedSubview(nameTitle)
-        stack.addArrangedSubview(avatarCreateNameField)
-        stack.addArrangedSubview(personaTitle)
-        stack.addArrangedSubview(avatarCreatePersonaField)
-        stack.addArrangedSubview(saveInfoTitle)
+        case .metadataAndSave:
+            stack.addArrangedSubview(nameTitle)
+            stack.addArrangedSubview(avatarCreateNameField)
+            stack.addArrangedSubview(personaTitle)
+            stack.addArrangedSubview(avatarCreatePersonaField)
+            stack.addArrangedSubview(saveInfoTitle)
+        }
         stack.addArrangedSubview(NSView())
 
         NSLayoutConstraint.activate([
@@ -1262,6 +1293,10 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         creationPreviewDraft?.hasRequiredActionImages == true
     }
 
+    private func canOpenMetadataStep() -> Bool {
+        creationStage == .previewReady
+    }
+
     private func syncInlineAvatarStage() {
         if hasCompleteInlineAvatarPreviewDraft() {
             creationStage = .previewReady
@@ -1281,12 +1316,15 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
     }
 
     private func updateAvatarCreateActionButtonStates() {
+        if creationStage != .saving, !canOpenMetadataStep() {
+            creationStep = .promptAndPreview
+        }
         let hasName = !normalizedPrompt(creationDraftName, fallback: "").isEmpty
         let isBusy = isInlineAvatarPreviewInFlight || isInlineAvatarSaveInFlight
         avatarCreateOptimizeButton?.isEnabled = avatarTabMode == .create && !isBusy
         avatarCreatePreviewButton?.isEnabled = avatarTabMode == .create && !isBusy && hasNonEmptyInlineAvatarOptimizedPrompt()
         avatarCreateRegenerateButton?.isEnabled = avatarTabMode == .create && !isBusy && creationPreviewDraft != nil
-        avatarCreateSaveButton?.isEnabled = avatarTabMode == .create && !isBusy && creationStage == .previewReady && hasName
+        avatarCreateSaveButton?.isEnabled = avatarTabMode == .create && creationStep == .metadataAndSave && !isBusy && creationStage == .previewReady && hasName
     }
 
     private func renderOptimizedInlineAvatarPrompt() throws {
@@ -1437,6 +1475,7 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         isInlineAvatarPreviewInFlight = false
         inlineAvatarPreviewRequestID = nil
         isInlineAvatarSaveInFlight = false
+        creationStep = .promptAndPreview
         creationRawPrompt = ""
         creationOptimizedPrompt = ""
         creationPreviewDraft = nil
@@ -1666,6 +1705,7 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
 
         isAvatarBrowsePromptExpanded = false
         resetInlineAvatarCreationDraft()
+        creationStep = .promptAndPreview
         statusLabel.stringValue = copy("avatar_studio.status_ready", fallback: "先生成预览，确认满意后再应用。")
         statusLabel.textColor = AvatarPanelTheme.muted
         avatarTabMode = .create
@@ -1688,6 +1728,24 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         } catch {
             showGenerationError(error)
         }
+    }
+
+    @objc private func handleSelectInlineAvatarPromptStep() {
+        guard avatarTabMode == .create else {
+            return
+        }
+
+        creationStep = .promptAndPreview
+        renderSelectedTab()
+    }
+
+    @objc private func handleSelectInlineAvatarMetadataStep() {
+        guard avatarTabMode == .create, canOpenMetadataStep() else {
+            return
+        }
+
+        creationStep = .metadataAndSave
+        renderSelectedTab()
     }
 
     @objc private func handleToggleAvatarBrowsePrompt(_ sender: NSButton) {

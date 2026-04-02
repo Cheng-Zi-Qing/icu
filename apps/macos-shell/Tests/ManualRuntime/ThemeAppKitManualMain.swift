@@ -17,6 +17,8 @@ struct ThemeAppKitManualMain {
             try testAvatarSelectorAvatarBrowsePromptResetsAndFocusesAfterTransitions()
             try testAvatarSelectorAvatarTabEntersInlineCreateMode()
             try testAvatarSelectorInlineCreateModeReturnsToBrowseModeWithoutClosing()
+            try testAvatarSelectorInlineCreateModeShowsTwoStepFlow()
+            try testAvatarSelectorInlineCreateModeBlocksMetadataStepUntilPreviewReady()
             try testAvatarSelectorInlineCreateModeOptimizesRawPromptAndUsesOptimizedPromptForPreview()
             try testAvatarSelectorInlineCreateModePreviewGenerationReturnsWithoutBlockingUI()
             try testAvatarSelectorInlineCreateModeRequiresThreePreviewsAndNameBeforeSave()
