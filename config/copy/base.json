@@ -88,6 +88,8 @@
     "draft_title": "当前草稿",
     "draft_placeholder": "尚未生成新的形象草稿。",
     "prompt_hint": "描述你想生成的形象、动作和动画关键词。",
+    "show_prompt_button": "编辑 prompt",
+    "hide_prompt_button": "收起 prompt",
     "add_custom_button": "新增自定义形象",
     "create_mode_title": "当前模式：新建形象",
     "return_to_library_button": "返回现有形象",

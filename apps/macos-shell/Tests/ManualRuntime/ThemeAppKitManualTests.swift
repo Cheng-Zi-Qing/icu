@@ -137,6 +137,80 @@ func testAvatarSelectorThemeTabOmitsModelSummaryAndCrossDomainPanels() throws {
     )
 }
 
+func testAvatarSelectorWindowUsesCompactFrame() throws {
+    let previewURL = try makeTinyPNG()
+    let controller = AvatarSelectorWindowController(
+        avatars: [
+            AvatarSummary(
+                id: "capybara",
+                name: "水豚",
+                style: "像素",
+                previewURL: previewURL,
+                traits: "稳重",
+                tone: "冷静"
+            )
+        ],
+        currentAvatarID: "capybara",
+        onChoose: { _ in },
+        onClose: {}
+    )
+
+    guard let contentSize = controller.window?.contentView?.frame.size else {
+        throw TestFailure(message: "selector content view should exist")
+    }
+
+    try expect(contentSize == NSSize(width: 880, height: 580), "selector should use the compact frame")
+}
+
+func testAvatarSelectorAvatarTabCollapsesPromptSectionByDefault() throws {
+    let previewURL = try makeTinyPNG()
+    let controller = AvatarSelectorWindowController(
+        avatars: [
+            AvatarSummary(
+                id: "capybara",
+                name: "水豚",
+                style: "像素",
+                previewURL: previewURL,
+                traits: "稳重",
+                tone: "冷静"
+            )
+        ],
+        currentAvatarID: "capybara",
+        onChoose: { _ in },
+        onClose: {}
+    )
+
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "selector content view should exist")
+    }
+
+    try requireButton(in: contentView, title: "桌宠形象动画").performClick(nil)
+    _ = try requireLabel(in: contentView, stringValue: "当前已应用形象")
+    _ = try requireLabel(in: contentView, stringValue: "当前草稿")
+    _ = try requireButton(in: contentView, title: "新增自定义形象")
+    _ = try requireActionButton(in: contentView, title: "生成预览")
+    _ = try requireActionButton(in: contentView, title: "重新生成")
+    _ = try requireActionButton(in: contentView, title: "应用")
+
+    try expect(
+        allSubviews(in: contentView)
+            .compactMap { $0 as? NSTextView }
+            .first(where: { $0.identifier?.rawValue == "avatarPrompt" && !$0.isHidden }) == nil,
+        "browse prompt editor should stay collapsed by default"
+    )
+
+    let showPromptButton = try requireActionButton(in: contentView, title: "编辑 prompt")
+    showPromptButton.performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    try expect(
+        allSubviews(in: contentView)
+            .compactMap { $0 as? NSTextView }
+            .first(where: { $0.identifier?.rawValue == "avatarPrompt" && !$0.isHidden }) != nil,
+        "browse prompt editor should show after clicking edit prompt"
+    )
+}
+
 func testAvatarSelectorAvatarTabEntersInlineCreateMode() throws {
     let previewURL = try makeTinyPNG()
     let controller = AvatarSelectorWindowController(

@@ -37,6 +37,7 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
 
     private var selectedTab: StudioTab = .theme
     private var avatarTabMode: AvatarTabMode = .browse
+    private var isAvatarBrowsePromptExpanded = false
     private var selectedAvatarID: String?
     private var pendingThemePack: ThemePack?
     private var pendingSpeechDraft: SpeechDraft?
@@ -149,7 +150,7 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         self.onClose = onClose
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 900, height: 640),
+            contentRect: NSRect(x: 0, y: 0, width: 880, height: 580),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -322,7 +323,7 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
 
         let root = NSStackView()
         root.orientation = .vertical
-        root.spacing = 16
+        root.spacing = 12
         root.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(root)
 
@@ -333,7 +334,7 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         )
         let header = NSStackView(views: [title, subtitle, statusLabel])
         header.orientation = .vertical
-        header.spacing = 6
+        header.spacing = 4
 
         let tabsBar = makeTabsBar()
         let footer = makeFooter()
@@ -344,12 +345,12 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         root.addArrangedSubview(footer)
 
         NSLayoutConstraint.activate([
-            root.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 24),
-            root.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            root.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
-            root.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -24),
+            root.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 18),
+            root.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 18),
+            root.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -18),
+            root.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -18),
             tabsBar.heightAnchor.constraint(equalToConstant: 38),
-            contentCard.heightAnchor.constraint(greaterThanOrEqualToConstant: 460),
+            contentCard.heightAnchor.constraint(greaterThanOrEqualToConstant: 420),
         ])
 
         renderSelectedTab()
@@ -520,7 +521,10 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
 
         view.addArrangedSubview(summaryRow)
         if avatarTabMode == .browse {
-            view.addArrangedSubview(promptSection)
+            view.addArrangedSubview(makeAvatarBrowsePromptDisclosureRow())
+            if isAvatarBrowsePromptExpanded {
+                view.addArrangedSubview(promptSection)
+            }
         }
         view.addArrangedSubview(previews)
         switch avatarTabMode {
@@ -776,6 +780,25 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         previewButton.widthAnchor.constraint(equalToConstant: 110).isActive = true
         applyButton.widthAnchor.constraint(equalToConstant: 88).isActive = true
         return stack
+    }
+
+    private func makeAvatarBrowsePromptDisclosureRow() -> NSView {
+        let titleKey = isAvatarBrowsePromptExpanded ? "avatar_studio.hide_prompt_button" : "avatar_studio.show_prompt_button"
+        let fallbackTitle = isAvatarBrowsePromptExpanded ? "收起 prompt" : "编辑 prompt"
+        let toggleButton = NSButton(
+            title: copy(titleKey, fallback: fallbackTitle),
+            target: self,
+            action: #selector(handleToggleAvatarBrowsePrompt(_:))
+        )
+        AvatarPanelTheme.styleSecondaryButton(toggleButton)
+        toggleButton.widthAnchor.constraint(equalToConstant: 110).isActive = true
+
+        let row = NSStackView()
+        row.orientation = .horizontal
+        row.spacing = 12
+        row.addArrangedSubview(NSView())
+        row.addArrangedSubview(toggleButton)
+        return row
     }
 
     private func makeActionBar(includeAddCustom: Bool) -> NSView {
@@ -1660,6 +1683,11 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         } catch {
             showGenerationError(error)
         }
+    }
+
+    @objc private func handleToggleAvatarBrowsePrompt(_ sender: NSButton) {
+        isAvatarBrowsePromptExpanded.toggle()
+        renderSelectedTab()
     }
 
     @objc private func handleInlineAvatarFieldAction(_ sender: NSTextField) {

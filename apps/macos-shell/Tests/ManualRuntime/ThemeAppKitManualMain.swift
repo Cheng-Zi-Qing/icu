@@ -12,6 +12,8 @@ struct ThemeAppKitManualMain {
             try testAvatarSelectorWindowRestylesWhenThemeChanges()
             try testAvatarSelectorWindowUsesStudioTabsAndThemeBubblePreviewByDefault()
             try testAvatarSelectorThemeTabOmitsModelSummaryAndCrossDomainPanels()
+            try testAvatarSelectorWindowUsesCompactFrame()
+            try testAvatarSelectorAvatarTabCollapsesPromptSectionByDefault()
             try testAvatarSelectorAvatarTabEntersInlineCreateMode()
             try testAvatarSelectorInlineCreateModeReturnsToBrowseModeWithoutClosing()
             try testAvatarSelectorInlineCreateModeOptimizesRawPromptAndUsesOptimizedPromptForPreview()
