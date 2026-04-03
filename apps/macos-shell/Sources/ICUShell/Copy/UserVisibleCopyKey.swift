@@ -30,16 +30,44 @@ enum UserVisibleCopyKey: String {
     case generationConfigAdvancedSectionTitle = "generation_config.advanced_section_title"
     case generationConfigShowAdvancedButton = "generation_config.show_advanced_button"
     case generationConfigHideAdvancedButton = "generation_config.hide_advanced_button"
+    case generationConfigBasicButton = "generation_config.basic_button"
+    case generationConfigAdvancedButton = "generation_config.advanced_button"
+    case generationConfigSaveButton = "generation_config.save_button"
+    case generationConfigSaveSuccessStatus = "generation_config.save_success_status"
+    case generationConfigDefaultConfigTitle = "generation_config.default_config_title"
     case generationConfigProviderLabel = "generation_config.provider_label"
+    case generationConfigPresetLabel = "generation_config.preset_label"
+    case generationConfigCustomModelLabel = "generation_config.custom_model_label"
     case generationConfigModelLabel = "generation_config.model_label"
+    case generationConfigAPIKeyLabel = "generation_config.api_key_label"
     case generationConfigBaseURLLabel = "generation_config.base_url_label"
+    case generationConfigHeadersLabel = "generation_config.headers_label"
     case generationConfigAuthLabel = "generation_config.auth_label"
     case generationConfigOptionsLabel = "generation_config.options_label"
+    case generationConfigTestConnectionButton = "generation_config.test_connection_button"
+    case generationConfigTestConnectionSuccessStatus = "generation_config.test_connection_success_status"
+    case generationConfigTestConnectionFailureStatus = "generation_config.test_connection_failure_status"
+    case generationConfigCustomizeButton = "generation_config.customize_button"
+    case generationConfigRestoreDefaultButton = "generation_config.restore_default_button"
+    case generationConfigAdvancedParamsButton = "generation_config.advanced_params_button"
+    case generationConfigUsingDefaultState = "generation_config.using_default_state"
+    case generationConfigCustomizedState = "generation_config.customized_state"
     case generationConfigProviderPlaceholder = "generation_config.provider_placeholder"
+    case generationConfigAPIKeyPlaceholder = "generation_config.api_key_placeholder"
     case generationConfigModelPlaceholder = "generation_config.model_placeholder"
     case generationConfigBaseURLPlaceholder = "generation_config.base_url_placeholder"
     case generationConfigAuthPlaceholder = "generation_config.auth_placeholder"
     case generationConfigOptionsPlaceholder = "generation_config.options_placeholder"
+    case generationConfigProviderOpenAITitle = "generation_config.provider_openai_title"
+    case generationConfigProviderAnthropicTitle = "generation_config.provider_anthropic_title"
+    case generationConfigProviderOllamaTitle = "generation_config.provider_ollama_title"
+    case generationConfigProviderHuggingFaceTitle = "generation_config.provider_huggingface_title"
+    case generationConfigProviderOpenAICompatibleTitle = "generation_config.provider_openai_compatible_title"
+    case generationConfigProviderDefaultOpenAIHelper = "generation_config.provider_default_openai_helper"
+    case generationConfigProviderDefaultAnthropicHelper = "generation_config.provider_default_anthropic_helper"
+    case generationConfigProviderDefaultOllamaHelper = "generation_config.provider_default_ollama_helper"
+    case generationConfigProviderDefaultHuggingFaceHelper = "generation_config.provider_default_huggingface_helper"
+    case generationConfigProviderDefaultOpenAICompatibleHelper = "generation_config.provider_default_openai_compatible_helper"
 
     case themeStudioTabTitle = "theme_studio.tab_title"
     case speechStudioBubblePreviewTitle = "speech_studio.bubble_preview_title"
@@ -116,18 +144,54 @@ extension UserVisibleCopyKey {
             return "显示高级设置"
         case .generationConfigHideAdvancedButton:
             return "隐藏高级设置"
+        case .generationConfigBasicButton:
+            return "基础"
+        case .generationConfigAdvancedButton:
+            return "高级"
+        case .generationConfigSaveButton:
+            return "保存"
+        case .generationConfigSaveSuccessStatus:
+            return "模型配置已保存。"
+        case .generationConfigDefaultConfigTitle:
+            return "Default Config"
         case .generationConfigProviderLabel:
             return "服务商"
+        case .generationConfigPresetLabel:
+            return "Preset"
+        case .generationConfigCustomModelLabel:
+            return "Custom Model"
         case .generationConfigModelLabel:
             return "模型"
+        case .generationConfigAPIKeyLabel:
+            return "API Key"
         case .generationConfigBaseURLLabel:
-            return "接口地址"
+            return "Base URL"
+        case .generationConfigHeadersLabel:
+            return "Headers JSON"
         case .generationConfigAuthLabel:
             return "认证 JSON"
         case .generationConfigOptionsLabel:
             return "选项 JSON"
+        case .generationConfigTestConnectionButton:
+            return "Test Connection"
+        case .generationConfigTestConnectionSuccessStatus:
+            return "%@ connection succeeded."
+        case .generationConfigTestConnectionFailureStatus:
+            return "%@ connection failed: %@"
+        case .generationConfigCustomizeButton:
+            return "Customize"
+        case .generationConfigRestoreDefaultButton:
+            return "Restore Default"
+        case .generationConfigAdvancedParamsButton:
+            return "Advanced Params"
+        case .generationConfigUsingDefaultState:
+            return "Using Default Config"
+        case .generationConfigCustomizedState:
+            return "Customized"
         case .generationConfigProviderPlaceholder:
             return "provider，如 ollama / huggingface / openai-compatible"
+        case .generationConfigAPIKeyPlaceholder:
+            return "api_key"
         case .generationConfigModelPlaceholder:
             return "model"
         case .generationConfigBaseURLPlaceholder:
@@ -136,6 +200,26 @@ extension UserVisibleCopyKey {
             return "auth JSON，如 {\"api_key\":\"sk-xxx\"}"
         case .generationConfigOptionsPlaceholder:
             return "options JSON，如 {\"temperature\":0.7}"
+        case .generationConfigProviderOpenAITitle:
+            return "OpenAI"
+        case .generationConfigProviderAnthropicTitle:
+            return "Anthropic"
+        case .generationConfigProviderOllamaTitle:
+            return "Ollama"
+        case .generationConfigProviderHuggingFaceTitle:
+            return "HuggingFace"
+        case .generationConfigProviderOpenAICompatibleTitle:
+            return "OpenAI-Compatible"
+        case .generationConfigProviderDefaultOpenAIHelper:
+            return "Reuse one OpenAI key and base URL for text and code cards."
+        case .generationConfigProviderDefaultAnthropicHelper:
+            return "Set your Claude key once, then point supported cards at Anthropic."
+        case .generationConfigProviderDefaultOllamaHelper:
+            return "Use your local Ollama host defaults for on-device text and code models."
+        case .generationConfigProviderDefaultHuggingFaceHelper:
+            return "Store a shared HuggingFace token here for avatar-generation presets."
+        case .generationConfigProviderDefaultOpenAICompatibleHelper:
+            return "Use this for gateways and self-hosted endpoints that speak the OpenAI API."
         case .themeStudioTabTitle:
             return "主题风格"
         case .speechStudioBubblePreviewTitle:

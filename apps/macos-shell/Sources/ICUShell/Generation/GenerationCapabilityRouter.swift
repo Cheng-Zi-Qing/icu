@@ -10,9 +10,9 @@ extension GenerationCapabilityKind {
     var allowedProviders: [GenerationCapabilityProvider] {
         switch self {
         case .textDescription, .codeGeneration:
-            return [.ollama, .openAICompatible]
+            return [.openAI, .anthropic, .ollama, .openAICompatible]
         case .animationAvatar:
-            return [.huggingFace, .openAICompatible]
+            return [.openAI, .huggingFace, .openAICompatible]
         }
     }
 }
@@ -22,17 +22,20 @@ struct GenerationCapabilityRouter {
 
     func capability(for kind: GenerationCapabilityKind) throws -> GenerationCapabilityConfig {
         let settings = try settingsStore.load()
-        let capability: GenerationCapabilityConfig
+        let rawCapability: GenerationCapabilityConfig
 
         switch kind {
         case .textDescription:
-            capability = settings.textDescription
+            rawCapability = settings.textDescription
         case .animationAvatar:
-            capability = settings.animationAvatar
+            rawCapability = settings.animationAvatar
         case .codeGeneration:
-            capability = settings.codeGeneration
+            rawCapability = settings.codeGeneration
         }
 
+        let capability = rawCapability.resolvedProviderConfig(
+            providerDefault: settings.providerDefaults[rawCapability.provider]
+        )
         try validate(capability, for: kind)
         return capability
     }

@@ -11,6 +11,11 @@ enum InlineAvatarCreationStage: Equatable {
     case saving
 }
 
+enum InlineAvatarCreationStep: Equatable {
+    case promptAndPreview
+    case metadataAndSave
+}
+
 struct InlineAvatarPreviewDraft: Equatable {
     var actionImageURLs: [String: URL]
     var suggestedPersona: String

@@ -53,12 +53,26 @@ struct SpeechDraft: Codable, Equatable {
         ]
     }
 
-    func previewSummaryText() -> String {
+    func statusPreviewLines() -> [String] {
         [
             "待机：\(statusIdle)",
+            "工作：\(statusWorking)",
+            "专注：\(statusFocus)",
+            "暂离：\(statusBreak)",
+        ]
+    }
+
+    func followUpPreviewLines() -> [String] {
+        [
+            "轻提醒：\(focusEndLight)",
+            "重提醒：\(focusEndHeavy)",
             "收工：\(stopWorkMessage)",
-            "提醒：\(eyeReminder)",
-        ].joined(separator: "\n")
+            "护眼：\(eyeReminder)",
+        ]
+    }
+
+    func previewSummaryText() -> String {
+        (statusPreviewLines() + followUpPreviewLines()).joined(separator: "\n")
     }
 
     func bubblePreviewText() -> String {

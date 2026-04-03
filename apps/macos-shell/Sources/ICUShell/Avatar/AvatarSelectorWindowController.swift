@@ -1,6 +1,10 @@
 import AppKit
 
 final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate, NSTableViewDataSource, NSTableViewDelegate, NSTextViewDelegate, NSTextFieldDelegate {
+    private final class FlippedView: NSView {
+        override var isFlipped: Bool { true }
+    }
+
     private enum StudioTab: CaseIterable {
         case theme
         case avatar
@@ -37,6 +41,7 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
 
     private var selectedTab: StudioTab = .theme
     private var avatarTabMode: AvatarTabMode = .browse
+    private var isAvatarBrowsePromptExpanded = false
     private var selectedAvatarID: String?
     private var pendingThemePack: ThemePack?
     private var pendingSpeechDraft: SpeechDraft?
@@ -83,6 +88,7 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
     private var creationDraftPersona = ""
     private var previousSuggestedPersona = ""
     private var creationStage: InlineAvatarCreationStage = .empty
+    private var creationStep: InlineAvatarCreationStep = .promptAndPreview
     private var isInlineAvatarPreviewInFlight = false
     private var inlineAvatarPreviewRequestID: UUID?
     private var isInlineAvatarSaveInFlight = false
@@ -106,14 +112,14 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         fallback: "尚未生成新的形象草稿。"
     )
 
-    private var appliedSpeechSummary = TextCatalog.shared.text(
-        "speech_studio.applied_summary_default",
-        fallback: "今天也一起稳稳推进。"
-    )
-    private var draftSpeechSummary = TextCatalog.shared.text(
-        "speech_studio.text_preview_placeholder",
-        fallback: "尚未生成新的话术草稿。"
-    )
+    private var appliedSpeechStatusLines = AvatarSelectorWindowController.currentSpeechStatusLines()
+    private var appliedSpeechFollowUpLines = AvatarSelectorWindowController.currentSpeechFollowUpLines()
+    private var draftSpeechStatusLines = [
+        TextCatalog.shared.text("speech_studio.status_group_placeholder", fallback: "尚未生成状态文案组。")
+    ]
+    private var draftSpeechFollowUpLines = [
+        TextCatalog.shared.text("speech_studio.follow_up_group_placeholder", fallback: "尚未生成提醒与结束文案。")
+    ]
     private var speechBubblePreviewText = TextCatalog.shared.text(
         "speech_studio.bubble_default",
         fallback: "今天也一起稳稳推进。"
@@ -149,7 +155,7 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         self.onClose = onClose
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 900, height: 640),
+            contentRect: NSRect(x: 0, y: 0, width: 880, height: 580),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -322,7 +328,7 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
 
         let root = NSStackView()
         root.orientation = .vertical
-        root.spacing = 16
+        root.spacing = 12
         root.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(root)
 
@@ -333,7 +339,7 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         )
         let header = NSStackView(views: [title, subtitle, statusLabel])
         header.orientation = .vertical
-        header.spacing = 6
+        header.spacing = 4
 
         let tabsBar = makeTabsBar()
         let footer = makeFooter()
@@ -344,12 +350,12 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         root.addArrangedSubview(footer)
 
         NSLayoutConstraint.activate([
-            root.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 24),
-            root.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            root.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
-            root.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -24),
+            root.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 18),
+            root.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 18),
+            root.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -18),
+            root.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -18),
             tabsBar.heightAnchor.constraint(equalToConstant: 38),
-            contentCard.heightAnchor.constraint(greaterThanOrEqualToConstant: 460),
+            contentCard.heightAnchor.constraint(greaterThanOrEqualToConstant: 420),
         ])
 
         renderSelectedTab()
@@ -408,12 +414,30 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         }
 
         activeView.translatesAutoresizingMaskIntoConstraints = false
-        contentCard.addSubview(activeView)
+        let scrollView = NSScrollView()
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.drawsBackground = false
+        scrollView.borderType = .noBorder
+        scrollView.hasVerticalScroller = true
+        scrollView.autohidesScrollers = true
+
+        let documentView = FlippedView()
+        documentView.translatesAutoresizingMaskIntoConstraints = false
+        documentView.addSubview(activeView)
+        scrollView.documentView = documentView
+
+        contentCard.addSubview(scrollView)
         NSLayoutConstraint.activate([
-            activeView.topAnchor.constraint(equalTo: contentCard.topAnchor, constant: 16),
-            activeView.leadingAnchor.constraint(equalTo: contentCard.leadingAnchor, constant: 16),
-            activeView.trailingAnchor.constraint(equalTo: contentCard.trailingAnchor, constant: -16),
-            activeView.bottomAnchor.constraint(equalTo: contentCard.bottomAnchor, constant: -16),
+            scrollView.topAnchor.constraint(equalTo: contentCard.topAnchor, constant: 16),
+            scrollView.leadingAnchor.constraint(equalTo: contentCard.leadingAnchor, constant: 16),
+            scrollView.trailingAnchor.constraint(equalTo: contentCard.trailingAnchor, constant: -16),
+            scrollView.bottomAnchor.constraint(equalTo: contentCard.bottomAnchor, constant: -16),
+            activeView.topAnchor.constraint(equalTo: documentView.topAnchor),
+            activeView.leadingAnchor.constraint(equalTo: documentView.leadingAnchor),
+            activeView.trailingAnchor.constraint(equalTo: documentView.trailingAnchor),
+            activeView.bottomAnchor.constraint(equalTo: documentView.bottomAnchor),
+            activeView.widthAnchor.constraint(equalTo: scrollView.contentView.widthAnchor),
+            documentView.widthAnchor.constraint(equalTo: scrollView.contentView.widthAnchor),
         ])
 
         updateThemeActionButtonStates()
@@ -431,7 +455,7 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
             hint: copy("theme_studio.prompt_hint", fallback: "用 prompt 描述你想要的 GUI 气质，包括右键菜单、配置页和状态气泡。"),
             textView: themeRawPromptView,
             storedText: themeRawPrompt,
-            minHeight: 96
+            minHeight: 112
         )
 
         let optimizedPromptSection = makePromptSection(
@@ -439,20 +463,13 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
             hint: copy("theme_studio.optimized_prompt_hint", fallback: "优化后的 prompt 会用于主题预览和应用，你可以继续手动编辑。"),
             textView: themeOptimizedPromptView,
             storedText: themeOptimizedPrompt,
-            minHeight: 96
+            minHeight: 112
         )
 
-        let previewRow = NSStackView(views: [
-            makePetBubblePreviewCard(
-                title: copy("theme_studio.bubble_preview_title", fallback: "桌宠气泡预览"),
-                bubbleText: themeBubblePreviewText,
-                note: copy("theme_studio.bubble_preview_note", fallback: "主题生成必须覆盖桌宠 transient/status bubble。")
-            ),
-            makeThemeChromePreviewCard(),
-        ])
-        previewRow.orientation = .horizontal
-        previewRow.spacing = 16
-        previewRow.distribution = .fillEqually
+        let promptWorkbench = makeThemePromptWorkbench(
+            rawPromptSection: rawPromptSection,
+            optimizedPromptSection: optimizedPromptSection
+        )
 
         view.addArrangedSubview(
             makeInfoCard(
@@ -460,17 +477,29 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
                 lines: [appliedThemeSummary]
             )
         )
-        view.addArrangedSubview(rawPromptSection)
-        view.addArrangedSubview(optimizedPromptSection)
-        view.addArrangedSubview(
-            makeInfoCard(
-                title: copy("theme_studio.draft_title", fallback: "样式草稿"),
-                lines: [draftThemeSummary]
-            )
-        )
-        view.addArrangedSubview(previewRow)
-        view.addArrangedSubview(makeThemeActionBar())
+        view.addArrangedSubview(promptWorkbench)
+        view.addArrangedSubview(makeThemePreviewWorkbench())
         return view
+    }
+
+    private func makeThemePromptWorkbench(rawPromptSection: NSView, optimizedPromptSection: NSView) -> NSView {
+        let controlCard = makeThemePromptControlCard()
+        let row = NSStackView(views: [rawPromptSection, controlCard, optimizedPromptSection])
+        row.orientation = .horizontal
+        row.alignment = .top
+        row.spacing = 14
+        row.distribution = .fill
+
+        rawPromptSection.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        rawPromptSection.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        optimizedPromptSection.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        optimizedPromptSection.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        controlCard.setContentHuggingPriority(.required, for: .horizontal)
+        controlCard.setContentCompressionResistancePriority(.required, for: .horizontal)
+
+        rawPromptSection.widthAnchor.constraint(equalTo: optimizedPromptSection.widthAnchor).isActive = true
+        controlCard.widthAnchor.constraint(equalToConstant: 148).isActive = true
+        return row
     }
 
     private func buildAvatarTabView() -> NSView {
@@ -520,7 +549,10 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
 
         view.addArrangedSubview(summaryRow)
         if avatarTabMode == .browse {
-            view.addArrangedSubview(promptSection)
+            view.addArrangedSubview(makeAvatarBrowsePromptDisclosureRow())
+            if isAvatarBrowsePromptExpanded {
+                view.addArrangedSubview(promptSection)
+            }
         }
         view.addArrangedSubview(previews)
         switch avatarTabMode {
@@ -545,31 +577,55 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
             minHeight: 104
         )
 
-        let previewRow = NSStackView(views: [
+        let groupedPreviewRow = NSStackView(views: [
             makeInfoCard(
-                title: copy("speech_studio.text_preview_title", fallback: "文本预览"),
-                lines: [draftSpeechSummary]
+                title: copy("speech_studio.status_group_title", fallback: "状态文案组"),
+                lines: draftSpeechStatusLines
             ),
-            makePetBubblePreviewCard(
-                title: copy("speech_studio.bubble_preview_title", fallback: "桌宠对话气泡预览"),
-                bubbleText: speechBubblePreviewText,
-                note: copy("speech_studio.bubble_preview_note", fallback: "这里展示真实的桌宠气泡弹出预览。")
+            makeInfoCard(
+                title: copy("speech_studio.follow_up_group_title", fallback: "提醒与结束文案"),
+                lines: draftSpeechFollowUpLines
             ),
         ])
-        previewRow.orientation = .horizontal
-        previewRow.spacing = 16
-        previewRow.distribution = .fillEqually
+        groupedPreviewRow.orientation = .horizontal
+        groupedPreviewRow.spacing = 16
+        groupedPreviewRow.distribution = .fillEqually
 
         view.addArrangedSubview(
             makeInfoCard(
                 title: copy("speech_studio.applied_summary_title", fallback: "当前已应用话术"),
-                lines: [appliedSpeechSummary]
+                lines: appliedSpeechStatusLines + appliedSpeechFollowUpLines
             )
         )
         view.addArrangedSubview(promptSection)
-        view.addArrangedSubview(previewRow)
+        view.addArrangedSubview(groupedPreviewRow)
+        view.addArrangedSubview(
+            makePetBubblePreviewCard(
+                title: copy("speech_studio.bubble_preview_title", fallback: "桌宠对话气泡预览"),
+                bubbleText: speechBubblePreviewText,
+                note: copy("speech_studio.bubble_preview_note", fallback: "这里展示真实的桌宠气泡弹出预览。")
+            )
+        )
         view.addArrangedSubview(makeActionBar(includeAddCustom: false))
         return view
+    }
+
+    private static func currentSpeechStatusLines() -> [String] {
+        [
+            "待机：\(DesktopPetCopy.statusText(for: .idle))",
+            "工作：\(DesktopPetCopy.statusText(for: .working))",
+            "专注：\(DesktopPetCopy.statusText(for: .focus))",
+            "暂离：\(DesktopPetCopy.statusText(for: .breakState))",
+        ]
+    }
+
+    private static func currentSpeechFollowUpLines() -> [String] {
+        [
+            "轻提醒：\(DesktopPetCopy.focusSuggestionMessage(for: .light) ?? "抬头缓一缓，再接着做。")",
+            "重提醒：\(DesktopPetCopy.focusSuggestionMessage(for: .heavy) ?? "这一段够久了，先休息一下。")",
+            "收工：\(DesktopPetCopy.stopWorkMessage())",
+            "护眼：\(DesktopPetCopy.eyeReminderMessage())",
+        ]
     }
 
     private func makePromptSection(
@@ -716,7 +772,7 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         sampleField.isEditable = false
         AvatarPanelTheme.styleEditableTextField(sampleField)
 
-        let primaryButton = NSButton(title: copy("theme_studio.preview_button", fallback: "预览效果"), target: nil, action: nil)
+        let primaryButton = NSButton(title: copy("theme_studio.preview_button", fallback: "生成主题草稿"), target: nil, action: nil)
         let secondaryButton = NSButton(title: copy("theme_studio.apply_button", fallback: "应用主题"), target: nil, action: nil)
         AvatarPanelTheme.stylePrimaryButton(primaryButton)
         AvatarPanelTheme.styleSecondaryButton(secondaryButton)
@@ -740,19 +796,116 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
             menuStack.leadingAnchor.constraint(equalTo: menuFrame.leadingAnchor, constant: 12),
             menuStack.trailingAnchor.constraint(equalTo: menuFrame.trailingAnchor, constant: -12),
             menuStack.bottomAnchor.constraint(equalTo: menuFrame.bottomAnchor, constant: -12),
-            primaryButton.widthAnchor.constraint(equalToConstant: 110),
+            primaryButton.widthAnchor.constraint(equalToConstant: 124),
             secondaryButton.widthAnchor.constraint(equalToConstant: 88),
         ])
         return card
     }
 
-    private func makeThemeActionBar() -> NSView {
+    private func makeThemePromptControlCard() -> NSView {
         let optimizeButton = NSButton(title: copy("theme_studio.optimize_button", fallback: "优化 prompt"), target: self, action: #selector(handleOptimizeThemePrompt))
         let reoptimizeButton = NSButton(title: copy("theme_studio.reoptimize_button", fallback: "重新优化"), target: self, action: #selector(handleReoptimizeThemePrompt))
-        let previewButton = NSButton(title: copy("theme_studio.preview_button", fallback: "预览效果"), target: self, action: #selector(handlePreviewTheme))
-        let applyButton = NSButton(title: copy("theme_studio.apply_button", fallback: "应用主题"), target: self, action: #selector(handleApplyTheme))
         AvatarPanelTheme.styleSecondaryButton(optimizeButton)
         AvatarPanelTheme.styleSecondaryButton(reoptimizeButton)
+
+        let card = AvatarPanelTheme.makeCard()
+        let stack = NSStackView()
+        stack.orientation = .vertical
+        stack.spacing = 10
+        stack.alignment = .centerX
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(stack)
+
+        let title = AvatarPanelTheme.makeLabel(
+            copy("theme_studio.prompt_actions_title", fallback: "优化控制"),
+            color: AvatarPanelTheme.accent
+        )
+        let hint = AvatarPanelTheme.makeLabel(
+            copy("theme_studio.prompt_actions_hint", fallback: "先整理左侧 prompt，再用右侧结果生成主题草稿。"),
+            color: AvatarPanelTheme.muted,
+            font: AvatarPanelTheme.smallFont
+        )
+        title.alignment = .center
+        hint.alignment = .center
+
+        stack.addArrangedSubview(title)
+        stack.addArrangedSubview(hint)
+        stack.addArrangedSubview(NSView())
+        stack.addArrangedSubview(optimizeButton)
+        stack.addArrangedSubview(reoptimizeButton)
+        stack.addArrangedSubview(NSView())
+
+        themeOptimizeButton = optimizeButton
+        themeReoptimizeButton = reoptimizeButton
+        updateThemeActionButtonStates()
+
+        optimizeButton.widthAnchor.constraint(equalToConstant: 112).isActive = true
+        reoptimizeButton.widthAnchor.constraint(equalToConstant: 112).isActive = true
+
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: card.topAnchor, constant: 16),
+            stack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 12),
+            stack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -12),
+            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -16),
+        ])
+        return card
+    }
+
+    private func makeThemePreviewWorkbench() -> NSView {
+        let card = AvatarPanelTheme.makeCard()
+        let stack = NSStackView()
+        stack.orientation = .vertical
+        stack.spacing = 12
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(stack)
+
+        let previewRow = NSStackView(views: [
+            makePetBubblePreviewCard(
+                title: copy("theme_studio.bubble_preview_title", fallback: "桌宠气泡预览"),
+                bubbleText: themeBubblePreviewText,
+                note: copy("theme_studio.bubble_preview_note", fallback: "主题生成必须覆盖桌宠 transient/status bubble。")
+            ),
+            makeThemeChromePreviewCard(),
+        ])
+        previewRow.orientation = .horizontal
+        previewRow.spacing = 16
+        previewRow.distribution = .fillEqually
+
+        stack.addArrangedSubview(
+            AvatarPanelTheme.makeLabel(
+                copy("theme_studio.preview_panel_title", fallback: "主题预览区"),
+                color: AvatarPanelTheme.accent
+            )
+        )
+        stack.addArrangedSubview(
+            AvatarPanelTheme.makeLabel(
+                copy("theme_studio.preview_panel_hint", fallback: "这里同时展示待应用草稿、气泡和菜单样式，确认后再应用。"),
+                color: AvatarPanelTheme.muted,
+                font: AvatarPanelTheme.smallFont
+            )
+        )
+        stack.addArrangedSubview(
+            AvatarPanelTheme.makeLabel(
+                copy("theme_studio.draft_summary_label", fallback: "待应用草稿"),
+                color: AvatarPanelTheme.accent
+            )
+        )
+        stack.addArrangedSubview(AvatarPanelTheme.makeLabel(draftThemeSummary, color: AvatarPanelTheme.text))
+        stack.addArrangedSubview(previewRow)
+        stack.addArrangedSubview(makeThemePreviewActionBar())
+
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: card.topAnchor, constant: 16),
+            stack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 16),
+            stack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
+            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -16),
+        ])
+        return card
+    }
+
+    private func makeThemePreviewActionBar() -> NSView {
+        let previewButton = NSButton(title: copy("theme_studio.preview_button", fallback: "生成主题草稿"), target: self, action: #selector(handlePreviewTheme))
+        let applyButton = NSButton(title: copy("theme_studio.apply_button", fallback: "应用主题"), target: self, action: #selector(handleApplyTheme))
         AvatarPanelTheme.styleSecondaryButton(previewButton)
         AvatarPanelTheme.stylePrimaryButton(applyButton)
 
@@ -760,22 +913,35 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         stack.orientation = .horizontal
         stack.spacing = 12
         stack.addArrangedSubview(NSView())
-        stack.addArrangedSubview(optimizeButton)
-        stack.addArrangedSubview(reoptimizeButton)
         stack.addArrangedSubview(previewButton)
         stack.addArrangedSubview(applyButton)
 
-        themeOptimizeButton = optimizeButton
-        themeReoptimizeButton = reoptimizeButton
         themePreviewButton = previewButton
         themeApplyButton = applyButton
         updateThemeActionButtonStates()
 
-        optimizeButton.widthAnchor.constraint(equalToConstant: 110).isActive = true
-        reoptimizeButton.widthAnchor.constraint(equalToConstant: 110).isActive = true
-        previewButton.widthAnchor.constraint(equalToConstant: 110).isActive = true
-        applyButton.widthAnchor.constraint(equalToConstant: 88).isActive = true
+        previewButton.widthAnchor.constraint(equalToConstant: 124).isActive = true
+        applyButton.widthAnchor.constraint(equalToConstant: 92).isActive = true
         return stack
+    }
+
+    private func makeAvatarBrowsePromptDisclosureRow() -> NSView {
+        let titleKey = isAvatarBrowsePromptExpanded ? "avatar_studio.hide_prompt_button" : "avatar_studio.show_prompt_button"
+        let fallbackTitle = isAvatarBrowsePromptExpanded ? "收起 prompt" : "编辑 prompt"
+        let toggleButton = NSButton(
+            title: copy(titleKey, fallback: fallbackTitle),
+            target: self,
+            action: #selector(handleToggleAvatarBrowsePrompt(_:))
+        )
+        AvatarPanelTheme.styleSecondaryButton(toggleButton)
+        toggleButton.widthAnchor.constraint(equalToConstant: 110).isActive = true
+
+        let row = NSStackView()
+        row.orientation = .horizontal
+        row.spacing = 12
+        row.addArrangedSubview(NSView())
+        row.addArrangedSubview(toggleButton)
+        return row
     }
 
     private func makeActionBar(includeAddCustom: Bool) -> NSView {
@@ -824,6 +990,16 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
             target: self,
             action: #selector(handleRegeneratePreview)
         )
+        let nextStepButton = NSButton(
+            title: copy("avatar_studio.create_next_step_button", fallback: "下一步"),
+            target: self,
+            action: #selector(handleGoToInlineAvatarMetadataStep)
+        )
+        let backStepButton = NSButton(
+            title: copy("avatar_studio.create_back_step_button", fallback: "返回上一步"),
+            target: self,
+            action: #selector(handleSelectInlineAvatarPromptStep)
+        )
         let returnButton = NSButton(
             title: copy("avatar_studio.return_to_library_button", fallback: "返回现有形象"),
             target: self,
@@ -837,6 +1013,8 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         AvatarPanelTheme.styleSecondaryButton(optimizeButton)
         AvatarPanelTheme.styleSecondaryButton(previewButton)
         AvatarPanelTheme.styleSecondaryButton(regenerateButton)
+        AvatarPanelTheme.styleSecondaryButton(nextStepButton)
+        AvatarPanelTheme.styleSecondaryButton(backStepButton)
         AvatarPanelTheme.styleSecondaryButton(returnButton)
         AvatarPanelTheme.stylePrimaryButton(saveAndApplyButton)
 
@@ -844,11 +1022,20 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         stack.orientation = .horizontal
         stack.spacing = 12
         stack.addArrangedSubview(NSView())
-        stack.addArrangedSubview(optimizeButton)
-        stack.addArrangedSubview(previewButton)
-        stack.addArrangedSubview(regenerateButton)
-        stack.addArrangedSubview(returnButton)
-        stack.addArrangedSubview(saveAndApplyButton)
+        switch creationStep {
+        case .promptAndPreview:
+            stack.addArrangedSubview(optimizeButton)
+            stack.addArrangedSubview(previewButton)
+            stack.addArrangedSubview(regenerateButton)
+            if canOpenMetadataStep() {
+                stack.addArrangedSubview(nextStepButton)
+            }
+            stack.addArrangedSubview(returnButton)
+        case .metadataAndSave:
+            stack.addArrangedSubview(backStepButton)
+            stack.addArrangedSubview(returnButton)
+            stack.addArrangedSubview(saveAndApplyButton)
+        }
 
         avatarCreateOptimizeButton = optimizeButton
         avatarCreatePreviewButton = previewButton
@@ -963,6 +1150,28 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
             copy("avatar_studio.create_mode_title", fallback: "当前模式：新建形象"),
             color: AvatarPanelTheme.accent
         )
+        let promptStepButton = NSButton(
+            title: copy("avatar_studio.create_step_prompt_button", fallback: "Step 1 · Prompt 与生成"),
+            target: self,
+            action: #selector(handleSelectInlineAvatarPromptStep)
+        )
+        let metadataStepButton = NSButton(
+            title: copy("avatar_studio.create_step_metadata_button", fallback: "Step 2 · 名称与保存"),
+            target: self,
+            action: #selector(handleSelectInlineAvatarMetadataStep)
+        )
+        if creationStep == .promptAndPreview {
+            AvatarPanelTheme.stylePrimaryButton(promptStepButton)
+            AvatarPanelTheme.styleSecondaryButton(metadataStepButton)
+        } else {
+            AvatarPanelTheme.styleSecondaryButton(promptStepButton)
+            AvatarPanelTheme.stylePrimaryButton(metadataStepButton)
+        }
+        metadataStepButton.isEnabled = canOpenMetadataStep()
+        let stepsRow = NSStackView(views: [promptStepButton, metadataStepButton, NSView()])
+        stepsRow.orientation = .horizontal
+        stepsRow.spacing = 10
+
         let promptTitle = AvatarPanelTheme.makeLabel(
             copy("avatar_studio.create_prompt_title", fallback: "原始 prompt"),
             color: AvatarPanelTheme.accent
@@ -993,36 +1202,42 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         avatarCreatePersonaField.placeholderString = copy("avatar_studio.create_persona_placeholder", fallback: "预览后会自动填入建议人设，可继续编辑。")
 
         stack.addArrangedSubview(modeLabel)
-        stack.addArrangedSubview(promptTitle)
-        stack.addArrangedSubview(
-            AvatarPanelTheme.makeLabel(
-                copy("avatar_studio.create_prompt_hint", fallback: "描述你想生成的形象、动作和动画关键词。"),
-                color: AvatarPanelTheme.muted,
-                font: AvatarPanelTheme.smallFont
+        stack.addArrangedSubview(stepsRow)
+
+        switch creationStep {
+        case .promptAndPreview:
+            stack.addArrangedSubview(promptTitle)
+            stack.addArrangedSubview(
+                AvatarPanelTheme.makeLabel(
+                    copy("avatar_studio.create_prompt_hint", fallback: "描述你想生成的形象、动作和动画关键词。"),
+                    color: AvatarPanelTheme.muted,
+                    font: AvatarPanelTheme.smallFont
+                )
             )
-        )
-        stack.addArrangedSubview(makeTextScrollView(textView: avatarCreateRawPromptView, minHeight: 96))
-        stack.addArrangedSubview(optimizedPromptTitle)
-        stack.addArrangedSubview(
-            AvatarPanelTheme.makeLabel(
-                copy("avatar_studio.create_optimized_prompt_hint", fallback: "优化后的 prompt 会用于生成 idle / working / alert 三组预览。"),
-                color: AvatarPanelTheme.muted,
-                font: AvatarPanelTheme.smallFont
+            stack.addArrangedSubview(makeTextScrollView(textView: avatarCreateRawPromptView, minHeight: 96))
+            stack.addArrangedSubview(optimizedPromptTitle)
+            stack.addArrangedSubview(
+                AvatarPanelTheme.makeLabel(
+                    copy("avatar_studio.create_optimized_prompt_hint", fallback: "优化后的 prompt 会用于生成 idle / working / alert 三组预览。"),
+                    color: AvatarPanelTheme.muted,
+                    font: AvatarPanelTheme.smallFont
+                )
             )
-        )
-        stack.addArrangedSubview(makeTextScrollView(textView: avatarCreateOptimizedPromptView, minHeight: 96))
-        stack.addArrangedSubview(actionsTitle)
-        stack.addArrangedSubview(
-            makeInfoCard(
-                title: copy("avatar_studio.create_actions_title", fallback: "动作生成"),
-                lines: inlineAvatarActionStatusLines()
+            stack.addArrangedSubview(makeTextScrollView(textView: avatarCreateOptimizedPromptView, minHeight: 96))
+            stack.addArrangedSubview(actionsTitle)
+            stack.addArrangedSubview(
+                makeInfoCard(
+                    title: copy("avatar_studio.create_actions_title", fallback: "动作生成"),
+                    lines: inlineAvatarActionStatusLines()
+                )
             )
-        )
-        stack.addArrangedSubview(nameTitle)
-        stack.addArrangedSubview(avatarCreateNameField)
-        stack.addArrangedSubview(personaTitle)
-        stack.addArrangedSubview(avatarCreatePersonaField)
-        stack.addArrangedSubview(saveInfoTitle)
+        case .metadataAndSave:
+            stack.addArrangedSubview(nameTitle)
+            stack.addArrangedSubview(avatarCreateNameField)
+            stack.addArrangedSubview(personaTitle)
+            stack.addArrangedSubview(avatarCreatePersonaField)
+            stack.addArrangedSubview(saveInfoTitle)
+        }
         stack.addArrangedSubview(NSView())
 
         NSLayoutConstraint.activate([
@@ -1107,7 +1322,7 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
     private func invalidateThemePreviewPresentation() {
         invalidateThemePreview()
         draftThemeSummary = copy("theme_studio.draft_placeholder", fallback: "尚未生成新的主题草稿。")
-        themeBubblePreviewText = copy("theme_studio.preview_invalidated_bubble", fallback: "优化后 prompt 已变更，请重新预览效果。")
+        themeBubblePreviewText = copy("theme_studio.preview_invalidated_bubble", fallback: "优化后 prompt 已变更，请重新生成主题草稿。")
         updateThemeActionButtonStates()
     }
 
@@ -1162,7 +1377,7 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
             fallback: ""
         )
         guard !prompt.isEmpty else {
-            statusLabel.stringValue = copy("theme_studio.preview_requires_optimized_status", fallback: "请先优化 prompt，再预览效果。")
+            statusLabel.stringValue = copy("theme_studio.preview_requires_optimized_status", fallback: "请先优化 prompt，再生成主题草稿。")
             statusLabel.textColor = AvatarPanelTheme.muted
             return
         }
@@ -1239,6 +1454,10 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         creationPreviewDraft?.hasRequiredActionImages == true
     }
 
+    private func canOpenMetadataStep() -> Bool {
+        creationStage == .previewReady
+    }
+
     private func syncInlineAvatarStage() {
         if hasCompleteInlineAvatarPreviewDraft() {
             creationStage = .previewReady
@@ -1258,12 +1477,15 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
     }
 
     private func updateAvatarCreateActionButtonStates() {
+        if creationStage != .saving, !canOpenMetadataStep() {
+            creationStep = .promptAndPreview
+        }
         let hasName = !normalizedPrompt(creationDraftName, fallback: "").isEmpty
         let isBusy = isInlineAvatarPreviewInFlight || isInlineAvatarSaveInFlight
         avatarCreateOptimizeButton?.isEnabled = avatarTabMode == .create && !isBusy
         avatarCreatePreviewButton?.isEnabled = avatarTabMode == .create && !isBusy && hasNonEmptyInlineAvatarOptimizedPrompt()
         avatarCreateRegenerateButton?.isEnabled = avatarTabMode == .create && !isBusy && creationPreviewDraft != nil
-        avatarCreateSaveButton?.isEnabled = avatarTabMode == .create && !isBusy && creationStage == .previewReady && hasName
+        avatarCreateSaveButton?.isEnabled = avatarTabMode == .create && creationStep == .metadataAndSave && !isBusy && creationStage == .previewReady && hasName
     }
 
     private func renderOptimizedInlineAvatarPrompt() throws {
@@ -1414,6 +1636,7 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
         isInlineAvatarPreviewInFlight = false
         inlineAvatarPreviewRequestID = nil
         isInlineAvatarSaveInFlight = false
+        creationStep = .promptAndPreview
         creationRawPrompt = ""
         creationOptimizedPrompt = ""
         creationPreviewDraft = nil
@@ -1451,12 +1674,18 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
             let draft = try speechDraftGenerator(prompt)
             pendingSpeechDraft = draft
             previewRevision += 1
-            draftSpeechSummary = draft.previewSummaryText()
+            draftSpeechStatusLines = draft.statusPreviewLines()
+            draftSpeechFollowUpLines = draft.followUpPreviewLines()
             speechBubblePreviewText = draft.bubblePreviewText()
         } else {
             pendingSpeechDraft = nil
             previewRevision += 1
-            draftSpeechSummary = formatCopy("speech_studio.draft_format", fallback: "草稿 %d：%@", previewRevision, prompt)
+            draftSpeechStatusLines = [
+                formatCopy("speech_studio.draft_format", fallback: "草稿 %d：%@", previewRevision, prompt)
+            ]
+            draftSpeechFollowUpLines = [
+                copy("speech_studio.follow_up_group_placeholder", fallback: "尚未生成提醒与结束文案。")
+            ]
             speechBubblePreviewText = regenerated
                 ? copy("speech_studio.bubble_regenerated", fallback: "换一版语气，继续保持简洁和像素感。")
                 : copy("speech_studio.bubble_default", fallback: "今天也一起稳稳推进。")
@@ -1478,6 +1707,9 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
             return
         }
 
+        if selectedTab == .avatar, tab != .avatar {
+            isAvatarBrowsePromptExpanded = false
+        }
         selectedTab = tab
         renderSelectedTab()
     }
@@ -1552,7 +1784,8 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
 
                 do {
                     try speechDraftApplier(pendingSpeechDraft)
-                    appliedSpeechSummary = draftSpeechSummary
+                    appliedSpeechStatusLines = draftSpeechStatusLines
+                    appliedSpeechFollowUpLines = draftSpeechFollowUpLines
                     self.pendingSpeechDraft = nil
                     statusLabel.stringValue = copy("speech_studio.apply_status", fallback: "话术草稿已应用。")
                     statusLabel.textColor = AvatarPanelTheme.text
@@ -1561,7 +1794,8 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
                     showGenerationError(error)
                 }
             } else {
-                appliedSpeechSummary = draftSpeechSummary
+                appliedSpeechStatusLines = draftSpeechStatusLines
+                appliedSpeechFollowUpLines = draftSpeechFollowUpLines
                 statusLabel.stringValue = copy("speech_studio.apply_status", fallback: "话术草稿已应用。")
                 statusLabel.textColor = AvatarPanelTheme.text
                 renderSelectedTab()
@@ -1638,7 +1872,9 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
             return
         }
 
+        isAvatarBrowsePromptExpanded = false
         resetInlineAvatarCreationDraft()
+        creationStep = .promptAndPreview
         statusLabel.stringValue = copy("avatar_studio.status_ready", fallback: "先生成预览，确认满意后再应用。")
         statusLabel.textColor = AvatarPanelTheme.muted
         avatarTabMode = .create
@@ -1646,6 +1882,7 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
     }
 
     @objc private func handleReturnToAvatarLibrary() {
+        isAvatarBrowsePromptExpanded = false
         resetInlineAvatarCreationDraft()
         statusLabel.stringValue = copy("avatar_studio.status_ready", fallback: "先生成预览，确认满意后再应用。")
         statusLabel.textColor = AvatarPanelTheme.muted
@@ -1659,6 +1896,36 @@ final class AvatarSelectorWindowController: NSWindowController, NSWindowDelegate
             renderSelectedTab()
         } catch {
             showGenerationError(error)
+        }
+    }
+
+    @objc private func handleSelectInlineAvatarPromptStep() {
+        guard avatarTabMode == .create else {
+            return
+        }
+
+        creationStep = .promptAndPreview
+        renderSelectedTab()
+    }
+
+    @objc private func handleSelectInlineAvatarMetadataStep() {
+        guard avatarTabMode == .create, canOpenMetadataStep() else {
+            return
+        }
+
+        creationStep = .metadataAndSave
+        renderSelectedTab()
+    }
+
+    @objc private func handleGoToInlineAvatarMetadataStep() {
+        handleSelectInlineAvatarMetadataStep()
+    }
+
+    @objc private func handleToggleAvatarBrowsePrompt(_ sender: NSButton) {
+        isAvatarBrowsePromptExpanded.toggle()
+        renderSelectedTab()
+        if isAvatarBrowsePromptExpanded {
+            window?.makeFirstResponder(avatarPromptView)
         }
     }
 

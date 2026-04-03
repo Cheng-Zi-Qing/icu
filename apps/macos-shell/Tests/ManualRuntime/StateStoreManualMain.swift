@@ -56,6 +56,7 @@ struct StateStoreManualMain {
             try testResolveInitialOriginFallsBackWhenSavedPositionIsOutOfBounds()
             try testGenerationSettingsStorePersistsCapabilitiesWithoutDroppingAvatarState()
             try testGenerationSettingsStoreFallsBackToRepoSettingsAndMigratesWritesToAppSupport()
+            try testGenerationSettingsStoreIgnoresBooleanOptionsWhenLoading()
             try testThemeManagerFallsBackToPixelThemeWhenStoredPackIsInvalid()
             try testThemeManagerApplyPersistsPackAndLoadsOnNextStartup()
             try testThemeGenerationServiceCanGenerateDraftWithoutApplying()

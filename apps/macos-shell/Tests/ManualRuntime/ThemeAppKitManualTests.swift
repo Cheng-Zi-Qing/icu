@@ -78,6 +78,7 @@ func testAvatarSelectorWindowUsesStudioTabsAndThemeBubblePreviewByDefault() thro
     guard let contentView = controller.window?.contentView else {
         throw TestFailure(message: "selector content view should exist")
     }
+    contentView.layoutSubtreeIfNeeded()
 
     _ = try requireButton(in: contentView, title: "主题风格")
     _ = try requireButton(in: contentView, title: "桌宠形象动画")
@@ -85,12 +86,16 @@ func testAvatarSelectorWindowUsesStudioTabsAndThemeBubblePreviewByDefault() thro
     _ = try requireLabel(in: contentView, stringValue: "当前已应用主题")
     _ = try requireLabel(in: contentView, stringValue: "原始 prompt")
     _ = try requireLabel(in: contentView, stringValue: "优化后 prompt")
-    _ = try requireLabel(in: contentView, stringValue: "样式草稿")
+    _ = try requireLabel(in: contentView, stringValue: "主题预览区")
     _ = try requireLabel(in: contentView, stringValue: "桌宠气泡预览")
     _ = try requireButton(in: contentView, title: "优化 prompt")
     _ = try requireButton(in: contentView, title: "重新优化")
-    _ = try requireButton(in: contentView, title: "预览效果")
+    _ = try requireButton(in: contentView, title: "生成主题草稿")
     _ = try requireButton(in: contentView, title: "应用主题")
+    try expect(
+        findLabel(in: contentView, stringValue: "样式草稿") == nil,
+        "theme tab should merge the draft summary into the preview workbench instead of rendering a standalone draft card"
+    )
     try expect(
         findButton(in: contentView, title: "生成预览") == nil,
         "theme tab should not reuse the generic preview button"
@@ -98,6 +103,68 @@ func testAvatarSelectorWindowUsesStudioTabsAndThemeBubblePreviewByDefault() thro
     try expect(
         findButton(in: contentView, title: "重新生成") == nil,
         "theme tab should not reuse the generic regenerate button"
+    )
+    try expect(
+        findButton(in: contentView, title: "预览效果") == nil,
+        "theme tab should use an explicit draft-generation label instead of the older preview wording"
+    )
+}
+
+func testAvatarSelectorThemeTabKeepsPromptEditorsSideBySideWithCentralOptimizeControls() throws {
+    let previewURL = try makeTinyPNG()
+    let controller = AvatarSelectorWindowController(
+        avatars: [
+            AvatarSummary(
+                id: "capybara",
+                name: "水豚",
+                style: "像素",
+                previewURL: previewURL,
+                traits: "稳重",
+                tone: "冷静"
+            )
+        ],
+        currentAvatarID: "capybara",
+        onChoose: { _ in },
+        onClose: {}
+    )
+
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "selector content view should exist")
+    }
+    contentView.layoutSubtreeIfNeeded()
+
+    let rawPromptView = try requireTextView(in: contentView, identifier: "themeRawPrompt")
+    let optimizedPromptView = try requireTextView(in: contentView, identifier: "themeOptimizedPrompt")
+    let optimizeButton = try requireActionButton(in: contentView, title: "优化 prompt")
+    let reoptimizeButton = try requireActionButton(in: contentView, title: "重新优化")
+
+    guard
+        let rawPromptScrollView = rawPromptView.enclosingScrollView,
+        let optimizedPromptScrollView = optimizedPromptView.enclosingScrollView
+    else {
+        throw TestFailure(message: "theme prompt editors should stay embedded in scroll views")
+    }
+
+    let rawFrame = rawPromptScrollView.convert(rawPromptScrollView.bounds, to: contentView)
+    let optimizedFrame = optimizedPromptScrollView.convert(optimizedPromptScrollView.bounds, to: contentView)
+    let optimizeFrame = optimizeButton.convert(optimizeButton.bounds, to: contentView)
+    let reoptimizeFrame = reoptimizeButton.convert(reoptimizeButton.bounds, to: contentView)
+
+    try expect(
+        abs(rawFrame.midY - optimizedFrame.midY) <= 24,
+        "theme raw and optimized prompt editors should stay aligned in the same horizontal workbench band"
+    )
+    try expect(
+        rawFrame.width >= 220 && optimizedFrame.width >= 220,
+        "theme prompt editors should keep enough width for parallel editing on the compact canvas"
+    )
+    try expect(
+        optimizeFrame.midX > rawFrame.maxX && optimizeFrame.midX < optimizedFrame.minX,
+        "the optimize button should sit between the raw and optimized prompt editors"
+    )
+    try expect(
+        reoptimizeFrame.midX > rawFrame.maxX && reoptimizeFrame.midX < optimizedFrame.minX,
+        "the reoptimize button should stay in the central control column between both prompt editors"
     )
 }
 
@@ -137,6 +204,198 @@ func testAvatarSelectorThemeTabOmitsModelSummaryAndCrossDomainPanels() throws {
     )
 }
 
+func testAvatarSelectorWindowUsesCompactFrame() throws {
+    let previewURL = try makeTinyPNG()
+    let controller = AvatarSelectorWindowController(
+        avatars: [
+            AvatarSummary(
+                id: "capybara",
+                name: "水豚",
+                style: "像素",
+                previewURL: previewURL,
+                traits: "稳重",
+                tone: "冷静"
+            )
+        ],
+        currentAvatarID: "capybara",
+        onChoose: { _ in },
+        onClose: {}
+    )
+
+    guard let contentSize = controller.window?.contentView?.frame.size else {
+        throw TestFailure(message: "selector content view should exist")
+    }
+
+    try expect(contentSize == NSSize(width: 880, height: 580), "selector should use the compact frame")
+}
+
+func testAvatarSelectorWindowWrapsLongTabContentInScrollViewport() throws {
+    let previewURL = try makeTinyPNG()
+    let controller = AvatarSelectorWindowController(
+        avatars: [
+            AvatarSummary(
+                id: "capybara",
+                name: "水豚",
+                style: "像素",
+                previewURL: previewURL,
+                traits: "稳重",
+                tone: "冷静"
+            )
+        ],
+        currentAvatarID: "capybara",
+        onChoose: { _ in },
+        onClose: {}
+    )
+
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "selector content view should exist")
+    }
+
+    try requireButton(in: contentView, title: "桌宠形象动画").performClick(nil)
+    contentView.layoutSubtreeIfNeeded()
+
+    let viewportScrollView = allSubviews(in: contentView)
+        .compactMap { $0 as? NSScrollView }
+        .first { scrollView in
+            guard let documentView = scrollView.documentView else {
+                return false
+            }
+
+            return findLabel(in: documentView, stringValue: "当前已应用形象") != nil
+                && findButton(in: documentView, title: "新增自定义形象") != nil
+        }
+
+    try expect(
+        viewportScrollView?.hasVerticalScroller == true,
+        "avatar tab should place its long-form content inside a dedicated vertical scroll viewport"
+    )
+}
+
+func testAvatarSelectorAvatarTabCollapsesPromptSectionByDefault() throws {
+    let previewURL = try makeTinyPNG()
+    let controller = AvatarSelectorWindowController(
+        avatars: [
+            AvatarSummary(
+                id: "capybara",
+                name: "水豚",
+                style: "像素",
+                previewURL: previewURL,
+                traits: "稳重",
+                tone: "冷静"
+            )
+        ],
+        currentAvatarID: "capybara",
+        onChoose: { _ in },
+        onClose: {}
+    )
+
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "selector content view should exist")
+    }
+
+    try requireButton(in: contentView, title: "桌宠形象动画").performClick(nil)
+    _ = try requireLabel(in: contentView, stringValue: "当前已应用形象")
+    _ = try requireLabel(in: contentView, stringValue: "当前草稿")
+    _ = try requireButton(in: contentView, title: "新增自定义形象")
+    _ = try requireActionButton(in: contentView, title: "生成预览")
+    _ = try requireActionButton(in: contentView, title: "重新生成")
+    _ = try requireActionButton(in: contentView, title: "应用")
+
+    try expect(
+        allSubviews(in: contentView)
+            .compactMap { $0 as? NSTextView }
+            .first(where: { $0.identifier?.rawValue == "avatarPrompt" && !$0.isHidden }) == nil,
+        "browse prompt editor should stay collapsed by default"
+    )
+
+    let showPromptButton = try requireActionButton(in: contentView, title: "编辑 prompt")
+    showPromptButton.performClick(nil)
+    let didShowPromptEditor = waitForCondition(timeout: 0.5) {
+        allSubviews(in: contentView)
+            .compactMap { $0 as? NSTextView }
+            .first(where: { $0.identifier?.rawValue == "avatarPrompt" && !$0.isHidden }) != nil
+    }
+    try expect(didShowPromptEditor, "browse prompt editor should show after clicking edit prompt")
+
+    try expect(
+        allSubviews(in: contentView)
+            .compactMap { $0 as? NSTextView }
+            .first(where: { $0.identifier?.rawValue == "avatarPrompt" && !$0.isHidden }) != nil,
+        "browse prompt editor should show after clicking edit prompt"
+    )
+}
+
+func testAvatarSelectorAvatarBrowsePromptResetsAndFocusesAfterTransitions() throws {
+    let previewURL = try makeTinyPNG()
+    let controller = AvatarSelectorWindowController(
+        avatars: [
+            AvatarSummary(
+                id: "capybara",
+                name: "水豚",
+                style: "像素",
+                previewURL: previewURL,
+                traits: "稳重",
+                tone: "冷静"
+            )
+        ],
+        currentAvatarID: "capybara",
+        onChoose: { _ in },
+        onClose: {}
+    )
+
+    controller.present()
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    guard
+        let window = controller.window,
+        let contentView = window.contentView
+    else {
+        throw TestFailure(message: "selector content view should exist")
+    }
+
+    try requireButton(in: contentView, title: "桌宠形象动画").performClick(nil)
+    try requireActionButton(in: contentView, title: "编辑 prompt").performClick(nil)
+
+    let didShowPromptEditor = waitForCondition(timeout: 0.5) {
+        allSubviews(in: contentView)
+            .compactMap { $0 as? NSTextView }
+            .first(where: { $0.identifier?.rawValue == "avatarPrompt" && !$0.isHidden }) != nil
+    }
+    try expect(didShowPromptEditor, "browse prompt editor should show after expanding")
+
+    let focusedPromptEditor = (window.firstResponder as? NSTextView)?.identifier?.rawValue == "avatarPrompt"
+    try expect(focusedPromptEditor, "expanding browse prompt should focus the prompt editor")
+
+    try requireButton(in: contentView, title: "新增自定义形象").performClick(nil)
+    try requireActionButton(in: contentView, title: "返回现有形象").performClick(nil)
+
+    let didCollapseAfterReturningBrowse = waitForCondition(timeout: 0.5) {
+        allSubviews(in: contentView)
+            .compactMap { $0 as? NSTextView }
+            .first(where: { $0.identifier?.rawValue == "avatarPrompt" && !$0.isHidden }) == nil
+    }
+    try expect(
+        didCollapseAfterReturningBrowse,
+        "browse prompt editor should collapse when returning from create mode"
+    )
+    _ = try requireActionButton(in: contentView, title: "编辑 prompt")
+
+    try requireActionButton(in: contentView, title: "编辑 prompt").performClick(nil)
+    try requireButton(in: contentView, title: "话术").performClick(nil)
+    try requireButton(in: contentView, title: "桌宠形象动画").performClick(nil)
+
+    let didCollapseAfterTabSwitch = waitForCondition(timeout: 0.5) {
+        allSubviews(in: contentView)
+            .compactMap { $0 as? NSTextView }
+            .first(where: { $0.identifier?.rawValue == "avatarPrompt" && !$0.isHidden }) == nil
+    }
+    try expect(
+        didCollapseAfterTabSwitch,
+        "browse prompt editor should collapse when leaving and returning to avatar tab"
+    )
+    _ = try requireActionButton(in: contentView, title: "编辑 prompt")
+}
+
 func testAvatarSelectorAvatarTabEntersInlineCreateMode() throws {
     let previewURL = try makeTinyPNG()
     let controller = AvatarSelectorWindowController(
@@ -168,7 +427,10 @@ func testAvatarSelectorAvatarTabEntersInlineCreateMode() throws {
 
     _ = try requireLabel(in: contentView, stringValue: "当前模式：新建形象")
     _ = try requireButton(in: contentView, title: "返回现有形象")
-    _ = try requireButton(in: contentView, title: "保存并应用")
+    try expect(
+        findButton(in: contentView, title: "保存并应用") == nil,
+        "step 1 create mode should defer save until metadata step"
+    )
     _ = try requireLabel(in: contentView, stringValue: "形象列表")
     try expect(
         controller.window?.isVisible == true,
@@ -221,6 +483,299 @@ func testAvatarSelectorInlineCreateModeReturnsToBrowseModeWithoutClosing() throw
     try expect(
         controller.window?.isVisible == true,
         "selector window should remain open after returning to browse mode"
+    )
+}
+
+func testAvatarSelectorInlineCreateModeShowsTwoStepFlow() throws {
+    let previewURL = try makeTinyPNG()
+    let idleURL = try makeTinyPNG()
+    let workingURL = try makeTinyPNG()
+    let alertURL = try makeTinyPNG()
+    let controller = AvatarSelectorWindowController(
+        avatars: [
+            AvatarSummary(
+                id: "capybara",
+                name: "水豚",
+                style: "像素",
+                previewURL: previewURL,
+                traits: "稳重",
+                tone: "冷静"
+            )
+        ],
+        currentAvatarID: "capybara",
+        avatarPromptOptimizer: { prompt in
+            "optimized::\(prompt)"
+        },
+        avatarPreviewGenerator: { _ in
+            InlineAvatarPreviewDraft(
+                actionImageURLs: [
+                    "idle": idleURL,
+                    "working": workingURL,
+                    "alert": alertURL,
+                ],
+                suggestedPersona: "稳重、冷静、慢半拍"
+            )
+        },
+        onChoose: { _ in },
+        onClose: {}
+    )
+
+    controller.present()
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "selector content view should exist")
+    }
+
+    try requireButton(in: contentView, title: "桌宠形象动画").performClick(nil)
+    try requireButton(in: contentView, title: "新增自定义形象").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    _ = try requireActionButton(in: contentView, title: "Step 1 · Prompt 与生成")
+    let metadataStepButton = try requireActionButton(in: contentView, title: "Step 2 · 名称与保存")
+    try expect(metadataStepButton.isEnabled == false, "metadata step should stay locked before preview-ready")
+
+    _ = try requireTextView(in: contentView, identifier: "avatarCreateRawPrompt")
+    _ = try requireTextView(in: contentView, identifier: "avatarCreateOptimizedPrompt")
+    _ = try requireLabel(in: contentView, stringValue: "动作生成")
+    try expect(
+        allSubviews(in: contentView)
+            .compactMap { $0 as? NSTextField }
+            .first(where: { $0.identifier?.rawValue == "avatarCreateNameField" }) == nil,
+        "step 1 should hide the name field"
+    )
+    try expect(
+        allSubviews(in: contentView)
+            .compactMap { $0 as? NSTextField }
+            .first(where: { $0.identifier?.rawValue == "avatarCreatePersonaField" }) == nil,
+        "step 1 should hide the persona field"
+    )
+
+    let rawPromptView = try requireTextView(in: contentView, identifier: "avatarCreateRawPrompt")
+    rawPromptView.string = "two-step draft prompt"
+    controller.textDidChange(Notification(name: NSText.didChangeNotification, object: rawPromptView))
+
+    try requireActionButton(in: contentView, title: "优化 prompt").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    try requireActionButton(in: contentView, title: "生成预览").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    let metadataStepButtonAfterPreview = try requireActionButton(in: contentView, title: "Step 2 · 名称与保存")
+    try expect(metadataStepButtonAfterPreview.isEnabled == true, "metadata step should unlock after preview-ready")
+    metadataStepButtonAfterPreview.performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    let nameField = try requireTextField(in: contentView, identifier: "avatarCreateNameField")
+    let personaField = try requireTextField(in: contentView, identifier: "avatarCreatePersonaField")
+    try expect(
+        personaField.stringValue == "稳重、冷静、慢半拍",
+        "metadata step should hydrate persona from preview draft"
+    )
+    nameField.stringValue = "两步水豚"
+    nameField.sendAction(nameField.action, to: nameField.target)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    personaField.stringValue = "自定义人设"
+    personaField.sendAction(personaField.action, to: personaField.target)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    try requireActionButton(in: contentView, title: "Step 1 · Prompt 与生成").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    let rawPromptAfterSwitch = try requireTextView(in: contentView, identifier: "avatarCreateRawPrompt")
+    try expect(
+        rawPromptAfterSwitch.string == "two-step draft prompt",
+        "switching back to step 1 should preserve prompt edits"
+    )
+    let regenerateAfterSwitch = try requireActionButton(in: contentView, title: "重新生成")
+    try expect(
+        regenerateAfterSwitch.isEnabled == true,
+        "switching back to step 1 should preserve generated preview draft state"
+    )
+
+    try requireActionButton(in: contentView, title: "Step 2 · 名称与保存").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    let nameFieldAfterSwitch = try requireTextField(in: contentView, identifier: "avatarCreateNameField")
+    let personaFieldAfterSwitch = try requireTextField(in: contentView, identifier: "avatarCreatePersonaField")
+    try expect(nameFieldAfterSwitch.stringValue == "两步水豚", "switching between steps should keep the name draft")
+    try expect(personaFieldAfterSwitch.stringValue == "自定义人设", "switching between steps should keep the persona draft")
+}
+
+func testAvatarSelectorInlineCreateModeBlocksMetadataStepUntilPreviewReady() throws {
+    let previewURL = try makeTinyPNG()
+    let idleURL = try makeTinyPNG()
+    let workingURL = try makeTinyPNG()
+    let alertURL = try makeTinyPNG()
+    let controller = AvatarSelectorWindowController(
+        avatars: [
+            AvatarSummary(
+                id: "capybara",
+                name: "水豚",
+                style: "像素",
+                previewURL: previewURL,
+                traits: "稳重",
+                tone: "冷静"
+            )
+        ],
+        currentAvatarID: "capybara",
+        avatarPromptOptimizer: { prompt in
+            "optimized::\(prompt)"
+        },
+        avatarPreviewGenerator: { _ in
+            InlineAvatarPreviewDraft(
+                actionImageURLs: [
+                    "idle": idleURL,
+                    "working": workingURL,
+                    "alert": alertURL,
+                ],
+                suggestedPersona: "稳重、冷静、慢半拍"
+            )
+        },
+        onChoose: { _ in },
+        onClose: {}
+    )
+
+    controller.present()
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "selector content view should exist")
+    }
+
+    try requireButton(in: contentView, title: "桌宠形象动画").performClick(nil)
+    try requireButton(in: contentView, title: "新增自定义形象").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    _ = try requireActionButton(in: contentView, title: "Step 1 · Prompt 与生成")
+    let metadataStepButton = try requireActionButton(in: contentView, title: "Step 2 · 名称与保存")
+    try expect(metadataStepButton.isEnabled == false, "metadata step should stay locked before preview-ready")
+
+    let rawPromptView = try requireTextView(in: contentView, identifier: "avatarCreateRawPrompt")
+    rawPromptView.string = "locked metadata step prompt"
+    controller.textDidChange(Notification(name: NSText.didChangeNotification, object: rawPromptView))
+    try requireActionButton(in: contentView, title: "优化 prompt").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    let metadataStepButtonAfterOptimize = try requireActionButton(in: contentView, title: "Step 2 · 名称与保存")
+    try expect(metadataStepButtonAfterOptimize.isEnabled == false, "metadata step should remain locked before preview generation")
+
+    try requireActionButton(in: contentView, title: "生成预览").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    let metadataStepButtonAfterPreview = try requireActionButton(in: contentView, title: "Step 2 · 名称与保存")
+    try expect(metadataStepButtonAfterPreview.isEnabled == true, "metadata step should unlock when preview-ready")
+}
+
+func testAvatarSelectorInlineCreateModeUsesNextAndBackStepNavigationButtons() throws {
+    let previewURL = try makeTinyPNG()
+    let idleURL = try makeTinyPNG()
+    let workingURL = try makeTinyPNG()
+    let alertURL = try makeTinyPNG()
+    let controller = AvatarSelectorWindowController(
+        avatars: [
+            AvatarSummary(
+                id: "capybara",
+                name: "水豚",
+                style: "像素",
+                previewURL: previewURL,
+                traits: "稳重",
+                tone: "冷静"
+            )
+        ],
+        currentAvatarID: "capybara",
+        avatarPromptOptimizer: { prompt in
+            "optimized::\(prompt)"
+        },
+        avatarPreviewGenerator: { _ in
+            InlineAvatarPreviewDraft(
+                actionImageURLs: [
+                    "idle": idleURL,
+                    "working": workingURL,
+                    "alert": alertURL,
+                ],
+                suggestedPersona: "稳重、冷静、慢半拍"
+            )
+        },
+        onChoose: { _ in },
+        onClose: {}
+    )
+
+    controller.present()
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "selector content view should exist")
+    }
+
+    try requireButton(in: contentView, title: "桌宠形象动画").performClick(nil)
+    try requireButton(in: contentView, title: "新增自定义形象").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    try expect(
+        findButton(in: contentView, title: "下一步") == nil,
+        "step 1 action bar should hide next-step navigation before preview-ready"
+    )
+
+    let rawPromptView = try requireTextView(in: contentView, identifier: "avatarCreateRawPrompt")
+    rawPromptView.string = "next/back step navigation prompt"
+    controller.textDidChange(Notification(name: NSText.didChangeNotification, object: rawPromptView))
+    try requireActionButton(in: contentView, title: "优化 prompt").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    try requireActionButton(in: contentView, title: "生成预览").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    let nextStepButton = try requireActionButton(in: contentView, title: "下一步")
+    try expect(
+        nextStepButton.constraints.contains(where: { constraint in
+            constraint.firstAttribute == .width
+                && constraint.relation == .equal
+                && abs(constraint.constant - 88) < 0.5
+        }) == false,
+        "next-step button should size from localized content without fixed width constraints"
+    )
+    nextStepButton.performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    _ = try requireTextField(in: contentView, identifier: "avatarCreateNameField")
+    _ = try requireTextField(in: contentView, identifier: "avatarCreatePersonaField")
+    let backStepButton = try requireActionButton(in: contentView, title: "返回上一步")
+    try expect(
+        backStepButton.constraints.contains(where: { constraint in
+            constraint.firstAttribute == .width
+                && constraint.relation == .equal
+                && abs(constraint.constant - 110) < 0.5
+        }) == false,
+        "back-step button should size from localized content without fixed width constraints"
+    )
+    _ = try requireActionButton(in: contentView, title: "保存并应用")
+    try expect(
+        findButton(in: contentView, title: "下一步") == nil,
+        "step 2 action bar should not keep the next-step action"
+    )
+
+    backStepButton.performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    _ = try requireActionButton(in: contentView, title: "下一步")
+    _ = try requireActionButton(in: contentView, title: "生成预览")
+    try expect(
+        findButton(in: contentView, title: "保存并应用") == nil,
+        "step 1 action bar should hide the save action after navigating back"
+    )
+    try expect(
+        allSubviews(in: contentView)
+            .compactMap { $0 as? NSTextView }
+            .contains(where: { $0.identifier?.rawValue == "avatarCreateRawPrompt" }),
+        "step 1 prompt editor should reappear after navigating back"
+    )
+    try expect(
+        allSubviews(in: contentView)
+            .compactMap { $0 as? NSTextField }
+            .contains(where: { $0.identifier?.rawValue == "avatarCreateNameField" }) == false,
+        "step 2 name field should be hidden again after navigating back"
+    )
+    try expect(
+        allSubviews(in: contentView)
+            .compactMap { $0 as? NSTextField }
+            .contains(where: { $0.identifier?.rawValue == "avatarCreatePersonaField" }) == false,
+        "step 2 persona field should be hidden again after navigating back"
     )
 }
 
@@ -377,10 +932,12 @@ func testAvatarSelectorInlineCreateModePreviewGenerationReturnsWithoutBlockingUI
 
     let previewButtonWhileGenerating = try requireActionButton(in: contentView, title: "生成预览")
     let regenerateButtonWhileGenerating = try requireActionButton(in: contentView, title: "重新生成")
-    let saveButtonWhileGenerating = try requireActionButton(in: contentView, title: "保存并应用")
     try expect(previewButtonWhileGenerating.isEnabled == false, "preview button should disable while generation is in flight")
     try expect(regenerateButtonWhileGenerating.isEnabled == false, "regenerate button should disable while generation is in flight")
-    try expect(saveButtonWhileGenerating.isEnabled == false, "save button should disable while generation is in flight")
+    try expect(
+        findButton(in: contentView, title: "保存并应用") == nil,
+        "step 1 action bar should not surface save while generation is in flight"
+    )
 
     try requireActionButton(in: contentView, title: "返回现有形象").performClick(nil)
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
@@ -459,12 +1016,11 @@ func testAvatarSelectorInlineCreateModeRequiresThreePreviewsAndNameBeforeSave() 
     let optimizeButton = try requireActionButton(in: contentView, title: "优化 prompt")
     let previewButton = try requireActionButton(in: contentView, title: "生成预览")
     let regenerateButton = try requireActionButton(in: contentView, title: "重新生成")
-    let saveButton = try requireActionButton(in: contentView, title: "保存并应用")
 
     try expect(optimizeButton.isEnabled == true, "avatar optimize button should stay enabled in create mode")
     try expect(previewButton.isEnabled == false, "avatar preview button should stay disabled until optimized prompt exists")
     try expect(regenerateButton.isEnabled == false, "avatar regenerate button should stay disabled before any preview")
-    try expect(saveButton.isEnabled == false, "avatar save button should stay disabled before preview and name")
+    try expect(findButton(in: contentView, title: "保存并应用") == nil, "step 1 action bar should hide save before metadata step")
 
     let rawPromptView = try requireTextView(in: contentView, identifier: "avatarCreateRawPrompt")
     rawPromptView.string = "raw prompt for gating"
@@ -473,28 +1029,35 @@ func testAvatarSelectorInlineCreateModeRequiresThreePreviewsAndNameBeforeSave() 
     try requireActionButton(in: contentView, title: "优化 prompt").performClick(nil)
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
     let previewButtonAfterOptimize = try requireActionButton(in: contentView, title: "生成预览")
-    let saveButtonAfterOptimize = try requireActionButton(in: contentView, title: "保存并应用")
     try expect(
         previewButtonAfterOptimize.isEnabled == true,
         "avatar preview button should enable after optimization"
     )
     try expect(
-        saveButtonAfterOptimize.isEnabled == false,
-        "avatar save button should still wait for preview"
+        findButton(in: contentView, title: "保存并应用") == nil,
+        "step 1 action bar should keep save hidden after optimization"
     )
 
     try requireActionButton(in: contentView, title: "生成预览").performClick(nil)
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
     let regenerateButtonAfterPreview = try requireActionButton(in: contentView, title: "重新生成")
-    let saveButtonAfterPreview = try requireActionButton(in: contentView, title: "保存并应用")
+    let metadataStepButton = try requireActionButton(in: contentView, title: "Step 2 · 名称与保存")
     try expect(
         regenerateButtonAfterPreview.isEnabled == true,
         "avatar regenerate button should enable after the first preview"
     )
+    try expect(metadataStepButton.isEnabled == false, "metadata step should stay locked when one action preview is missing")
     try expect(
-        saveButtonAfterPreview.isEnabled == false,
-        "avatar save button should stay disabled when one action preview is missing"
+        findButton(in: contentView, title: "保存并应用") == nil,
+        "step 1 action bar should keep save hidden until the metadata step"
     )
+
+    try requireActionButton(in: contentView, title: "重新生成").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    let metadataStepButtonAfterCompletePreview = try requireActionButton(in: contentView, title: "Step 2 · 名称与保存")
+    try expect(metadataStepButtonAfterCompletePreview.isEnabled == true, "metadata step should unlock after all required previews exist")
+    metadataStepButtonAfterCompletePreview.performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
 
     let nameField = try requireTextField(in: contentView, identifier: "avatarCreateNameField")
     let personaField = try requireTextField(in: contentView, identifier: "avatarCreatePersonaField")
@@ -503,16 +1066,14 @@ func testAvatarSelectorInlineCreateModeRequiresThreePreviewsAndNameBeforeSave() 
         "avatar preview should hydrate the editable persona field from the preview draft"
     )
 
-    nameField.stringValue = "淡定水豚"
-    nameField.sendAction(nameField.action, to: nameField.target)
-    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
-    let saveButtonAfterName = try requireActionButton(in: contentView, title: "保存并应用")
+    let saveButtonBeforeName = try requireActionButton(in: contentView, title: "保存并应用")
     try expect(
-        saveButtonAfterName.isEnabled == false,
-        "avatar save button should still stay disabled until idle working alert previews all exist"
+        saveButtonBeforeName.isEnabled == false,
+        "avatar save button should remain disabled without a name even after preview-ready"
     )
 
-    try requireActionButton(in: contentView, title: "重新生成").performClick(nil)
+    nameField.stringValue = "淡定水豚"
+    nameField.sendAction(nameField.action, to: nameField.target)
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
     let saveButtonAfterCompletePreview = try requireActionButton(in: contentView, title: "保存并应用")
     try expect(
@@ -585,6 +1146,8 @@ func testAvatarSelectorInlineCreateModeCancelKeepsDraftUnsaved() throws {
     try requireActionButton(in: contentView, title: "优化 prompt").performClick(nil)
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
     try requireActionButton(in: contentView, title: "生成预览").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    try requireActionButton(in: contentView, title: "Step 2 · 名称与保存").performClick(nil)
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
 
     let nameField = try requireTextField(in: contentView, identifier: "avatarCreateNameField")
@@ -664,6 +1227,8 @@ func testAvatarSelectorInlineCreateModeSaveWithoutHandlerStaysEditable() throws 
     try requireActionButton(in: contentView, title: "优化 prompt").performClick(nil)
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
     try requireActionButton(in: contentView, title: "生成预览").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    try requireActionButton(in: contentView, title: "Step 2 · 名称与保存").performClick(nil)
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
 
     let nameField = try requireTextField(in: contentView, identifier: "avatarCreateNameField")
@@ -770,6 +1335,8 @@ func testAvatarSelectorInlineCreateModeSavesAndAppliesGeneratedAvatar() throws {
     try requireActionButton(in: contentView, title: "优化 prompt").performClick(nil)
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
     try requireActionButton(in: contentView, title: "生成预览").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    try requireActionButton(in: contentView, title: "Step 2 · 名称与保存").performClick(nil)
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
 
     let nameField = try requireTextField(in: contentView, identifier: "avatarCreateNameField")
@@ -889,6 +1456,8 @@ func testAvatarSelectorInlineCreateModeSaveApplyFailureStaysOpenAndShowsError() 
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
     try requireActionButton(in: contentView, title: "生成预览").performClick(nil)
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    try requireActionButton(in: contentView, title: "Step 2 · 名称与保存").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
 
     let nameField = try requireTextField(in: contentView, identifier: "avatarCreateNameField")
     nameField.stringValue = "淡定水豚"
@@ -960,7 +1529,7 @@ func testAvatarSelectorThemeTabGeneratesDraftBeforeApplyingTheme() throws {
 
     try requireActionButton(in: contentView, title: "优化 prompt").performClick(nil)
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
-    try requireActionButton(in: contentView, title: "预览效果").performClick(nil)
+    try requireActionButton(in: contentView, title: "生成主题草稿").performClick(nil)
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
 
     try expect(
@@ -1136,7 +1705,7 @@ func testAvatarSelectorThemeTabInvalidatesApplyWhenOptimizedPromptChanges() thro
 
     try requireActionButton(in: contentView, title: "优化 prompt").performClick(nil)
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
-    try requireActionButton(in: contentView, title: "预览效果").performClick(nil)
+    try requireActionButton(in: contentView, title: "生成主题草稿").performClick(nil)
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
 
     _ = try requireLabel(in: contentView, stringValue: "草稿 1：AppKit Test Theme / optimized::raw theme prompt")
@@ -1161,7 +1730,7 @@ func testAvatarSelectorThemeTabInvalidatesApplyWhenOptimizedPromptChanges() thro
         "theme apply should keep the current theme unchanged after the optimized prompt changes"
     )
     _ = try requireLabel(in: contentView, stringValue: "尚未生成新的主题草稿。")
-    _ = try requireLabel(in: contentView, stringValue: "优化后 prompt 已变更，请重新预览效果。")
+    _ = try requireLabel(in: contentView, stringValue: "优化后 prompt 已变更，请重新生成主题草稿。")
     try expect(
         findLabel(in: contentView, stringValue: "草稿 1：AppKit Test Theme / optimized::raw theme prompt") == nil,
         "theme draft summary should stop presenting the stale preview as current after optimized prompt changes"
@@ -1225,7 +1794,7 @@ func testAvatarSelectorThemeTabBlocksApplyAfterFailedReoptimize() throws {
 
     try requireActionButton(in: contentView, title: "优化 prompt").performClick(nil)
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
-    try requireActionButton(in: contentView, title: "预览效果").performClick(nil)
+    try requireActionButton(in: contentView, title: "生成主题草稿").performClick(nil)
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
 
     try requireActionButton(in: contentView, title: "重新优化").performClick(nil)
@@ -1242,7 +1811,7 @@ func testAvatarSelectorThemeTabBlocksApplyAfterFailedReoptimize() throws {
         "theme apply should not activate a stale preview after reoptimize fails"
     )
     _ = try requireLabel(in: contentView, stringValue: "尚未生成新的主题草稿。")
-    _ = try requireLabel(in: contentView, stringValue: "优化后 prompt 已变更，请重新预览效果。")
+    _ = try requireLabel(in: contentView, stringValue: "优化后 prompt 已变更，请重新生成主题草稿。")
 }
 
 func testAvatarSelectorThemeTabUpdatesActionButtonStatesAcrossReviewFlow() throws {
@@ -1274,7 +1843,7 @@ func testAvatarSelectorThemeTabUpdatesActionButtonStatesAcrossReviewFlow() throw
         throw TestFailure(message: "selector content view should exist")
     }
 
-    let initialPreviewButton = try requireActionButton(in: contentView, title: "预览效果")
+    let initialPreviewButton = try requireActionButton(in: contentView, title: "生成主题草稿")
     let initialApplyButton = try requireActionButton(in: contentView, title: "应用主题")
     try expect(initialPreviewButton.isEnabled == false, "theme preview button should start disabled before an optimized prompt exists")
     try expect(initialApplyButton.isEnabled == false, "theme apply button should start disabled before a preview exists")
@@ -1287,15 +1856,15 @@ func testAvatarSelectorThemeTabUpdatesActionButtonStatesAcrossReviewFlow() throw
     try requireActionButton(in: contentView, title: "优化 prompt").performClick(nil)
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
 
-    let previewButtonAfterOptimize = try requireActionButton(in: contentView, title: "预览效果")
+    let previewButtonAfterOptimize = try requireActionButton(in: contentView, title: "生成主题草稿")
     let applyButtonAfterOptimize = try requireActionButton(in: contentView, title: "应用主题")
     try expect(previewButtonAfterOptimize.isEnabled == true, "theme preview button should enable once an optimized prompt exists")
     try expect(applyButtonAfterOptimize.isEnabled == false, "theme apply button should stay disabled until preview succeeds")
 
-    try requireActionButton(in: contentView, title: "预览效果").performClick(nil)
+    try requireActionButton(in: contentView, title: "生成主题草稿").performClick(nil)
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
 
-    let previewButtonAfterPreview = try requireActionButton(in: contentView, title: "预览效果")
+    let previewButtonAfterPreview = try requireActionButton(in: contentView, title: "生成主题草稿")
     let applyButtonAfterPreview = try requireActionButton(in: contentView, title: "应用主题")
     try expect(previewButtonAfterPreview.isEnabled == true, "theme preview button should remain enabled after preview")
     try expect(applyButtonAfterPreview.isEnabled == true, "theme apply button should enable after a valid preview exists")
@@ -1303,7 +1872,7 @@ func testAvatarSelectorThemeTabUpdatesActionButtonStatesAcrossReviewFlow() throw
     optimizedPromptView.string = "optimized::raw button state prompt edited"
     controller.textDidChange(Notification(name: NSText.didChangeNotification, object: optimizedPromptView))
 
-    let previewButtonAfterEdit = try requireActionButton(in: contentView, title: "预览效果")
+    let previewButtonAfterEdit = try requireActionButton(in: contentView, title: "生成主题草稿")
     let applyButtonAfterEdit = try requireActionButton(in: contentView, title: "应用主题")
     try expect(previewButtonAfterEdit.isEnabled == true, "theme preview button should stay enabled when the edited optimized prompt is still non-empty")
     try expect(applyButtonAfterEdit.isEnabled == false, "theme apply button should disable when the optimized prompt invalidates the last preview")
@@ -1429,10 +1998,60 @@ func testAvatarSelectorWindowSpeechTabShowsBubblePreviewAndApplyActions() throws
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
 
     _ = try requireLabel(in: contentView, stringValue: "当前已应用话术")
+    _ = try requireLabel(in: contentView, stringValue: "状态文案组")
+    _ = try requireLabel(in: contentView, stringValue: "提醒与结束文案")
     _ = try requireLabel(in: contentView, stringValue: "桌宠对话气泡预览")
     _ = try requireButton(in: contentView, title: "生成预览")
     _ = try requireButton(in: contentView, title: "重新生成")
     _ = try requireButton(in: contentView, title: "应用")
+}
+
+func testAvatarSelectorSpeechTabShowsAllGeneratedSpeechEntriesAsGroupedContent() throws {
+    let previewURL = try makeTinyPNG()
+    let draft = SpeechDraft(
+        statusIdle: "空闲待命",
+        statusWorking: "稳步推进",
+        statusFocus: "沉浸专注",
+        statusBreak: "暂时离开",
+        focusEndLight: "抬头看远一点，再继续。",
+        focusEndHeavy: "已经持续很久了，先完整休息一下。",
+        stopWorkMessage: "今天先到这里。",
+        eyeReminder: "看向远处，放松一下眼睛。"
+    )
+    let controller = AvatarSelectorWindowController(
+        avatars: [
+            AvatarSummary(
+                id: "capybara",
+                name: "水豚",
+                style: "像素",
+                previewURL: previewURL,
+                traits: "稳重",
+                tone: "冷静"
+            )
+        ],
+        currentAvatarID: "capybara",
+        speechDraftGenerator: { _ in draft },
+        onChoose: { _ in },
+        onClose: {}
+    )
+
+    guard let contentView = controller.window?.contentView else {
+        throw TestFailure(message: "selector content view should exist")
+    }
+
+    try requireButton(in: contentView, title: "话术").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    try requireActionButton(in: contentView, title: "生成预览").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    _ = try requireLabel(in: contentView, stringValue: "待机：空闲待命")
+    _ = try requireLabel(in: contentView, stringValue: "工作：稳步推进")
+    _ = try requireLabel(in: contentView, stringValue: "专注：沉浸专注")
+    _ = try requireLabel(in: contentView, stringValue: "暂离：暂时离开")
+    _ = try requireLabel(in: contentView, stringValue: "轻提醒：抬头看远一点，再继续。")
+    _ = try requireLabel(in: contentView, stringValue: "重提醒：已经持续很久了，先完整休息一下。")
+    _ = try requireLabel(in: contentView, stringValue: "收工：今天先到这里。")
+    _ = try requireLabel(in: contentView, stringValue: "护眼：看向远处，放松一下眼睛。")
 }
 
 func testAvatarSelectorSpeechTabOmitsStyleChromeAndModelSummary() throws {
@@ -2553,7 +3172,7 @@ func requireActionButton(in root: NSView, title: String) throws -> NSButton {
     throw TestFailure(message: "expected actionable button '\(title)' to exist")
 }
 
-func requireTextView(in root: NSView, identifier: String) throws -> NSTextView {
+private func requireTextView(in root: NSView, identifier: String) throws -> NSTextView {
     if let textView = allSubviews(in: root)
         .compactMap({ $0 as? NSTextView })
         .first(where: { $0.identifier?.rawValue == identifier }) {
