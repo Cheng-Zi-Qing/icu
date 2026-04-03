@@ -1,18 +1,70 @@
 import Foundation
 
-final class GenerationHTTPClient: GenerationTransport {
+final class GenerationHTTPClient: GenerationTransport, GenerationConnectionTesting {
     private let session: URLSession
 
     init(session: URLSession = .shared) {
         self.session = session
     }
 
+    func testConnection(provider: GenerationProvider, defaults: GenerationProviderDefaultConfig) throws {
+        switch provider {
+        case .openAI, .openAICompatible:
+            let endpoint = try endpointURL(baseURL: defaults.baseURL, path: "models")
+            try performStatusRequest(
+                url: endpoint,
+                headers: defaults.headers,
+                auth: defaults.resolvedAuth
+            )
+        case .anthropic:
+            let endpoint = try endpointURL(baseURL: defaults.baseURL, path: "models")
+            var headers = defaults.headers
+            if headers["anthropic-version"] == nil {
+                headers["anthropic-version"] = "2023-06-01"
+            }
+
+            var auth = defaults.resolvedAuth
+            if auth["x-api-key"] == nil,
+               auth["x_api_key"] == nil,
+               let apiKey = auth["api_key"],
+               !apiKey.isEmpty {
+                auth["x-api-key"] = apiKey
+                auth["api_key"] = nil
+            }
+
+            try performStatusRequest(
+                url: endpoint,
+                headers: headers,
+                auth: auth
+            )
+        case .ollama:
+            let endpoint = try endpointURL(baseURL: defaults.baseURL, path: "api/tags")
+            try performStatusRequest(
+                url: endpoint,
+                headers: defaults.headers,
+                auth: defaults.resolvedAuth
+            )
+        case .huggingFace:
+            let endpoint = try endpointURL(baseURL: defaults.baseURL, path: "")
+            try performStatusRequest(
+                url: endpoint,
+                headers: defaults.headers,
+                auth: defaults.resolvedAuth,
+                acceptedStatusCodes: 200 ... 499
+            )
+        }
+    }
+
     func completeJSON(prompt: String, capability: GenerationCapabilityConfig) throws -> String {
         switch capability.provider {
         case .ollama:
             return try callOllama(prompt: prompt, capability: capability)
+        case .openAI:
+            return try callOpenAICompatible(prompt: prompt, capability: capability)
         case .openAICompatible:
             return try callOpenAICompatible(prompt: prompt, capability: capability)
+        case .anthropic:
+            return try callAnthropic(prompt: prompt, capability: capability)
         case .huggingFace:
             throw GenerationRouteError.unsupportedProviderForTheme(capability.provider)
         }
@@ -33,6 +85,7 @@ final class GenerationHTTPClient: GenerationTransport {
         let json = try performJSONRequest(
             url: endpoint,
             payload: payload,
+            headers: capability.headers,
             auth: capability.auth
         )
 
@@ -76,6 +129,7 @@ final class GenerationHTTPClient: GenerationTransport {
         let json = try performJSONRequest(
             url: endpoint,
             payload: payload,
+            headers: capability.headers,
             auth: capability.auth
         )
 
@@ -97,6 +151,58 @@ final class GenerationHTTPClient: GenerationTransport {
         }
 
         throw GenerationRouteError.responseMissingContent("openai-compatible response field 'choices[0].message.content'")
+    }
+
+    private func callAnthropic(prompt: String, capability: GenerationCapabilityConfig) throws -> String {
+        let endpoint = try endpointURL(baseURL: capability.baseURL, path: "messages")
+        var payload: [String: Any] = [
+            "model": capability.model,
+            "messages": [
+                ["role": "user", "content": prompt],
+            ],
+            "max_tokens": 1024,
+        ]
+        for (key, value) in capability.options {
+            payload[key] = value
+        }
+
+        var headers = capability.headers
+        if headers["anthropic-version"] == nil {
+            headers["anthropic-version"] = "2023-06-01"
+        }
+
+        var auth = capability.auth
+        if auth["x-api-key"] == nil,
+           auth["x_api_key"] == nil,
+           let apiKey = auth["api_key"],
+           !apiKey.isEmpty {
+            auth["x-api-key"] = apiKey
+            // Native Anthropic uses x-api-key and should not duplicate the same
+            // credential as Authorization: Bearer <api_key>.
+            auth["api_key"] = nil
+        }
+
+        let json = try performJSONRequest(
+            url: endpoint,
+            payload: payload,
+            headers: headers,
+            auth: auth
+        )
+
+        if let providerError = extractProviderError(from: json) {
+            throw GenerationRouteError.providerReturnedError(providerError)
+        }
+
+        if let contentItems = json["content"] as? [[String: Any]] {
+            for item in contentItems {
+                if let content = item["text"] as? String,
+                   !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    return content
+                }
+            }
+        }
+
+        throw GenerationRouteError.responseMissingContent("anthropic response field 'content[0].text'")
     }
 
     private func endpointURL(baseURL: String, path: String) throws -> URL {
@@ -126,12 +232,16 @@ final class GenerationHTTPClient: GenerationTransport {
     private func performJSONRequest(
         url: URL,
         payload: [String: Any],
+        headers: [String: String] = [:],
         auth: [String: String]
     ) throws -> [String: Any] {
         var request = URLRequest(url: url, timeoutInterval: 60)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        for (name, value) in headers {
+            request.setValue(value, forHTTPHeaderField: name)
+        }
         applyAuth(auth, to: &request)
 
         do {
@@ -159,6 +269,28 @@ final class GenerationHTTPClient: GenerationTransport {
             throw GenerationRouteError.invalidResponse(error.localizedDescription)
         }
         return object
+    }
+
+    private func performStatusRequest(
+        url: URL,
+        method: String = "GET",
+        headers: [String: String] = [:],
+        auth: [String: String],
+        acceptedStatusCodes: ClosedRange<Int> = 200 ... 299
+    ) throws {
+        var request = URLRequest(url: url, timeoutInterval: 20)
+        request.httpMethod = method
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        for (name, value) in headers {
+            request.setValue(value, forHTTPHeaderField: name)
+        }
+        applyAuth(auth, to: &request)
+
+        let (data, response) = try perform(request)
+        guard acceptedStatusCodes.contains(response.statusCode) else {
+            let message = extractProviderError(from: data) ?? "HTTP \(response.statusCode)"
+            throw GenerationRouteError.requestFailed("HTTP \(response.statusCode): \(message)")
+        }
     }
 
     private func perform(_ request: URLRequest) throws -> (Data, HTTPURLResponse) {

@@ -26,7 +26,7 @@ class DesktopPetView: NSView {
     private var completedVariantLoops = 0
     private var variantRotationTicksRemaining = 0
     private var persistentStatusText = DesktopPetCopy.statusText(for: .idle)
-    private var transientBubbleResetWorkItem: DispatchWorkItem?
+    private var transientBubbleDismissTimer: Timer?
     private var animationTimer: DispatchSourceTimer?
     private var themeObserver: NSObjectProtocol?
     private var copyObserver: NSObjectProtocol?
@@ -139,18 +139,21 @@ class DesktopPetView: NSView {
     }
 
     func showTransientMessage(_ text: String, duration: TimeInterval = 3) {
-        transientBubbleResetWorkItem?.cancel()
+        transientBubbleDismissTimer?.invalidate()
         transientBubbleLabel.stringValue = text
         layoutTransientBubble()
         transientBubbleContainer.isHidden = false
         transientBubbleTail.isHidden = false
         toolTip = text
 
-        let workItem = DispatchWorkItem { [weak self] in
+        let timer = Timer(
+            timeInterval: duration,
+            repeats: false
+        ) { [weak self] _ in
             self?.hideTransientBubble()
         }
-        transientBubbleResetWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + duration, execute: workItem)
+        transientBubbleDismissTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
     }
 
     // MARK: - Image Loading
@@ -503,7 +506,7 @@ class DesktopPetView: NSView {
 
     deinit {
         cancelAnimationTimer()
-        transientBubbleResetWorkItem?.cancel()
+        transientBubbleDismissTimer?.invalidate()
         if let themeObserver {
             NotificationCenter.default.removeObserver(themeObserver)
         }

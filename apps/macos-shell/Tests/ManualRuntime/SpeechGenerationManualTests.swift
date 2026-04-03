@@ -33,6 +33,8 @@ func testSpeechGenerationServiceUsesTextCapabilityAndReturnsDraft() throws {
     try expect(draft.stopWorkMessage == "今天先到这里。", "speech service should decode the generated stop work message")
     try expect(transport.requestedProviders == [.ollama], "speech service should use the text capability only")
     try expect(transport.requestedPrompts.count == 1, "speech service should make exactly one generation request")
+
+    try testCapabilityRouterResolvesAuthFromCustomThenProviderDefault()
 }
 
 func testSpeechGenerationServiceRejectsUnsupportedTextProviderBeforeNetworkCall() throws {
@@ -133,5 +135,61 @@ func testCopyOverrideStoreAppliesSpeechDraftAndPreservesUnrelatedOverrides() thr
     try expect(
         DesktopPetCopy.stopWorkMessage() == "今天先到这里。",
         "copy override store should reload the active catalog for transient pet copy"
+    )
+}
+
+func testCapabilityRouterResolvesAuthFromCustomThenProviderDefault() throws {
+    let settings = GenerationSettings(
+        activeThemeID: nil,
+        providerDefaults: [
+            .anthropic: GenerationProviderDefaultConfig(
+                apiKey: "",
+                baseURL: "https://api.anthropic.com/v1",
+                headers: [:],
+                auth: ["api_key": "provider-default-key"]
+            )
+        ],
+        textDescription: GenerationCapabilityConfig(
+            provider: .anthropic,
+            preset: "claude-sonnet",
+            model: "claude-3-7-sonnet-latest",
+            customized: true,
+            custom: GenerationCapabilityCustomTransport(
+                apiKey: "",
+                baseURL: "https://proxy.example.invalid/v1",
+                headers: [:],
+                auth: [:]
+            ),
+            headers: [:],
+            baseURL: "https://proxy.example.invalid/v1",
+            auth: [:],
+            options: [:]
+        ),
+        animationAvatar: GenerationCapabilityConfig(
+            provider: .openAICompatible,
+            baseURL: "https://images.example.invalid/v1",
+            model: "image-model",
+            auth: [:],
+            options: [:]
+        ),
+        codeGeneration: GenerationCapabilityConfig(
+            provider: .openAICompatible,
+            baseURL: "https://code.example.invalid/v1",
+            model: "code-model",
+            auth: [:],
+            options: [:]
+        )
+    )
+
+    let router = GenerationCapabilityRouter(settingsStore: try makeGenerationSettingsStore(settings: settings))
+    let resolved = try router.capability(for: .textDescription)
+
+    try expect(
+        resolved.auth["api_key"] == "provider-default-key",
+        "router should fall back to provider-default auth when customized transport does not define auth"
+    )
+    try expect(
+        resolved.baseURL == "https://proxy.example.invalid/v1",
+        "router should keep capability custom base URL while sharing auth fallback resolution"
     )
 }

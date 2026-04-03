@@ -33,7 +33,6 @@ final class GenerationCoordinator {
         let controller = GenerationConfigWindowController(
             settingsStore: settingsStore,
             themeManager: themeManager,
-            generationCoordinator: self,
             onClose: { [weak self] in
                 self?.configWindowController = nil
             }
