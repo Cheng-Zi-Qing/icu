@@ -153,3 +153,37 @@ func testHealthMetricsStoreSerializesConcurrentWrites() throws {
     let summary = try store.daySummary(for: shownAt)
     try expect(summary.eyeReminder.shown == writeCount, "serial store writes should not lose events")
 }
+
+func testHealthSessionTrackerSettlesWorkFocusAndBreakMetricsAcrossTransitions() throws {
+    let appPaths = try makeTemporaryAppPaths()
+    let store = try HealthMetricsStore(appPaths: appPaths)
+    let tracker = HealthSessionTracker(store: store)
+    let start = Date(timeIntervalSince1970: 1_744_000_000)
+
+    try tracker.recordStateTransition(from: .idle, to: .working, at: start)
+    try tracker.recordStateTransition(from: .working, to: .focus, at: start.addingTimeInterval(600))
+    try tracker.recordStateTransition(from: .focus, to: .working, at: start.addingTimeInterval(1500))
+    try tracker.recordStateTransition(from: .working, to: .breakState, at: start.addingTimeInterval(2100))
+
+    let summary = try store.daySummary(for: start)
+    try expect(summary.workDuration == 1_200, "working spans should be settled on boundary changes")
+    try expect(summary.focusCount == 1, "entering focus should increment focus count")
+    try expect(summary.focusDuration == 900, "focus duration should be settled when leaving focus")
+    try expect(summary.breakCount == 1, "entering break should increment break count")
+}
+
+func testHealthSessionTrackerOnlyRequestsStopWorkReportWhenDataExists() throws {
+    let appPaths = try makeTemporaryAppPaths()
+    let store = try HealthMetricsStore(appPaths: appPaths)
+    let tracker = HealthSessionTracker(store: store)
+    let start = Date(timeIntervalSince1970: 1_744_000_000)
+
+    let shouldPresentBeforeActivity = try tracker.shouldPresentStopWorkReport(at: start)
+    try expect(shouldPresentBeforeActivity == false, "empty day should not request stop-work report")
+
+    try tracker.recordStateTransition(from: .idle, to: .working, at: start)
+    try tracker.recordStateTransition(from: .working, to: .idle, at: start.addingTimeInterval(300))
+
+    let shouldPresentAfterActivity = try tracker.shouldPresentStopWorkReport(at: start)
+    try expect(shouldPresentAfterActivity == true, "day with settled work data should request stop-work report")
+}

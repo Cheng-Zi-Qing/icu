@@ -36,6 +36,8 @@ struct StateStoreManualMain {
             try testHealthMetricsStoreRecoversFromCorruptMetricsFileAndRecordsDiagnostic()
             try testHealthMetricsStoreEmitsDiagnosticsForIgnoredInvalidEvents()
             try testHealthMetricsStoreSerializesConcurrentWrites()
+            try testHealthSessionTrackerSettlesWorkFocusAndBreakMetricsAcrossTransitions()
+            try testHealthSessionTrackerOnlyRequestsStopWorkReportWhenDataExists()
             try testAvatarCatalogListsRepoAvatar()
             try testAvatarCatalogPrefersAppAssetsOverRepoAvatar()
             try testAvatarAssetStoreUsesInstalledCopyCatalogForGeneratedStyleLabel()
