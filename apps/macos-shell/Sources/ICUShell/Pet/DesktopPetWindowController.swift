@@ -5,9 +5,12 @@ import AppKit
 class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
     private let workSessionController: WorkSessionController
     private let reminderScheduler: ReminderScheduler
-    private let avatarCoordinator: AvatarCoordinator
-    private let generationCoordinator: GenerationCoordinator
+    private let healthTracker: HealthSessionTracker
+    private let healthReportPresenter: (HealthDaySummary, HealthWeekSummary) -> Void
+    private let onChangeAvatarRequested: () -> Void
+    private let onOpenGenerationConfigRequested: () -> Void
     private let onQuitRequested: () -> Void
+    private let nowProvider: () -> Date
     private let petView: DesktopPetView
     private lazy var contextMenuController = ContextMenuPanelController { [weak self] action in
         self?.handleMenuAction(action)
@@ -16,17 +19,23 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
     init(
         workSessionController: WorkSessionController,
         reminderScheduler: ReminderScheduler,
+        healthTracker: HealthSessionTracker,
+        healthReportPresenter: @escaping (HealthDaySummary, HealthWeekSummary) -> Void,
         assetLocator: PetAssetLocator,
         petID: String,
-        avatarCoordinator: AvatarCoordinator,
-        generationCoordinator: GenerationCoordinator,
-        onQuitRequested: @escaping () -> Void
+        onChangeAvatarRequested: @escaping () -> Void,
+        onOpenGenerationConfigRequested: @escaping () -> Void,
+        onQuitRequested: @escaping () -> Void,
+        nowProvider: @escaping () -> Date = { .now }
     ) {
         self.workSessionController = workSessionController
         self.reminderScheduler = reminderScheduler
-        self.avatarCoordinator = avatarCoordinator
-        self.generationCoordinator = generationCoordinator
+        self.healthTracker = healthTracker
+        self.healthReportPresenter = healthReportPresenter
+        self.onChangeAvatarRequested = onChangeAvatarRequested
+        self.onOpenGenerationConfigRequested = onOpenGenerationConfigRequested
         self.onQuitRequested = onQuitRequested
+        self.nowProvider = nowProvider
 
         let size = NSSize(width: 128, height: 128)
         let origin = WindowPlacement.resolveInitialOrigin(
@@ -90,8 +99,29 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    func presentReminder(text: String) {
-        petView.showTransientMessage(text)
+    func presentReminder(payload: ReminderPresentationPayload) {
+        let now = nowProvider()
+        do {
+            try healthTracker.recordReminderShown(payload, at: now)
+        } catch {
+            logHealthError("record reminder shown", error: error)
+        }
+
+        petView.showReminderCard(payload) { [weak self] outcome in
+            self?.handleReminderOutcome(outcome, for: payload)
+        }
+    }
+
+    func presentHealthReport() {
+        let now = nowProvider()
+        do {
+            let todaySummary = try healthTracker.todayReport(at: now)
+            let weekSummary = try healthTracker.weekReport(containing: now)
+            healthReportPresenter(todaySummary, weekSummary)
+        } catch {
+            logHealthError("load health report", error: error)
+            petView.showTransientMessage(DesktopPetCopy.healthReportUnavailableMessage(), duration: 1.8)
+        }
     }
 
     func setPetID(_ petID: String) {
@@ -108,34 +138,43 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
 
     private func handleMenuAction(_ action: DesktopPetMenuAction) {
         do {
+            let oldState = workSessionController.state
+            let now = nowProvider()
             var transientMessage: String?
+            var shouldPresentReport = false
 
             switch action {
             case .startWork:
-                try workSessionController.startWork()
+                try workSessionController.startWork(now: now)
+                recordHealthTransition(from: oldState, to: workSessionController.state, at: now)
                 reminderScheduler.startWorking()
             case .enterFocus:
-                try workSessionController.enterFocus()
+                try workSessionController.enterFocus(now: now)
+                recordHealthTransition(from: oldState, to: workSessionController.state, at: now)
                 reminderScheduler.enterFocus()
             case .takeBreak:
-                try workSessionController.takeBreak()
+                try workSessionController.takeBreak(now: now)
+                recordHealthTransition(from: oldState, to: workSessionController.state, at: now)
                 reminderScheduler.stop()
             case .resumeWorking:
-                let suggestion = try workSessionController.resumeWorking()
+                let suggestion = try workSessionController.resumeWorking(now: now)
+                recordHealthTransition(from: oldState, to: workSessionController.state, at: now)
                 reminderScheduler.resumeWorking()
                 transientMessage = focusSuggestionMessage(for: suggestion)
             case .stopWork:
-                try workSessionController.stopWork()
+                try workSessionController.stopWork(now: now)
+                recordHealthTransition(from: oldState, to: workSessionController.state, at: now)
                 reminderScheduler.stop()
-                transientMessage = DesktopPetCopy.stopWorkMessage()
+                shouldPresentReport = shouldAutoPresentStopWorkReport(at: now)
+                transientMessage = shouldPresentReport ? nil : DesktopPetCopy.stopWorkMessage()
             case .changeAvatar:
-                avatarCoordinator.presentAvatarPicker()
+                onChangeAvatarRequested()
                 return
             case .openGenerationConfig:
-                _ = generationCoordinator.openGenerationConfig()
+                onOpenGenerationConfigRequested()
                 return
             case .openHealthReport:
-                petView.showTransientMessage(DesktopPetCopy.healthReportComingSoonMessage(), duration: 1.8)
+                presentHealthReport()
                 return
             case .closeWindow:
                 window?.orderOut(nil)
@@ -145,13 +184,54 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
                 return
             }
 
-            applyCurrentStateToView(showBubble: transientMessage == nil)
+            applyCurrentStateToView(showBubble: transientMessage == nil && !shouldPresentReport)
             if let transientMessage {
                 petView.showTransientMessage(transientMessage)
+            }
+            if shouldPresentReport {
+                presentHealthReport()
             }
         } catch {
             NSSound.beep()
             petView.showTransientMessage(UserFacingErrorCopy.desktopPetMessage(for: error), duration: 2)
+        }
+    }
+
+    private func handleReminderOutcome(_ outcome: HealthReminderOutcome, for payload: ReminderPresentationPayload) {
+        let now = nowProvider()
+        petView.dismissReminderCard()
+        applyCurrentStateToView(showBubble: false)
+
+        do {
+            try healthTracker.recordReminderOutcome(for: payload, outcome: outcome, at: now)
+        } catch {
+            logHealthError("record reminder outcome", error: error)
+        }
+
+        if outcome == .snoozed {
+            let followUpPayload = ReminderPresentationPayload(
+                id: UUID(),
+                type: payload.type,
+                text: payload.text
+            )
+            reminderScheduler.scheduleSnooze(for: followUpPayload)
+        }
+    }
+
+    private func recordHealthTransition(from oldState: ShellWorkState, to newState: ShellWorkState, at date: Date) {
+        do {
+            try healthTracker.recordStateTransition(from: oldState, to: newState, at: date)
+        } catch {
+            logHealthError("record state transition", error: error)
+        }
+    }
+
+    private func shouldAutoPresentStopWorkReport(at date: Date) -> Bool {
+        do {
+            return try healthTracker.shouldPresentStopWorkReport(at: date)
+        } catch {
+            logHealthError("check stop-work report eligibility", error: error)
+            return false
         }
     }
 
@@ -166,6 +246,10 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
 
     private func focusSuggestionMessage(for suggestion: FocusEndSuggestion?) -> String? {
         DesktopPetCopy.focusSuggestionMessage(for: suggestion)
+    }
+
+    private func logHealthError(_ operation: String, error: Error) {
+        NSLog("[ICUShell] failed to \(operation): \(error.localizedDescription)")
     }
 
     private func persistCurrentWindowPlacement() {

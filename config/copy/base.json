@@ -244,7 +244,8 @@
     "reminder_complete_action": "已完成",
     "reminder_snooze_action": "稍后提醒",
     "reminder_skip_action": "跳过",
-    "health_report_coming_soon": "健康报告正在准备中。"
+    "health_report_coming_soon": "健康报告正在准备中。",
+    "health_report_unavailable": "健康报告暂时无法打开。"
   },
   "errors": {
     "work_invalid_transition": "当前状态下不能执行这个操作。",

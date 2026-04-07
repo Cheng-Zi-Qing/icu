@@ -2,6 +2,7 @@ import AppKit
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     private var petWindowController: DesktopPetWindowController?
+    private var healthReportWindowController: HealthReportWindowController?
     private var statusItem: NSStatusItem?
     private var appPaths: AppPaths?
     private var stateStore: StateStore?
@@ -27,6 +28,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
             let store = try StateStore(paths: paths)
             let sessionController = try WorkSessionController(store: store)
+            let healthMetricsStore = try HealthMetricsStore(appPaths: paths)
+            let healthTracker = HealthSessionTracker(store: healthMetricsStore)
             setenv("ICU_APP_SUPPORT_ROOT", paths.rootURL.path, 1)
             TextCatalog.installShared(try TextCatalog.live(appPaths: paths, repoRootURL: assetLocator.repoRootURL))
             let generationSettingsStore = GenerationSettingsStore(
@@ -77,8 +80,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let petID = avatarCoordinator.currentAvatarID(
                 fallback: ProcessInfo.processInfo.environment["ICU_PET_ID"] ?? "capybara"
             )
-            let scheduler = ReminderScheduler { [weak self] in
-                self?.petWindowController?.presentReminder(text: DesktopPetCopy.eyeReminderMessage())
+            let scheduler = ReminderScheduler { [weak self] payload in
+                self?.petWindowController?.presentReminder(payload: payload)
             }
 
             self.appPaths = paths
@@ -96,10 +99,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             petWindowController = DesktopPetWindowController(
                 workSessionController: sessionController,
                 reminderScheduler: scheduler,
+                healthTracker: healthTracker,
+                healthReportPresenter: { [weak self] todaySummary, weekSummary in
+                    self?.presentHealthReportWindow(todaySummary: todaySummary, weekSummary: weekSummary)
+                },
                 assetLocator: assetLocator,
                 petID: petID,
-                avatarCoordinator: avatarCoordinator,
-                generationCoordinator: generationCoordinator,
+                onChangeAvatarRequested: { [weak self] in
+                    self?.avatarCoordinator?.presentAvatarPicker()
+                },
+                onOpenGenerationConfigRequested: { [weak self] in
+                    _ = self?.generationCoordinator?.openGenerationConfig()
+                },
                 onQuitRequested: { [weak self] in
                     self?.quit()
                 }
@@ -116,6 +127,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         reminderScheduler?.stop()
+        healthReportWindowController?.close()
         petWindowController?.close()
     }
 
@@ -158,9 +170,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             _ = generationCoordinator?.openGenerationConfig()
         case .openHealthReport:
             showPet()
-            petWindowController?.presentReminder(text: DesktopPetCopy.healthReportComingSoonMessage())
+            petWindowController?.presentHealthReport()
         case .quitApp:
             quit()
         }
+    }
+
+    private func presentHealthReportWindow(todaySummary: HealthDaySummary, weekSummary: HealthWeekSummary) {
+        healthReportWindowController?.close()
+        let controller = HealthReportWindowController(todaySummary: todaySummary, weekSummary: weekSummary)
+        healthReportWindowController = controller
+        controller.showWindow(nil)
     }
 }

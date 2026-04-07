@@ -25,6 +25,8 @@ func testHealthMetricsStoreBuildsWeekSummaryFromMultipleDays() throws {
     let store = try HealthMetricsStore(appPaths: appPaths)
     let firstDay = Date(timeIntervalSince1970: 1_744_000_000)
     let secondDay = firstDay.addingTimeInterval(86_400)
+    var utcCalendar = Calendar(identifier: .gregorian)
+    utcCalendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
 
     try store.recordReminderShown(
         id: UUID(uuidString: "22222222-2222-2222-2222-222222222222")!,
@@ -59,12 +61,44 @@ func testHealthMetricsStoreBuildsWeekSummaryFromMultipleDays() throws {
         at: secondDay.addingTimeInterval(150)
     )
 
+    try store.settleWorkDuration(seconds: 1_800, at: firstDay)
+    try store.recordFocusSessionStart(at: firstDay.addingTimeInterval(120))
+    try store.settleFocusDuration(seconds: 900, at: firstDay.addingTimeInterval(600))
+    try store.recordBreakStart(at: firstDay.addingTimeInterval(1_700))
+    try store.settleWorkDuration(seconds: 600, at: secondDay)
+
     let summary = try store.weekSummary(containing: secondDay)
 
     try expect(summary.eyeReminder.shown == 3, "week summary should total shown reminders")
     try expect(summary.eyeReminder.completed == 2, "week summary should total completed reminders")
     try expect(summary.eyeReminder.skipped == 1, "week summary should total skipped reminders")
     try expect(abs(summary.eyeReminderCompletionRate - (2.0 / 3.0)) < 0.0001, "week completion rate should use completed/shown")
+    try expect(summary.workDuration == 2_400, "week summary should total work duration across the week")
+    try expect(summary.focusCount == 1, "week summary should total focus counts across the week")
+    try expect(summary.focusDuration == 900, "week summary should total focus duration across the week")
+    try expect(summary.breakCount == 1, "week summary should total break counts across the week")
+    try expect(summary.days.count == 7, "week summary should expose all seven days for compact trend rendering")
+    try expect(
+        summary.days.contains(where: {
+            $0.date == utcCalendar.startOfDay(for: firstDay)
+                && $0.workDuration == 1_800
+                && $0.focusCount == 1
+                && $0.focusDuration == 900
+                && $0.breakCount == 1
+                && $0.eyeReminder.completed == 1
+        }),
+        "week summary should preserve per-day totals for the first active day"
+    )
+    try expect(
+        summary.days.contains(where: {
+            $0.date == utcCalendar.startOfDay(for: secondDay)
+                && $0.workDuration == 600
+                && $0.eyeReminder.shown == 2
+                && $0.eyeReminder.skipped == 1
+                && $0.eyeReminder.completed == 1
+        }),
+        "week summary should preserve per-day totals for the second active day"
+    )
     try expect(
         summary.weekEndExclusiveDate == summary.weekStartDate.addingTimeInterval(7 * 86_400),
         "week summary should expose an exclusive end date"

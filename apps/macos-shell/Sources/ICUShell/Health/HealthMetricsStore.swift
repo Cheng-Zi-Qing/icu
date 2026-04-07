@@ -154,16 +154,7 @@ final class HealthMetricsStore {
             }
 
             let metrics = try loadMetrics(pendingDiagnostics: &pendingDiagnostics)
-            let counts = aggregateReminderCounts(from: startOfDay, to: nextDay, metrics: metrics)
-            let sessionMetrics = aggregateSessionTotals(from: startOfDay, to: nextDay, metrics: metrics)
-            return HealthDaySummary(
-                date: startOfDay,
-                eyeReminder: counts,
-                workDuration: sessionMetrics.workDuration,
-                focusCount: sessionMetrics.focusCount,
-                focusDuration: sessionMetrics.focusDuration,
-                breakCount: sessionMetrics.breakCount
-            )
+            return makeDaySummary(startingAt: startOfDay, endingBefore: nextDay, metrics: metrics)
         }
         emitDiagnostics(pendingDiagnostics)
         return summary
@@ -177,6 +168,8 @@ final class HealthMetricsStore {
             let weekEndExclusive = calendar.date(byAdding: .day, value: 7, to: weekStart) ?? weekStart
             let metrics = try loadMetrics(pendingDiagnostics: &pendingDiagnostics)
             let counts = aggregateReminderCounts(from: weekStart, to: weekEndExclusive, metrics: metrics)
+            let sessionMetrics = aggregateSessionTotals(from: weekStart, to: weekEndExclusive, metrics: metrics)
+            let days = makeDaySummaries(from: weekStart, to: weekEndExclusive, metrics: metrics)
 
             let completionRate: Double
             if counts.shown > 0 {
@@ -189,7 +182,12 @@ final class HealthMetricsStore {
                 weekStartDate: weekStart,
                 weekEndExclusiveDate: weekEndExclusive,
                 eyeReminder: counts,
-                eyeReminderCompletionRate: completionRate
+                eyeReminderCompletionRate: completionRate,
+                workDuration: sessionMetrics.workDuration,
+                focusCount: sessionMetrics.focusCount,
+                focusDuration: sessionMetrics.focusDuration,
+                breakCount: sessionMetrics.breakCount,
+                days: days
             )
         }
         emitDiagnostics(pendingDiagnostics)
@@ -296,6 +294,40 @@ final class HealthMetricsStore {
         }
 
         return aggregate
+    }
+
+    private func makeDaySummaries(
+        from start: Date,
+        to end: Date,
+        metrics: PersistedHealthMetricsDocument
+    ) -> [HealthDaySummary] {
+        var summaries: [HealthDaySummary] = []
+        var day = start
+
+        while day < end {
+            let nextDay = calendar.date(byAdding: .day, value: 1, to: day) ?? end
+            summaries.append(makeDaySummary(startingAt: day, endingBefore: nextDay, metrics: metrics))
+            day = nextDay
+        }
+
+        return summaries
+    }
+
+    private func makeDaySummary(
+        startingAt start: Date,
+        endingBefore end: Date,
+        metrics: PersistedHealthMetricsDocument
+    ) -> HealthDaySummary {
+        let counts = aggregateReminderCounts(from: start, to: end, metrics: metrics)
+        let sessionMetrics = aggregateSessionTotals(from: start, to: end, metrics: metrics)
+        return HealthDaySummary(
+            date: start,
+            eyeReminder: counts,
+            workDuration: sessionMetrics.workDuration,
+            focusCount: sessionMetrics.focusCount,
+            focusDuration: sessionMetrics.focusDuration,
+            breakCount: sessionMetrics.breakCount
+        )
     }
 
     private func dayKey(for date: Date) -> String {

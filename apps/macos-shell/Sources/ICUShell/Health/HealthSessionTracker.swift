@@ -51,6 +51,18 @@ final class HealthSessionTracker {
         return summary.hasActivity
     }
 
+    func recordReminderShown(_ payload: ReminderPresentationPayload, at date: Date) throws {
+        try store.recordReminderShown(id: payload.id, type: payload.type, at: date)
+    }
+
+    func recordReminderOutcome(
+        for payload: ReminderPresentationPayload,
+        outcome: HealthReminderOutcome,
+        at date: Date
+    ) throws {
+        try store.recordReminderOutcome(id: payload.id, outcome: outcome, at: date)
+    }
+
     func todayReport(at date: Date) throws -> HealthDaySummary {
         try store.daySummary(for: date)
     }

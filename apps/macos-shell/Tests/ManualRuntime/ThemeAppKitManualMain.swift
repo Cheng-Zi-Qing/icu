@@ -2,6 +2,7 @@ import AppKit
 
 @main
 struct ThemeAppKitManualMain {
+    @MainActor
     static func main() throws {
         _ = NSApplication.shared
         NSApp.setActivationPolicy(.prohibited)
@@ -49,6 +50,14 @@ struct ThemeAppKitManualMain {
             try testReminderCardRendersCompleteSnoozeAndSkipActions()
             try testReminderCardRelayoutsAfterBoundsChange()
             try testReminderCardTooltipPersistsAcrossThemeChanges()
+            try testReminderCardEnablesAndDispatchesActionsWhenCallbackProvided()
+            try testReminderCardButtonsWinHitTestingOverTransparentPetPixels()
+            try testHealthReportWindowSwitchesBetweenTodayAndWeekModes()
+            try testHealthReportWindowUsesCompactFrame()
+            try testHealthReportWindowUsesTodayAccumulationTitle()
+            try testReminderCompleteAndSkipLogExpectedOutcomes()
+            try testReminderSnoozeSchedulesFreshFollowUpAndLogsOutcomes()
+            try testStopWorkPresentsHealthReportWhenMeaningfulDataExists()
             try testDesktopPetViewAdvancesFramesForMultiFrameIdleAnimation()
             try testDesktopPetViewKeepsLegacySingleFrameAnimationStatic()
             try testDesktopPetViewDoesNotAutoAdvanceWhileDetachedFromWindow()

@@ -28,6 +28,14 @@ struct HealthDaySummary: Codable {
     var focusDuration: Int
     var breakCount: Int
 
+    var eyeReminderCompletionRate: Double {
+        guard eyeReminder.shown > 0 else {
+            return 0
+        }
+
+        return Double(eyeReminder.completed) / Double(eyeReminder.shown)
+    }
+
     var hasActivity: Bool {
         workDuration > 0
             || focusDuration > 0
@@ -45,6 +53,15 @@ struct HealthWeekSummary: Codable {
     var weekEndExclusiveDate: Date
     var eyeReminder: HealthReminderCounts
     var eyeReminderCompletionRate: Double
+    var workDuration: Int
+    var focusCount: Int
+    var focusDuration: Int
+    var breakCount: Int
+    var days: [HealthDaySummary]
+
+    var activeDayCount: Int {
+        days.filter(\.hasActivity).count
+    }
 }
 
 struct PersistedHealthReminder: Codable {

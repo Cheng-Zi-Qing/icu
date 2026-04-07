@@ -169,12 +169,25 @@ class DesktopPetView: NSView {
     }
 
     func showReminderCard(_ payload: ReminderPresentationPayload) {
+        showReminderCard(payload, onAction: nil)
+    }
+
+    func showReminderCard(
+        _ payload: ReminderPresentationPayload,
+        onAction: ((HealthReminderOutcome) -> Void)? = nil
+    ) {
         transientBubbleDismissTimer?.invalidate()
         hideTransientBubble()
-        reminderCardView.configure(with: payload)
+        reminderCardView.configure(with: payload, onAction: onAction)
         activeReminderTooltip = payload.text
         layoutReminderCard()
         reminderCardView.isHidden = false
+        updateToolTipForVisibleContent()
+    }
+
+    func dismissReminderCard() {
+        activeReminderTooltip = nil
+        reminderCardView.isHidden = true
         updateToolTipForVisibleContent()
     }
 
@@ -449,6 +462,13 @@ class DesktopPetView: NSView {
 
     /// 透明像素（alpha ≈ 0）不响应鼠标事件，点击可穿透到桌面
     override func hitTest(_ point: NSPoint) -> NSView? {
+        if !reminderCardView.isHidden {
+            let reminderPoint = convert(point, to: reminderCardView)
+            if let hitView = reminderCardView.hitTest(reminderPoint), hitView is NSButton {
+                return hitView
+            }
+        }
+
         guard let image = currentImage else { return super.hitTest(point) }
         guard let imagePoint = imagePixelPoint(for: point, image: image) else {
             return nil

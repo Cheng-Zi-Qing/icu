@@ -5,6 +5,11 @@ final class ReminderCardView: NSView {
     private let completeButton = NSButton(title: "", target: nil, action: nil)
     private let snoozeButton = NSButton(title: "", target: nil, action: nil)
     private let skipButton = NSButton(title: "", target: nil, action: nil)
+    var onAction: ((HealthReminderOutcome) -> Void)? {
+        didSet {
+            updateActionAvailability()
+        }
+    }
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -16,11 +21,15 @@ final class ReminderCardView: NSView {
         setup()
     }
 
-    func configure(with payload: ReminderPresentationPayload) {
+    func configure(
+        with payload: ReminderPresentationPayload,
+        onAction: ((HealthReminderOutcome) -> Void)? = nil
+    ) {
         messageLabel.stringValue = payload.text
         completeButton.title = DesktopPetCopy.reminderCompleteActionTitle()
         snoozeButton.title = DesktopPetCopy.reminderSnoozeActionTitle()
         skipButton.title = DesktopPetCopy.reminderSkipActionTitle()
+        self.onAction = onAction
     }
 
     func applyTheme(_ theme: ThemeDefinition) {
@@ -61,15 +70,18 @@ final class ReminderCardView: NSView {
         messageLabel.translatesAutoresizingMaskIntoConstraints = false
 
         completeButton.identifier = NSUserInterfaceItemIdentifier("desktopPet.reminderCard.complete")
-        completeButton.isEnabled = false
+        completeButton.target = self
+        completeButton.action = #selector(handleCompleteAction)
         completeButton.translatesAutoresizingMaskIntoConstraints = false
 
         snoozeButton.identifier = NSUserInterfaceItemIdentifier("desktopPet.reminderCard.snooze")
-        snoozeButton.isEnabled = false
+        snoozeButton.target = self
+        snoozeButton.action = #selector(handleSnoozeAction)
         snoozeButton.translatesAutoresizingMaskIntoConstraints = false
 
         skipButton.identifier = NSUserInterfaceItemIdentifier("desktopPet.reminderCard.skip")
-        skipButton.isEnabled = false
+        skipButton.target = self
+        skipButton.action = #selector(handleSkipAction)
         skipButton.translatesAutoresizingMaskIntoConstraints = false
 
         addSubview(messageLabel)
@@ -95,5 +107,27 @@ final class ReminderCardView: NSView {
             skipButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
             skipButton.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8),
         ])
+
+        updateActionAvailability()
+    }
+
+    private func updateActionAvailability() {
+        let isEnabled = onAction != nil
+        for button in [completeButton, snoozeButton, skipButton] {
+            button.isEnabled = isEnabled
+            button.alphaValue = isEnabled ? 1 : 0.65
+        }
+    }
+
+    @objc private func handleCompleteAction() {
+        onAction?(.completed)
+    }
+
+    @objc private func handleSnoozeAction() {
+        onAction?(.snoozed)
+    }
+
+    @objc private func handleSkipAction() {
+        onAction?(.skipped)
     }
 }

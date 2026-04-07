@@ -78,6 +78,7 @@ swiftc -framework AppKit \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Health/HealthMetricsModels.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Health/HealthMetricsStore.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Health/HealthSessionTracker.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Health/HealthReportWindowController.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/PetAnimationModels.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/PetAssetLocator.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Avatar/AvatarCatalog.swift" \
@@ -99,6 +100,7 @@ swiftc -framework AppKit \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/PetAnimationPlayer.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/PetMotionEnhancer.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/DesktopPetView.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/DesktopPetWindowController.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Generation/GenerationCapabilityModels.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Generation/GenerationCapabilityRouter.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Generation/GenerationSettingsStore.swift" \
