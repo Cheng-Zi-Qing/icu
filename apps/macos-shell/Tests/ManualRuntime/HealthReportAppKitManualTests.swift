@@ -106,7 +106,44 @@ func testReminderCardButtonsWinHitTestingOverTransparentPetPixels() throws {
     let hitPoint = view.convert(pointInsideButtonNearTrailingEdge, from: snoozeButton.superview)
     let hitView = view.hitTest(hitPoint)
 
-    try expect(hitView === snoozeButton, "reminder buttons should stay clickable even above transparent pet pixels")
+    let actualDescription = hitView.map { "\($0.identifier?.rawValue ?? String(describing: type(of: $0)))" } ?? "nil"
+    try expect(
+        hitView === snoozeButton,
+        "reminder buttons should stay clickable even above transparent pet pixels (got \(actualDescription))"
+    )
+}
+
+func testReminderCardBodyWinsHitTestingOverTransparentPetPixels() throws {
+    let appPaths = try makeTemporaryAppPaths()
+    let view = DesktopPetView(
+        frame: NSRect(x: 0, y: 0, width: 128, height: 128),
+        assetLocator: PetAssetLocator(appPaths: appPaths),
+        petID: "missing_pet"
+    )
+    let payload = ReminderPresentationPayload(id: UUID(), type: .eyeCare, text: "看看远处，护护眼。")
+
+    view.showReminderCard(payload) { _ in }
+    view.layoutSubtreeIfNeeded()
+
+    let reminderCard = try requireView(in: view, identifier: "desktopPet.reminderCard")
+    let messageLabel = try requireView(in: view, identifier: "desktopPet.reminderCard.message")
+    let pointInsideMessageLabel = NSPoint(x: messageLabel.frame.midX, y: messageLabel.frame.midY)
+    let hitPoint = view.convert(pointInsideMessageLabel, from: messageLabel.superview)
+    let hitView = view.hitTest(hitPoint)
+
+    try expect(
+        hitView === reminderCard,
+        "reminder body clicks should stay on the reminder card instead of falling through to the transparent desktop"
+    )
+}
+
+func testReminderCardAcceptsFirstMouseWhenWindowIsInactive() throws {
+    let reminderCard = ReminderCardView(frame: NSRect(x: 0, y: 0, width: 120, height: 108))
+
+    try expect(
+        reminderCard.acceptsFirstMouse(for: nil),
+        "reminder card should accept the first click so the desktop prompt works while the app is inactive"
+    )
 }
 
 func testHealthReportWindowSwitchesBetweenTodayAndWeekModes() throws {
@@ -185,6 +222,57 @@ func testReminderCompleteAndSkipLogExpectedOutcomes() throws {
     try expect(summary.eyeReminder.completed == 1, "complete action should persist a completed outcome")
     try expect(summary.eyeReminder.skipped == 1, "skip action should persist a skipped outcome")
     try expect(summary.eyeReminder.snoozed == 0, "complete and skip should not increment snoozed counts")
+}
+
+@MainActor
+func testReminderPresentationExpandsWindowAndKeepsCardAbovePetCanvas() throws {
+    let harness = try makeHealthFlowHarness()
+    defer { harness.controller.close() }
+
+    let payload = ReminderPresentationPayload(
+        id: UUID(uuidString: "dddddddd-4444-4444-4444-444444444444")!,
+        type: .eyeCare,
+        text: "看看远处，护护眼。"
+    )
+
+    harness.controller.presentReminder(payload: payload)
+
+    let contentView = try requireWindowContentView(of: harness.controller)
+    let reminderCard = try requireView(in: contentView, identifier: "desktopPet.reminderCard")
+
+    try expect(
+        harness.window.frame.height > DesktopPetView.compactContentSize.height,
+        "presenting a reminder should expand the window so the prompt does not stack on top of the pet"
+    )
+    try expect(
+        reminderCard.frame.minY >= DesktopPetView.compactContentSize.height,
+        "expanded reminder layout should place the card above the 128pt pet canvas instead of covering it"
+    )
+}
+
+@MainActor
+func testWorkStateBubbleExpandsWindowAndKeepsBubbleAbovePetCanvas() throws {
+    let harness = try makeHealthFlowHarness()
+    defer { harness.controller.close() }
+
+    harness.window.actionHandler?(.startWork)
+    harness.window.contentView?.layoutSubtreeIfNeeded()
+
+    let contentView = try requireWindowContentView(of: harness.controller)
+    let bubbleContainer = try requireView(in: contentView, identifier: "desktopPet.transientBubbleContainer")
+
+    try expect(
+        harness.window.frame.height > DesktopPetView.compactContentSize.height,
+        "showing the work-state prompt should expand the window instead of drawing over the pet"
+    )
+    try expect(
+        !bubbleContainer.isHidden,
+        "work-state prompt should keep the transient bubble visible"
+    )
+    try expect(
+        bubbleContainer.frame.minY >= DesktopPetView.compactContentSize.height,
+        "expanded work-state prompt should sit above the 128pt pet canvas instead of covering it"
+    )
 }
 
 @MainActor

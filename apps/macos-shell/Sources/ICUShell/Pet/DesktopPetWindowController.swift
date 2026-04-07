@@ -37,7 +37,7 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
         self.onQuitRequested = onQuitRequested
         self.nowProvider = nowProvider
 
-        let size = NSSize(width: 128, height: 128)
+        let size = DesktopPetView.compactContentSize
         let origin = WindowPlacement.resolveInitialOrigin(
             saved: workSessionController.savedWindowPlacement,
             visibleFrame: Self.activeVisibleFrame(),
@@ -74,6 +74,9 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
 
         super.init(window: window)
         window.delegate = self
+        petView.onOverlayLayoutModeChanged = { [weak self] mode in
+            self?.updateWindowSize(for: mode)
+        }
 
         window.menuModelProvider = { [weak self] in
             self?.currentMenuModel() ?? DesktopPetMenuModel(state: .idle)
@@ -250,6 +253,29 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
 
     private func logHealthError(_ operation: String, error: Error) {
         NSLog("[ICUShell] failed to \(operation): \(error.localizedDescription)")
+    }
+
+    private func updateWindowSize(for mode: DesktopPetView.OverlayLayoutMode) {
+        guard let window else {
+            return
+        }
+
+        let targetSize: NSSize
+        switch mode {
+        case .compact:
+            targetSize = DesktopPetView.compactContentSize
+        case .transientBubble:
+            targetSize = DesktopPetView.transientBubbleExpandedContentSize
+        case .reminderCard:
+            targetSize = DesktopPetView.reminderExpandedContentSize
+        }
+        guard window.contentView?.frame.size != targetSize else {
+            return
+        }
+
+        var frame = window.frame
+        frame.size = targetSize
+        window.setFrame(frame, display: true)
     }
 
     private func persistCurrentWindowPlacement() {

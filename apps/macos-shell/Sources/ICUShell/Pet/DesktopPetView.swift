@@ -7,6 +7,43 @@ import AppKit
 /// - 透明区域不响应点击（点击穿透到桌面）
 /// - 拖拽事件传递给父 window
 class DesktopPetView: NSView {
+    enum OverlayLayoutMode {
+        case compact
+        case transientBubble
+        case reminderCard
+    }
+
+    private enum LayoutMetrics {
+        static let petCanvasWidth: CGFloat = 128
+        static let petCanvasHeight: CGFloat = 128
+        static let transientBubbleMaxHeight: CGFloat = 56
+        static let transientBubbleTailSize: CGFloat = 8
+        static let transientBubbleGap: CGFloat = 6
+        static let transientBubbleTopInset: CGFloat = 8
+        static let reminderCardHeight: CGFloat = 108
+        static let reminderGap: CGFloat = 8
+        static let reminderTopInset: CGFloat = 8
+    }
+
+    static let compactContentSize = NSSize(
+        width: LayoutMetrics.petCanvasWidth,
+        height: LayoutMetrics.petCanvasHeight
+    )
+    static let reminderExpandedContentSize = NSSize(
+        width: LayoutMetrics.petCanvasWidth,
+        height: LayoutMetrics.petCanvasHeight
+            + LayoutMetrics.reminderGap
+            + LayoutMetrics.reminderCardHeight
+            + LayoutMetrics.reminderTopInset
+    )
+    static let transientBubbleExpandedContentSize = NSSize(
+        width: LayoutMetrics.petCanvasWidth,
+        height: LayoutMetrics.petCanvasHeight
+            + LayoutMetrics.transientBubbleGap
+            + LayoutMetrics.transientBubbleTailSize
+            + LayoutMetrics.transientBubbleMaxHeight
+            + LayoutMetrics.transientBubbleTopInset
+    )
 
     private var imageView: NSImageView!
     private var statusLabel: NSTextField!
@@ -32,6 +69,7 @@ class DesktopPetView: NSView {
     private var animationTimer: DispatchSourceTimer?
     private var themeObserver: NSObjectProtocol?
     private var copyObserver: NSObjectProtocol?
+    var onOverlayLayoutModeChanged: ((OverlayLayoutMode) -> Void)?
 
     // MARK: - Init
 
@@ -86,7 +124,7 @@ class DesktopPetView: NSView {
         imageView = NSImageView(frame: bounds)
         imageView.image = currentImage
         imageView.imageScaling = .scaleProportionallyUpOrDown
-        imageView.autoresizingMask = [.width, .height]
+        imageView.autoresizingMask = [.width]
         imageView.wantsLayer = true
         addSubview(imageView)
     }
@@ -95,7 +133,7 @@ class DesktopPetView: NSView {
         statusLabel = NSTextField(labelWithString: persistentStatusText)
         statusLabel.identifier = NSUserInterfaceItemIdentifier("desktopPet.statusLabel")
         statusLabel.frame = NSRect(x: 8, y: 8, width: bounds.width - 16, height: 18)
-        statusLabel.autoresizingMask = [.width, .minYMargin]
+        statusLabel.autoresizingMask = [.width, .maxYMargin]
         addSubview(statusLabel)
     }
 
@@ -156,6 +194,7 @@ class DesktopPetView: NSView {
         layoutTransientBubble()
         transientBubbleContainer.isHidden = false
         transientBubbleTail.isHidden = false
+        notifyOverlayLayoutModeChanged()
         updateToolTipForVisibleContent()
 
         let timer = Timer(
@@ -177,17 +216,19 @@ class DesktopPetView: NSView {
         onAction: ((HealthReminderOutcome) -> Void)? = nil
     ) {
         transientBubbleDismissTimer?.invalidate()
-        hideTransientBubble()
+        hideTransientBubble(notifyLayoutChange: false)
         reminderCardView.configure(with: payload, onAction: onAction)
         activeReminderTooltip = payload.text
         layoutReminderCard()
         reminderCardView.isHidden = false
+        notifyOverlayLayoutModeChanged()
         updateToolTipForVisibleContent()
     }
 
     func dismissReminderCard() {
         activeReminderTooltip = nil
         reminderCardView.isHidden = true
+        notifyOverlayLayoutModeChanged()
         updateToolTipForVisibleContent()
     }
 
@@ -377,12 +418,54 @@ class DesktopPetView: NSView {
         PetMotionEnhancer.apply(currentMotionProfile, to: imageView)
     }
 
+    private var petCanvasRect: NSRect {
+        NSRect(
+            x: 0,
+            y: 0,
+            width: bounds.width,
+            height: min(LayoutMetrics.petCanvasHeight, bounds.height)
+        )
+    }
+
+    private var usesExpandedReminderLayout: Bool {
+        bounds.height >= Self.reminderExpandedContentSize.height - 1
+    }
+
+    private var usesExpandedTransientBubbleLayout: Bool {
+        bounds.height >= Self.transientBubbleExpandedContentSize.height - 1
+            && bounds.height < Self.reminderExpandedContentSize.height - 1
+    }
+
+    private var currentOverlayLayoutMode: OverlayLayoutMode {
+        if !reminderCardView.isHidden {
+            return .reminderCard
+        }
+        if !transientBubbleContainer.isHidden {
+            return .transientBubble
+        }
+        return .compact
+    }
+
+    private func notifyOverlayLayoutModeChanged() {
+        onOverlayLayoutModeChanged?(currentOverlayLayoutMode)
+    }
+
+    private func layoutPetChrome() {
+        guard imageView != nil, statusLabel != nil else {
+            return
+        }
+        let petRect = petCanvasRect
+        imageView.frame = petRect
+        statusLabel.frame = NSRect(x: 8, y: 8, width: petRect.width - 16, height: 18)
+    }
+
     private func layoutTransientBubble() {
         guard transientBubbleContainer != nil, transientBubbleLabel != nil else {
             return
         }
 
-        let maxBubbleWidth = max(72, bounds.width - 20)
+        let petRect = petCanvasRect
+        let maxBubbleWidth = max(72, petRect.width - 20)
         let horizontalPadding: CGFloat = 10
         let verticalPadding: CGFloat = 7
         let maxTextSize = NSSize(width: maxBubbleWidth - (horizontalPadding * 2), height: 52)
@@ -393,9 +476,14 @@ class DesktopPetView: NSView {
             attributes: [.font: font]
         )
         let bubbleWidth = min(maxBubbleWidth, ceil(textRect.width) + (horizontalPadding * 2))
-        let bubbleHeight = max(28, min(56, ceil(textRect.height) + (verticalPadding * 2)))
-        let bubbleX = max(6, min(bounds.midX - (bubbleWidth / 2), bounds.width - bubbleWidth - 6))
-        let bubbleY = max(bounds.height - bubbleHeight - 12, 28)
+        let bubbleHeight = max(28, min(LayoutMetrics.transientBubbleMaxHeight, ceil(textRect.height) + (verticalPadding * 2)))
+        let bubbleX = max(6, min(petRect.midX - (bubbleWidth / 2), petRect.width - bubbleWidth - 6))
+        let bubbleY: CGFloat
+        if usesExpandedTransientBubbleLayout {
+            bubbleY = petRect.maxY + LayoutMetrics.transientBubbleGap + LayoutMetrics.transientBubbleTailSize
+        } else {
+            bubbleY = max(petRect.maxY - bubbleHeight - 12, 28)
+        }
 
         transientBubbleContainer.frame = NSRect(
             x: bubbleX,
@@ -404,26 +492,41 @@ class DesktopPetView: NSView {
             height: bubbleHeight
         )
         transientBubbleLabel.frame = transientBubbleContainer.bounds.insetBy(dx: horizontalPadding, dy: verticalPadding)
+        let tailY: CGFloat
+        if usesExpandedTransientBubbleLayout {
+            tailY = petRect.maxY + LayoutMetrics.transientBubbleGap
+        } else {
+            tailY = transientBubbleContainer.frame.minY - 6
+        }
         transientBubbleTail.frame = NSRect(
             x: transientBubbleContainer.frame.midX - 4,
-            y: transientBubbleContainer.frame.minY - 6,
+            y: tailY,
             width: 8,
             height: 8
         )
     }
 
-    private func hideTransientBubble() {
+    private func hideTransientBubble(notifyLayoutChange: Bool = true) {
         transientBubbleContainer.isHidden = true
         transientBubbleTail.isHidden = true
+        if notifyLayoutChange {
+            notifyOverlayLayoutModeChanged()
+        }
         updateToolTipForVisibleContent()
     }
 
     private func layoutReminderCard() {
         let width = min(max(120, bounds.width - 12), 220)
-        let height: CGFloat = 108
+        let height = LayoutMetrics.reminderCardHeight
+        let y: CGFloat
+        if usesExpandedReminderLayout {
+            y = petCanvasRect.maxY + LayoutMetrics.reminderGap
+        } else {
+            y = max(26, bounds.height - height - 8)
+        }
         reminderCardView.frame = NSRect(
             x: (bounds.width - width) / 2,
-            y: max(26, bounds.height - height - 8),
+            y: y,
             width: width,
             height: height
         )
@@ -464,8 +567,8 @@ class DesktopPetView: NSView {
     override func hitTest(_ point: NSPoint) -> NSView? {
         if !reminderCardView.isHidden {
             let reminderPoint = convert(point, to: reminderCardView)
-            if let hitView = reminderCardView.hitTest(reminderPoint), hitView is NSButton {
-                return hitView
+            if reminderCardView.bounds.contains(reminderPoint) {
+                return reminderCardView.interactiveHitView(at: reminderPoint) ?? reminderCardView
             }
         }
 
@@ -487,7 +590,7 @@ class DesktopPetView: NSView {
             return nil
         }
 
-        let drawRect = aspectFitRect(for: image.size, in: bounds)
+        let drawRect = aspectFitRect(for: image.size, in: petCanvasRect)
         guard drawRect.width > 0, drawRect.height > 0, drawRect.contains(point) else {
             return nil
         }
@@ -525,6 +628,7 @@ class DesktopPetView: NSView {
 
     override func layout() {
         super.layout()
+        layoutPetChrome()
         layoutTransientBubble()
         layoutReminderCard()
     }

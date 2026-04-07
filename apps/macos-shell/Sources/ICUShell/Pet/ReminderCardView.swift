@@ -21,6 +21,10 @@ final class ReminderCardView: NSView {
         setup()
     }
 
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
+
     func configure(
         with payload: ReminderPresentationPayload,
         onAction: ((HealthReminderOutcome) -> Void)? = nil
@@ -117,6 +121,29 @@ final class ReminderCardView: NSView {
             button.isEnabled = isEnabled
             button.alphaValue = isEnabled ? 1 : 0.65
         }
+    }
+
+    func interactiveHitView(at point: NSPoint) -> NSView? {
+        for button in [completeButton, snoozeButton, skipButton] {
+            let buttonPoint = convert(point, to: button)
+            if button.bounds.contains(buttonPoint) {
+                return button
+            }
+        }
+
+        return bounds.contains(point) ? self : nil
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        interactiveHitView(at: point)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        // Swallow card-body clicks so they do not fall back into window dragging.
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        // Keep drag gestures inside the reminder card from moving the desktop pet.
     }
 
     @objc private func handleCompleteAction() {
