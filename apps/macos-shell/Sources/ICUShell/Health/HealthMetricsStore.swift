@@ -32,42 +32,6 @@ private struct PersistedHealthMetricsDocument: Codable {
     }
 }
 
-private enum HealthDaySummarySessionCache {
-    private static let lock = NSLock()
-    private static var valuesByDate: [Date: PersistedSessionDayMetrics] = [:]
-
-    static func store(_ value: PersistedSessionDayMetrics, for date: Date) {
-        lock.lock()
-        valuesByDate[date] = value
-        lock.unlock()
-    }
-
-    static func value(for date: Date) -> PersistedSessionDayMetrics {
-        lock.lock()
-        let value = valuesByDate[date] ?? .empty
-        lock.unlock()
-        return value
-    }
-}
-
-extension HealthDaySummary {
-    var workDuration: Int {
-        HealthDaySummarySessionCache.value(for: date).workDuration
-    }
-
-    var focusCount: Int {
-        HealthDaySummarySessionCache.value(for: date).focusCount
-    }
-
-    var focusDuration: Int {
-        HealthDaySummarySessionCache.value(for: date).focusDuration
-    }
-
-    var breakCount: Int {
-        HealthDaySummarySessionCache.value(for: date).breakCount
-    }
-}
-
 final class HealthMetricsStore {
     private let appPaths: AppPaths
     private let fileManager: FileManager
@@ -155,15 +119,11 @@ final class HealthMetricsStore {
     }
 
     func settleWorkDuration(seconds: TimeInterval, at date: Date) throws {
-        try mutateSessionDay(at: date) { day in
-            day.workDuration += durationSeconds(from: seconds)
-        }
+        try settleSessionDuration(seconds: seconds, at: date, metric: \.workDuration)
     }
 
     func settleFocusDuration(seconds: TimeInterval, at date: Date) throws {
-        try mutateSessionDay(at: date) { day in
-            day.focusDuration += durationSeconds(from: seconds)
-        }
+        try settleSessionDuration(seconds: seconds, at: date, metric: \.focusDuration)
     }
 
     func recordFocusSessionStart(at date: Date) throws {
@@ -183,16 +143,27 @@ final class HealthMetricsStore {
         let summary = try queue.sync {
             let startOfDay = calendar.startOfDay(for: date)
             guard let nextDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) else {
-                HealthDaySummarySessionCache.store(.empty, for: startOfDay)
-                return HealthDaySummary(date: startOfDay, eyeReminder: .empty)
+                return HealthDaySummary(
+                    date: startOfDay,
+                    eyeReminder: .empty,
+                    workDuration: 0,
+                    focusCount: 0,
+                    focusDuration: 0,
+                    breakCount: 0
+                )
             }
 
             let metrics = try loadMetrics(pendingDiagnostics: &pendingDiagnostics)
             let counts = aggregateReminderCounts(from: startOfDay, to: nextDay, metrics: metrics)
             let sessionMetrics = aggregateSessionTotals(from: startOfDay, to: nextDay, metrics: metrics)
-            HealthDaySummarySessionCache.store(sessionMetrics, for: startOfDay)
-
-            return HealthDaySummary(date: startOfDay, eyeReminder: counts)
+            return HealthDaySummary(
+                date: startOfDay,
+                eyeReminder: counts,
+                workDuration: sessionMetrics.workDuration,
+                focusCount: sessionMetrics.focusCount,
+                focusDuration: sessionMetrics.focusDuration,
+                breakCount: sessionMetrics.breakCount
+            )
         }
         emitDiagnostics(pendingDiagnostics)
         return summary
@@ -237,6 +208,43 @@ final class HealthMetricsStore {
             var dayMetrics = metrics.sessionDays[key] ?? .empty
             mutate(&dayMetrics)
             metrics.sessionDays[key] = dayMetrics
+            try saveMetrics(metrics)
+        }
+        emitDiagnostics(pendingDiagnostics)
+    }
+
+    private func settleSessionDuration(
+        seconds: TimeInterval,
+        at startDate: Date,
+        metric: WritableKeyPath<PersistedSessionDayMetrics, Int>
+    ) throws {
+        let boundedSeconds = max(0, seconds)
+        guard boundedSeconds > 0 else {
+            return
+        }
+
+        var pendingDiagnostics: [String] = []
+        try queue.sync {
+            var metrics = try loadMetrics(pendingDiagnostics: &pendingDiagnostics)
+            var cursor = startDate
+            let endDate = startDate.addingTimeInterval(boundedSeconds)
+
+            while cursor < endDate {
+                let dayStart = calendar.startOfDay(for: cursor)
+                let nextDay = calendar.date(byAdding: .day, value: 1, to: dayStart) ?? endDate
+                let segmentEnd = min(nextDay, endDate)
+                let secondsForDay = durationSeconds(from: segmentEnd.timeIntervalSince(cursor))
+
+                if secondsForDay > 0 {
+                    let key = dayKey(for: cursor)
+                    var dayMetrics = metrics.sessionDays[key] ?? .empty
+                    dayMetrics[keyPath: metric] += secondsForDay
+                    metrics.sessionDays[key] = dayMetrics
+                }
+
+                cursor = segmentEnd
+            }
+
             try saveMetrics(metrics)
         }
         emitDiagnostics(pendingDiagnostics)

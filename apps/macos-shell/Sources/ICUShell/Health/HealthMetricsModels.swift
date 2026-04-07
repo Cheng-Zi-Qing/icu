@@ -23,6 +23,21 @@ struct HealthReminderCounts: Codable {
 struct HealthDaySummary: Codable {
     var date: Date
     var eyeReminder: HealthReminderCounts
+    var workDuration: Int
+    var focusCount: Int
+    var focusDuration: Int
+    var breakCount: Int
+
+    var hasActivity: Bool {
+        workDuration > 0
+            || focusDuration > 0
+            || focusCount > 0
+            || breakCount > 0
+            || eyeReminder.shown > 0
+            || eyeReminder.completed > 0
+            || eyeReminder.snoozed > 0
+            || eyeReminder.skipped > 0
+    }
 }
 
 struct HealthWeekSummary: Codable {
@@ -30,12 +45,6 @@ struct HealthWeekSummary: Codable {
     var weekEndExclusiveDate: Date
     var eyeReminder: HealthReminderCounts
     var eyeReminderCompletionRate: Double
-}
-
-struct PersistedHealthMetrics: Codable {
-    var reminders: [PersistedHealthReminder]
-
-    static let empty = PersistedHealthMetrics(reminders: [])
 }
 
 struct PersistedHealthReminder: Codable {

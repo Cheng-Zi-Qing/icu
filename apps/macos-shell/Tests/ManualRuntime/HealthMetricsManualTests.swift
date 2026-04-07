@@ -187,3 +187,29 @@ func testHealthSessionTrackerOnlyRequestsStopWorkReportWhenDataExists() throws {
     let shouldPresentAfterActivity = try tracker.shouldPresentStopWorkReport(at: start)
     try expect(shouldPresentAfterActivity == true, "day with settled work data should request stop-work report")
 }
+
+func testHealthSessionTrackerSplitsSettledDurationAcrossMidnightBoundary() throws {
+    let appPaths = try makeTemporaryAppPaths()
+    let store = try HealthMetricsStore(appPaths: appPaths)
+    let tracker = HealthSessionTracker(store: store)
+
+    var utcCalendar = Calendar(identifier: .gregorian)
+    utcCalendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
+    let start = utcCalendar.date(from: DateComponents(
+        year: 2025,
+        month: 4,
+        day: 3,
+        hour: 23,
+        minute: 50
+    ))!
+    let end = start.addingTimeInterval(1_200)
+
+    try tracker.recordStateTransition(from: .idle, to: .working, at: start)
+    try tracker.recordStateTransition(from: .working, to: .idle, at: end)
+
+    let firstDaySummary = try store.daySummary(for: start)
+    let secondDaySummary = try store.daySummary(for: end)
+
+    try expect(firstDaySummary.workDuration == 600, "work before midnight should settle on first day")
+    try expect(secondDaySummary.workDuration == 600, "work after midnight should settle on next day")
+}

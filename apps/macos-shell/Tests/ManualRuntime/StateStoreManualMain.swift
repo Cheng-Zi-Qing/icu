@@ -38,6 +38,7 @@ struct StateStoreManualMain {
             try testHealthMetricsStoreSerializesConcurrentWrites()
             try testHealthSessionTrackerSettlesWorkFocusAndBreakMetricsAcrossTransitions()
             try testHealthSessionTrackerOnlyRequestsStopWorkReportWhenDataExists()
+            try testHealthSessionTrackerSplitsSettledDurationAcrossMidnightBoundary()
             try testAvatarCatalogListsRepoAvatar()
             try testAvatarCatalogPrefersAppAssetsOverRepoAvatar()
             try testAvatarAssetStoreUsesInstalledCopyCatalogForGeneratedStyleLabel()

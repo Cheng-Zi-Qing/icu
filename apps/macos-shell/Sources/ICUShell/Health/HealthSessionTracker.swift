@@ -9,6 +9,9 @@ final class HealthSessionTracker {
         self.store = store
     }
 
+    // Contract: callers should emit every transition while the app is alive.
+    // On the first observed transition we only know the boundary timestamp from
+    // this call, so any pre-launch/session duration before `at` cannot be inferred.
     func recordStateTransition(from oldState: ShellWorkState, to newState: ShellWorkState, at date: Date) throws {
         let settledState = activeState ?? oldState
         let settledStart = activeStateStartedAt ?? date
@@ -45,14 +48,7 @@ final class HealthSessionTracker {
 
     func shouldPresentStopWorkReport(at date: Date) throws -> Bool {
         let summary = try store.daySummary(for: date)
-        return summary.workDuration > 0
-            || summary.focusDuration > 0
-            || summary.focusCount > 0
-            || summary.breakCount > 0
-            || summary.eyeReminder.shown > 0
-            || summary.eyeReminder.completed > 0
-            || summary.eyeReminder.snoozed > 0
-            || summary.eyeReminder.skipped > 0
+        return summary.hasActivity
     }
 
     func todayReport(at date: Date) throws -> HealthDaySummary {
