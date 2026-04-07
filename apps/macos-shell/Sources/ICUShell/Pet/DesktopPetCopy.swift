@@ -48,4 +48,8 @@ enum DesktopPetCopy {
     static func reminderSkipActionTitle() -> String {
         TextCatalog.shared.text(.petReminderSkipAction)
     }
+
+    static func healthReportComingSoonMessage() -> String {
+        TextCatalog.shared.text(.petHealthReportComingSoon)
+    }
 }

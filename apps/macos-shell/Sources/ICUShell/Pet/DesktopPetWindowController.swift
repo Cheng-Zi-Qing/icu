@@ -135,6 +135,7 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
                 _ = generationCoordinator.openGenerationConfig()
                 return
             case .openHealthReport:
+                petView.showTransientMessage(DesktopPetCopy.healthReportComingSoonMessage(), duration: 1.8)
                 return
             case .closeWindow:
                 window?.orderOut(nil)

@@ -35,6 +35,20 @@ final class ReminderCardView: NSView {
 
         messageLabel.textColor = ThemedComponents.color(theme.tokens.colors.textPrimaryHex, fallback: .labelColor)
         messageLabel.font = ThemedComponents.statusFont(theme)
+
+        let buttonTextColor = ThemedComponents.color(theme.tokens.colors.textPrimaryHex, fallback: .labelColor)
+        let buttonFillColor = ThemedComponents.color(theme.tokens.colors.inputBackgroundHex, fallback: .controlBackgroundColor)
+        let buttonBorderColor = ThemedComponents.color(theme.tokens.colors.borderHex, fallback: .separatorColor)
+        for button in [completeButton, snoozeButton, skipButton] {
+            button.contentTintColor = buttonTextColor
+            button.wantsLayer = true
+            button.isBordered = false
+            button.layer?.backgroundColor = buttonFillColor.withAlphaComponent(0.5).cgColor
+            button.layer?.borderWidth = 1
+            button.layer?.borderColor = buttonBorderColor.cgColor
+            button.layer?.cornerRadius = 6
+            button.alphaValue = button.isEnabled ? 1 : 0.65
+        }
     }
 
     private func setup() {
@@ -47,15 +61,15 @@ final class ReminderCardView: NSView {
         messageLabel.translatesAutoresizingMaskIntoConstraints = false
 
         completeButton.identifier = NSUserInterfaceItemIdentifier("desktopPet.reminderCard.complete")
-        completeButton.bezelStyle = .rounded
+        completeButton.isEnabled = false
         completeButton.translatesAutoresizingMaskIntoConstraints = false
 
         snoozeButton.identifier = NSUserInterfaceItemIdentifier("desktopPet.reminderCard.snooze")
-        snoozeButton.bezelStyle = .rounded
+        snoozeButton.isEnabled = false
         snoozeButton.translatesAutoresizingMaskIntoConstraints = false
 
         skipButton.identifier = NSUserInterfaceItemIdentifier("desktopPet.reminderCard.skip")
-        skipButton.bezelStyle = .rounded
+        skipButton.isEnabled = false
         skipButton.translatesAutoresizingMaskIntoConstraints = false
 
         addSubview(messageLabel)

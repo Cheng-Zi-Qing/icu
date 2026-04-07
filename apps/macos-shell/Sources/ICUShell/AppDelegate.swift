@@ -157,7 +157,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         case .openGenerationConfig:
             _ = generationCoordinator?.openGenerationConfig()
         case .openHealthReport:
-            return
+            showPet()
+            petWindowController?.presentReminder(text: DesktopPetCopy.healthReportComingSoonMessage())
         case .quitApp:
             quit()
         }

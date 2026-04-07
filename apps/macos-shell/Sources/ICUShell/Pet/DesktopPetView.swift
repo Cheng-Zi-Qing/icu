@@ -27,6 +27,7 @@ class DesktopPetView: NSView {
     private var completedVariantLoops = 0
     private var variantRotationTicksRemaining = 0
     private var persistentStatusText = DesktopPetCopy.statusText(for: .idle)
+    private var activeReminderTooltip: String?
     private var transientBubbleDismissTimer: Timer?
     private var animationTimer: DispatchSourceTimer?
     private var themeObserver: NSObjectProtocol?
@@ -131,7 +132,7 @@ class DesktopPetView: NSView {
     func setStatusText(_ text: String, showBubble: Bool = false) {
         persistentStatusText = text
         statusLabel.stringValue = text
-        toolTip = text
+        updateToolTipForVisibleContent()
         if showBubble {
             showTransientMessage(text)
         }
@@ -148,12 +149,14 @@ class DesktopPetView: NSView {
     }
 
     func showTransientMessage(_ text: String, duration: TimeInterval = 3) {
+        activeReminderTooltip = nil
+        reminderCardView.isHidden = true
         transientBubbleDismissTimer?.invalidate()
         transientBubbleLabel.stringValue = text
         layoutTransientBubble()
         transientBubbleContainer.isHidden = false
         transientBubbleTail.isHidden = false
-        toolTip = text
+        updateToolTipForVisibleContent()
 
         let timer = Timer(
             timeInterval: duration,
@@ -169,9 +172,10 @@ class DesktopPetView: NSView {
         transientBubbleDismissTimer?.invalidate()
         hideTransientBubble()
         reminderCardView.configure(with: payload)
+        activeReminderTooltip = payload.text
         layoutReminderCard()
         reminderCardView.isHidden = false
-        toolTip = payload.text
+        updateToolTipForVisibleContent()
     }
 
     // MARK: - Image Loading
@@ -398,7 +402,7 @@ class DesktopPetView: NSView {
     private func hideTransientBubble() {
         transientBubbleContainer.isHidden = true
         transientBubbleTail.isHidden = true
-        toolTip = persistentStatusText
+        updateToolTipForVisibleContent()
     }
 
     private func layoutReminderCard() {
@@ -499,6 +503,12 @@ class DesktopPetView: NSView {
         window?.performDrag(with: event)
     }
 
+    override func layout() {
+        super.layout()
+        layoutTransientBubble()
+        layoutReminderCard()
+    }
+
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
 
@@ -571,7 +581,7 @@ class DesktopPetView: NSView {
 
         if statusLabel.stringValue == previousPersistentStatus {
             statusLabel.stringValue = nextPersistentStatus
-            toolTip = nextPersistentStatus
+            updateToolTipForVisibleContent()
         }
     }
 
@@ -603,6 +613,20 @@ class DesktopPetView: NSView {
         layoutTransientBubble()
         reminderCardView.applyTheme(theme)
         layoutReminderCard()
+        updateToolTipForVisibleContent()
+    }
+
+    private func updateToolTipForVisibleContent() {
+        if !reminderCardView.isHidden, let activeReminderTooltip {
+            toolTip = activeReminderTooltip
+            return
+        }
+
+        if !transientBubbleContainer.isHidden {
+            toolTip = transientBubbleLabel.stringValue
+            return
+        }
+
         toolTip = persistentStatusText
     }
 

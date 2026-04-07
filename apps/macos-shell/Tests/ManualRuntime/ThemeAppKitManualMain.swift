@@ -47,6 +47,8 @@ struct ThemeAppKitManualMain {
             try testDesktopPetViewUsesInstalledCopyCatalogForInitialStatusLabel()
             try testDesktopPetViewShowsTransientBubbleSeparateFromStatusChip()
             try testReminderCardRendersCompleteSnoozeAndSkipActions()
+            try testReminderCardRelayoutsAfterBoundsChange()
+            try testReminderCardTooltipPersistsAcrossThemeChanges()
             try testDesktopPetViewAdvancesFramesForMultiFrameIdleAnimation()
             try testDesktopPetViewKeepsLegacySingleFrameAnimationStatic()
             try testDesktopPetViewDoesNotAutoAdvanceWhileDetachedFromWindow()

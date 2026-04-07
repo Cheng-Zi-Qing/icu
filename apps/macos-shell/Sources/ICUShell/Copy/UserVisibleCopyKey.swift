@@ -20,6 +20,7 @@ enum UserVisibleCopyKey: String {
     case petReminderCompleteAction = "pet.reminder_complete_action"
     case petReminderSnoozeAction = "pet.reminder_snooze_action"
     case petReminderSkipAction = "pet.reminder_skip_action"
+    case petHealthReportComingSoon = "pet.health_report_coming_soon"
 
     case generationConfigWindowTitle = "generation_config.window_title"
     case generationConfigWindowSubtitle = "generation_config.window_subtitle"
@@ -130,6 +131,8 @@ extension UserVisibleCopyKey {
             return "稍后提醒"
         case .petReminderSkipAction:
             return "跳过"
+        case .petHealthReportComingSoon:
+            return "健康报告正在准备中。"
         case .generationConfigWindowTitle:
             return "模型工作台"
         case .generationConfigWindowSubtitle:
