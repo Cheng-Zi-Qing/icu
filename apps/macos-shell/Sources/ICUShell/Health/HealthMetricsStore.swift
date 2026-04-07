@@ -28,15 +28,18 @@ final class HealthMetricsStore {
         self.encoder.dateEncodingStrategy = .iso8601
         self.decoder.dateDecodingStrategy = .iso8601
         self.encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        // TODO(health-metrics): Retention/compaction is intentionally deferred for Task 1.
+        // Keep raw events for now until product policy defines archival window and report guarantees.
 
         try appPaths.ensureDirectories(fileManager: fileManager)
     }
 
     func recordReminderShown(id: UUID, type: HealthReminderType, at date: Date) throws {
+        var pendingDiagnostics: [String] = []
         try queue.sync {
-            var metrics = try loadMetrics()
+            var metrics = try loadMetrics(pendingDiagnostics: &pendingDiagnostics)
             guard !metrics.reminders.contains(where: { $0.id == id }) else {
-                diagnostics("Ignoring duplicate shown event for reminder id \(id.uuidString)")
+                pendingDiagnostics.append("Ignoring duplicate shown event for reminder id \(id.uuidString)")
                 return
             }
 
@@ -51,18 +54,20 @@ final class HealthMetricsStore {
             )
             try saveMetrics(metrics)
         }
+        emitDiagnostics(pendingDiagnostics)
     }
 
     func recordReminderOutcome(id: UUID, outcome: HealthReminderOutcome, at date: Date) throws {
+        var pendingDiagnostics: [String] = []
         try queue.sync {
-            var metrics = try loadMetrics()
+            var metrics = try loadMetrics(pendingDiagnostics: &pendingDiagnostics)
             guard let reminderIndex = metrics.reminders.firstIndex(where: { $0.id == id }) else {
-                diagnostics("Ignoring outcome for unknown reminder id \(id.uuidString)")
+                pendingDiagnostics.append("Ignoring outcome for unknown reminder id \(id.uuidString)")
                 return
             }
 
             guard metrics.reminders[reminderIndex].outcome == nil else {
-                diagnostics("Ignoring duplicate outcome for reminder id \(id.uuidString)")
+                pendingDiagnostics.append("Ignoring duplicate outcome for reminder id \(id.uuidString)")
                 return
             }
 
@@ -70,26 +75,35 @@ final class HealthMetricsStore {
             metrics.reminders[reminderIndex].outcomeAt = date
             try saveMetrics(metrics)
         }
+        emitDiagnostics(pendingDiagnostics)
     }
 
     func daySummary(for date: Date) throws -> HealthDaySummary {
-        try queue.sync {
+        var pendingDiagnostics: [String] = []
+        let summary = try queue.sync {
             let startOfDay = calendar.startOfDay(for: date)
             guard let nextDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) else {
                 return HealthDaySummary(date: startOfDay, eyeReminder: .empty)
             }
 
-            let counts = try aggregateReminderCounts(from: startOfDay, to: nextDay)
+            let counts = try aggregateReminderCounts(from: startOfDay, to: nextDay, pendingDiagnostics: &pendingDiagnostics)
             return HealthDaySummary(date: startOfDay, eyeReminder: counts)
         }
+        emitDiagnostics(pendingDiagnostics)
+        return summary
     }
 
     func weekSummary(containing date: Date) throws -> HealthWeekSummary {
-        try queue.sync {
+        var pendingDiagnostics: [String] = []
+        let summary = try queue.sync {
             let weekComponents = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: date)
             let weekStart = calendar.date(from: weekComponents) ?? calendar.startOfDay(for: date)
             let weekEndExclusive = calendar.date(byAdding: .day, value: 7, to: weekStart) ?? weekStart
-            let counts = try aggregateReminderCounts(from: weekStart, to: weekEndExclusive)
+            let counts = try aggregateReminderCounts(
+                from: weekStart,
+                to: weekEndExclusive,
+                pendingDiagnostics: &pendingDiagnostics
+            )
 
             let completionRate: Double
             if counts.shown > 0 {
@@ -105,14 +119,20 @@ final class HealthMetricsStore {
                 eyeReminderCompletionRate: completionRate
             )
         }
+        emitDiagnostics(pendingDiagnostics)
+        return summary
     }
 
     private var metricsFileURL: URL {
         appPaths.stateDirectory.appendingPathComponent("health_metrics.json", isDirectory: false)
     }
 
-    private func aggregateReminderCounts(from start: Date, to end: Date) throws -> HealthReminderCounts {
-        let metrics = try loadMetrics()
+    private func aggregateReminderCounts(
+        from start: Date,
+        to end: Date,
+        pendingDiagnostics: inout [String]
+    ) throws -> HealthReminderCounts {
+        let metrics = try loadMetrics(pendingDiagnostics: &pendingDiagnostics)
         let filtered = metrics.reminders.filter { reminder in
             reminder.type == .eyeCare && reminder.shownAt >= start && reminder.shownAt < end
         }
@@ -138,7 +158,7 @@ final class HealthMetricsStore {
         return counts
     }
 
-    private func loadMetrics() throws -> PersistedHealthMetrics {
+    private func loadMetrics(pendingDiagnostics: inout [String]) throws -> PersistedHealthMetrics {
         guard fileManager.fileExists(atPath: metricsFileURL.path) else {
             return .empty
         }
@@ -152,14 +172,15 @@ final class HealthMetricsStore {
             )
             do {
                 try fileManager.moveItem(at: metricsFileURL, to: backupURL)
-                diagnostics(
+                pendingDiagnostics.append(
                     "Recovered from corrupt health metrics; moved file to \(backupURL.lastPathComponent)"
                 )
-                return .empty
             } catch {
-                diagnostics("Failed to quarantine corrupt health metrics: \(error.localizedDescription)")
-                throw error
+                pendingDiagnostics.append(
+                    "Recovered from corrupt health metrics without quarantine: \(error.localizedDescription)"
+                )
             }
+            return .empty
         }
     }
 
@@ -168,7 +189,13 @@ final class HealthMetricsStore {
         try data.write(to: metricsFileURL, options: .atomic)
     }
 
+    private func emitDiagnostics(_ pendingDiagnostics: [String]) {
+        for message in pendingDiagnostics {
+            diagnostics(message)
+        }
+    }
+
     private static func defaultDiagnostics(_ message: String) {
-        fputs("[HealthMetricsStore] \(message)\n", stderr)
+        NSLog("[HealthMetricsStore] %@", message)
     }
 }
