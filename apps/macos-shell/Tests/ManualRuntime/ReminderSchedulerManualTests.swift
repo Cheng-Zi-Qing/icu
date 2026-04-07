@@ -38,19 +38,32 @@ func testResumeWorkingRearmsEyeReminder() throws {
 }
 
 func testEyeReminderCallbackCarriesStableReminderIdentifier() throws {
-    var reminderIDs: [UUID] = []
+    var reminders: [ReminderPresentationPayload] = []
     let scheduler = ReminderScheduler(
-        eyeInterval: 0.01,
+        eyeInterval: 0.2,
         snoozeInterval: 0.01
     ) { payload in
-        reminderIDs.append(payload.id)
+        reminders.append(payload)
     }
     defer { scheduler.stop() }
 
     scheduler.startWorking()
     try expect(
-        waitForCondition(timeout: 0.2) { !reminderIDs.isEmpty },
-        "scheduler should emit a reminder payload"
+        waitForCondition(timeout: 0.35) { reminders.count == 1 },
+        "scheduler should emit the first reminder payload"
+    )
+
+    let firstReminder = reminders[0]
+    scheduler.scheduleSnooze(for: firstReminder)
+
+    try expect(
+        waitForCondition(timeout: 0.2) { reminders.count >= 2 },
+        "snoozing should emit a follow-up payload"
+    )
+
+    try expect(
+        reminders[1].id == firstReminder.id,
+        "follow-up payload should carry the same stable reminder identifier"
     )
 }
 
