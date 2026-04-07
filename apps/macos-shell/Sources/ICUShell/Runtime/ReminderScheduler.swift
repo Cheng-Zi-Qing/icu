@@ -6,6 +6,7 @@ struct ReminderPresentationPayload {
     let text: String
 }
 
+@MainActor
 final class ReminderScheduler {
     private(set) var isEyeReminderArmed = false
 
@@ -65,8 +66,8 @@ final class ReminderScheduler {
             self.cancelSnoozeReminder(for: payload.id)
             self.emitReminder(payload)
         }
-        timer.resume()
         snoozeTimers[payload.id] = timer
+        timer.resume()
     }
 
     private func armEyeReminder() {
@@ -86,8 +87,8 @@ final class ReminderScheduler {
             )
             self.armEyeReminder()
         }
-        timer.resume()
         eyeTimer = timer
+        timer.resume()
     }
 
     private func cancelEyeReminder() {
@@ -98,7 +99,9 @@ final class ReminderScheduler {
 
     private func emitReminder(_ payload: ReminderPresentationPayload) {
         onReminder?(payload)
-        onEyeReminder?()
+        if onReminder == nil {
+            onEyeReminder?()
+        }
     }
 
     private func cancelSnoozeReminder(for reminderID: UUID) {

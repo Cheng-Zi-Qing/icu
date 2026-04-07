@@ -2,6 +2,7 @@ import Foundation
 
 @main
 struct StateStoreManualMain {
+    @MainActor
     static func main() throws {
         do {
             try testAppPathsLivePrefersICUAppSupportRootOverride()

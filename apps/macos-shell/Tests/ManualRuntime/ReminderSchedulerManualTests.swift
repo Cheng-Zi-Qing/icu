@@ -16,12 +16,14 @@ func waitForCondition(
     return condition()
 }
 
+@MainActor
 func testWorkingStateArmsEyeReminder() throws {
     let scheduler = ReminderScheduler(eyeInterval: 1200)
     scheduler.startWorking()
     try expect(scheduler.isEyeReminderArmed, "working state should arm eye reminder")
 }
 
+@MainActor
 func testFocusSuspendsEyeReminder() throws {
     let scheduler = ReminderScheduler(eyeInterval: 1200)
     scheduler.startWorking()
@@ -29,6 +31,7 @@ func testFocusSuspendsEyeReminder() throws {
     try expect(!scheduler.isEyeReminderArmed, "focus should suspend eye reminder")
 }
 
+@MainActor
 func testResumeWorkingRearmsEyeReminder() throws {
     let scheduler = ReminderScheduler(eyeInterval: 1200)
     scheduler.startWorking()
@@ -37,6 +40,7 @@ func testResumeWorkingRearmsEyeReminder() throws {
     try expect(scheduler.isEyeReminderArmed, "resume working should re-arm eye reminder")
 }
 
+@MainActor
 func testEyeReminderCallbackCarriesStableReminderIdentifier() throws {
     var reminders: [ReminderPresentationPayload] = []
     let scheduler = ReminderScheduler(
@@ -61,12 +65,14 @@ func testEyeReminderCallbackCarriesStableReminderIdentifier() throws {
         "snoozing should emit a follow-up payload"
     )
 
+    let matchingFollowUps = reminders.dropFirst().filter { $0.id == firstReminder.id }
     try expect(
-        reminders[1].id == firstReminder.id,
-        "follow-up payload should carry the same stable reminder identifier"
+        matchingFollowUps.count == 1,
+        "snoozed follow-up should carry the same stable reminder identifier exactly once"
     )
 }
 
+@MainActor
 func testSnoozeSchedulesOneFollowUpReminder() throws {
     var reminders: [ReminderPresentationPayload] = []
     let scheduler = ReminderScheduler(
