@@ -1,14 +1,39 @@
 import Foundation
 
+struct ReminderPresentationPayload {
+    let id: UUID
+    let type: HealthReminderType
+    let text: String
+}
+
 final class ReminderScheduler {
     private(set) var isEyeReminderArmed = false
 
     private let eyeInterval: TimeInterval
+    private let snoozeInterval: TimeInterval
+    private let onReminder: ((ReminderPresentationPayload) -> Void)?
     private let onEyeReminder: (() -> Void)?
     private var eyeTimer: DispatchSourceTimer?
+    private var snoozeTimers: [UUID: DispatchSourceTimer] = [:]
 
-    init(eyeInterval: TimeInterval = 20 * 60, onEyeReminder: (() -> Void)? = nil) {
+    init(
+        eyeInterval: TimeInterval = 20 * 60,
+        snoozeInterval: TimeInterval = 5 * 60,
+        onReminder: ((ReminderPresentationPayload) -> Void)? = nil
+    ) {
         self.eyeInterval = eyeInterval
+        self.snoozeInterval = snoozeInterval
+        self.onReminder = onReminder
+        self.onEyeReminder = nil
+    }
+
+    init(
+        eyeInterval: TimeInterval = 20 * 60,
+        onEyeReminder: (() -> Void)? = nil
+    ) {
+        self.eyeInterval = eyeInterval
+        self.snoozeInterval = 5 * 60
+        self.onReminder = nil
         self.onEyeReminder = onEyeReminder
     }
 
@@ -18,6 +43,7 @@ final class ReminderScheduler {
 
     func enterFocus() {
         cancelEyeReminder()
+        cancelSnoozeReminders()
     }
 
     func resumeWorking() {
@@ -26,6 +52,21 @@ final class ReminderScheduler {
 
     func stop() {
         cancelEyeReminder()
+        cancelSnoozeReminders()
+    }
+
+    func scheduleSnooze(for payload: ReminderPresentationPayload) {
+        cancelSnoozeReminder(for: payload.id)
+
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(deadline: .now() + snoozeInterval)
+        timer.setEventHandler { [weak self] in
+            guard let self else { return }
+            self.cancelSnoozeReminder(for: payload.id)
+            self.emitReminder(payload)
+        }
+        timer.resume()
+        snoozeTimers[payload.id] = timer
     }
 
     private func armEyeReminder() {
@@ -36,7 +77,13 @@ final class ReminderScheduler {
         timer.schedule(deadline: .now() + eyeInterval)
         timer.setEventHandler { [weak self] in
             guard let self else { return }
-            self.onEyeReminder?()
+            self.emitReminder(
+                ReminderPresentationPayload(
+                    id: UUID(),
+                    type: .eyeCare,
+                    text: DesktopPetCopy.eyeReminderMessage()
+                )
+            )
             self.armEyeReminder()
         }
         timer.resume()
@@ -47,5 +94,22 @@ final class ReminderScheduler {
         eyeTimer?.cancel()
         eyeTimer = nil
         isEyeReminderArmed = false
+    }
+
+    private func emitReminder(_ payload: ReminderPresentationPayload) {
+        onReminder?(payload)
+        onEyeReminder?()
+    }
+
+    private func cancelSnoozeReminder(for reminderID: UUID) {
+        snoozeTimers[reminderID]?.cancel()
+        snoozeTimers[reminderID] = nil
+    }
+
+    private func cancelSnoozeReminders() {
+        for timer in snoozeTimers.values {
+            timer.cancel()
+        }
+        snoozeTimers.removeAll()
     }
 }

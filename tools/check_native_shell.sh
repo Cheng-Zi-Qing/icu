@@ -74,6 +74,7 @@ swiftc -framework AppKit \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/StateStore.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/WorkSessionController.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/WindowPlacement.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/ReminderScheduler.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Health/HealthMetricsModels.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Health/HealthMetricsStore.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Health/HealthSessionTracker.swift" \

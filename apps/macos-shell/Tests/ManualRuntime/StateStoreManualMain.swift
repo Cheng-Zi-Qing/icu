@@ -31,6 +31,8 @@ struct StateStoreManualMain {
             try testWorkingStateArmsEyeReminder()
             try testFocusSuspendsEyeReminder()
             try testResumeWorkingRearmsEyeReminder()
+            try testEyeReminderCallbackCarriesStableReminderIdentifier()
+            try testSnoozeSchedulesOneFollowUpReminder()
             try testHealthMetricsStorePersistsReminderEventsAndIgnoresDuplicateOutcomes()
             try testHealthMetricsStoreBuildsWeekSummaryFromMultipleDays()
             try testHealthMetricsStoreRecoversFromCorruptMetricsFileAndRecordsDiagnostic()
