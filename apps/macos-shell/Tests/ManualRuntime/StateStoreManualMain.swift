@@ -31,6 +31,8 @@ struct StateStoreManualMain {
             try testWorkingStateArmsEyeReminder()
             try testFocusSuspendsEyeReminder()
             try testResumeWorkingRearmsEyeReminder()
+            try testHealthMetricsStorePersistsReminderEventsAndIgnoresDuplicateOutcomes()
+            try testHealthMetricsStoreBuildsWeekSummaryFromMultipleDays()
             try testAvatarCatalogListsRepoAvatar()
             try testAvatarCatalogPrefersAppAssetsOverRepoAvatar()
             try testAvatarAssetStoreUsesInstalledCopyCatalogForGeneratedStyleLabel()

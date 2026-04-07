@@ -18,6 +18,8 @@ swiftc \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/StateStore.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/WorkSessionController.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/ReminderScheduler.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Health/HealthMetricsModels.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Health/HealthMetricsStore.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/PetAnimationModels.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/PetAssetLocator.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Avatar/AvatarAssetStore.swift" \
@@ -43,6 +45,7 @@ swiftc \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/WorkSessionManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/MenuModelManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/GenerationSettingsManualTests.swift" \
+  "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/HealthMetricsManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/ThemePackManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/ReminderSchedulerManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/AvatarCatalogManualTests.swift" \
@@ -70,6 +73,8 @@ swiftc -framework AppKit \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/StateStore.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/WorkSessionController.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/WindowPlacement.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Health/HealthMetricsModels.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Health/HealthMetricsStore.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/PetAnimationModels.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/PetAssetLocator.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Avatar/AvatarCatalog.swift" \
