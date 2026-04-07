@@ -103,6 +103,8 @@ final class HealthMetricsStore {
 
         for reminder in filtered {
             switch reminder.outcome {
+            case .shown:
+                break
             case .completed:
                 counts.completed += 1
             case .snoozed:

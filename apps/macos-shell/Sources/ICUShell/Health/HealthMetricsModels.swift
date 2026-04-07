@@ -5,6 +5,7 @@ enum HealthReminderType: String, Codable {
 }
 
 enum HealthReminderOutcome: String, Codable {
+    case shown
     case completed
     case snoozed
     case skipped
