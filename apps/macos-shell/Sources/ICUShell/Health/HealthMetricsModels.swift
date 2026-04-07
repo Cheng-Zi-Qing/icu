@@ -27,7 +27,7 @@ struct HealthDaySummary: Codable {
 
 struct HealthWeekSummary: Codable {
     var weekStartDate: Date
-    var weekEndDate: Date
+    var weekEndExclusiveDate: Date
     var eyeReminder: HealthReminderCounts
     var eyeReminderCompletionRate: Double
 }

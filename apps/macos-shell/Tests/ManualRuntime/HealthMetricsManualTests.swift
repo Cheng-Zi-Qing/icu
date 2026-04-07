@@ -65,4 +65,91 @@ func testHealthMetricsStoreBuildsWeekSummaryFromMultipleDays() throws {
     try expect(summary.eyeReminder.completed == 2, "week summary should total completed reminders")
     try expect(summary.eyeReminder.skipped == 1, "week summary should total skipped reminders")
     try expect(abs(summary.eyeReminderCompletionRate - (2.0 / 3.0)) < 0.0001, "week completion rate should use completed/shown")
+    try expect(
+        summary.weekEndExclusiveDate == summary.weekStartDate.addingTimeInterval(7 * 86_400),
+        "week summary should expose an exclusive end date"
+    )
+}
+
+func testHealthMetricsStoreRecoversFromCorruptMetricsFileAndRecordsDiagnostic() throws {
+    let appPaths = try makeTemporaryAppPaths()
+    let metricsURL = appPaths.stateDirectory.appendingPathComponent("health_metrics.json", isDirectory: false)
+    try writeTextFile("{not valid json", to: metricsURL)
+
+    var diagnostics: [String] = []
+    let store = try HealthMetricsStore(appPaths: appPaths) { message in
+        diagnostics.append(message)
+    }
+
+    let summary = try store.daySummary(for: Date(timeIntervalSince1970: 1_744_000_000))
+    try expect(summary.eyeReminder.shown == 0, "corrupt metrics should recover as empty metrics")
+
+    let stateFiles = try FileManager.default.contentsOfDirectory(
+        at: appPaths.stateDirectory,
+        includingPropertiesForKeys: nil
+    )
+    let backupExists = stateFiles.contains { fileURL in
+        fileURL.lastPathComponent.hasPrefix("health_metrics.corrupt-")
+    }
+
+    try expect(backupExists, "corrupt metrics should be renamed aside for diagnostics")
+    try expect(
+        diagnostics.contains(where: { $0.contains("corrupt") }),
+        "store should emit diagnostics for corrupt metrics recovery"
+    )
+}
+
+func testHealthMetricsStoreEmitsDiagnosticsForIgnoredInvalidEvents() throws {
+    let appPaths = try makeTemporaryAppPaths()
+    var diagnostics: [String] = []
+    let store = try HealthMetricsStore(appPaths: appPaths) { message in
+        diagnostics.append(message)
+    }
+
+    let shownAt = Date(timeIntervalSince1970: 1_744_000_000)
+    let reminderID = UUID(uuidString: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")!
+    let unknownID = UUID(uuidString: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")!
+
+    try store.recordReminderShown(id: reminderID, type: .eyeCare, at: shownAt)
+    try store.recordReminderShown(id: reminderID, type: .eyeCare, at: shownAt.addingTimeInterval(10))
+    try store.recordReminderOutcome(id: unknownID, outcome: .completed, at: shownAt.addingTimeInterval(20))
+    try store.recordReminderOutcome(id: reminderID, outcome: .completed, at: shownAt.addingTimeInterval(30))
+    try store.recordReminderOutcome(id: reminderID, outcome: .skipped, at: shownAt.addingTimeInterval(40))
+
+    try expect(
+        diagnostics.contains(where: { $0.contains("duplicate shown") }),
+        "store should emit diagnostics for duplicate shown events"
+    )
+    try expect(
+        diagnostics.contains(where: { $0.contains("unknown reminder id") }),
+        "store should emit diagnostics for unknown reminder outcomes"
+    )
+    try expect(
+        diagnostics.contains(where: { $0.contains("duplicate outcome") }),
+        "store should emit diagnostics for duplicate outcomes"
+    )
+}
+
+func testHealthMetricsStoreSerializesConcurrentWrites() throws {
+    let appPaths = try makeTemporaryAppPaths()
+    let store = try HealthMetricsStore(appPaths: appPaths)
+    let shownAt = Date(timeIntervalSince1970: 1_744_000_000)
+    let lock = NSLock()
+    var errors: [Error] = []
+    let writeCount = 64
+
+    DispatchQueue.concurrentPerform(iterations: writeCount) { index in
+        let reminderID = UUID(uuidString: String(format: "00000000-0000-0000-0000-%012d", index))!
+        do {
+            try store.recordReminderShown(id: reminderID, type: .eyeCare, at: shownAt.addingTimeInterval(Double(index)))
+        } catch {
+            lock.lock()
+            errors.append(error)
+            lock.unlock()
+        }
+    }
+
+    try expect(errors.isEmpty, "concurrent writes should not throw errors")
+    let summary = try store.daySummary(for: shownAt)
+    try expect(summary.eyeReminder.shown == writeCount, "serial store writes should not lose events")
 }
