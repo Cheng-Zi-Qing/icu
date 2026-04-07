@@ -156,6 +156,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             changeAvatar()
         case .openGenerationConfig:
             _ = generationCoordinator?.openGenerationConfig()
+        case .openHealthReport:
+            return
         case .quitApp:
             quit()
         }

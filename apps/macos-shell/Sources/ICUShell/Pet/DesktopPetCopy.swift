@@ -36,4 +36,16 @@ enum DesktopPetCopy {
     static func eyeReminderMessage() -> String {
         text("pet.eye_reminder", fallback: "看看远处，护护眼。")
     }
+
+    static func reminderCompleteActionTitle() -> String {
+        TextCatalog.shared.text(.petReminderCompleteAction)
+    }
+
+    static func reminderSnoozeActionTitle() -> String {
+        TextCatalog.shared.text(.petReminderSnoozeAction)
+    }
+
+    static func reminderSkipActionTitle() -> String {
+        TextCatalog.shared.text(.petReminderSkipAction)
+    }
 }

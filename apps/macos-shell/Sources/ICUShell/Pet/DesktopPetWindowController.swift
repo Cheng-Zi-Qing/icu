@@ -134,6 +134,8 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
             case .openGenerationConfig:
                 _ = generationCoordinator.openGenerationConfig()
                 return
+            case .openHealthReport:
+                return
             case .closeWindow:
                 window?.orderOut(nil)
                 return

@@ -4,6 +4,7 @@ enum StatusItemMenuAction: String, Equatable {
     case showPet
     case changeAvatar
     case openGenerationConfig
+    case openHealthReport
     case quitApp
 
     var title: String {
@@ -14,6 +15,8 @@ enum StatusItemMenuAction: String, Equatable {
             return TextCatalog.shared.text(.menuChangeAvatar)
         case .openGenerationConfig:
             return TextCatalog.shared.text(.menuGenerationConfig)
+        case .openHealthReport:
+            return TextCatalog.shared.text(.menuHealthReport)
         case .quitApp:
             return TextCatalog.shared.text(.menuQuitApp)
         }
@@ -22,7 +25,7 @@ enum StatusItemMenuAction: String, Equatable {
 
 struct StatusItemMenuModel: Equatable {
     let sections: [[StatusItemMenuAction]] = [
-        [.showPet, .changeAvatar, .openGenerationConfig],
+        [.showPet, .changeAvatar, .openGenerationConfig, .openHealthReport],
         [.quitApp]
     ]
 }

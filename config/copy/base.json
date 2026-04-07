@@ -17,7 +17,8 @@
     "take_break": "暂离",
     "resume_working": "回来工作",
     "stop_work": "下班",
-    "hide_pet": "隐藏桌宠"
+    "hide_pet": "隐藏桌宠",
+    "health_report": "健康报告"
   },
   "generation_config": {
     "window_title": "模型工作台",
@@ -239,7 +240,10 @@
     "focus_end_light": "抬头缓一缓，再接着做。",
     "focus_end_heavy": "这一段够久了，先休息一下。",
     "stop_work_message": "收工，歇会儿。",
-    "eye_reminder": "看看远处，护护眼。"
+    "eye_reminder": "看看远处，护护眼。",
+    "reminder_complete_action": "已完成",
+    "reminder_snooze_action": "稍后提醒",
+    "reminder_skip_action": "跳过"
   },
   "errors": {
     "work_invalid_transition": "当前状态下不能执行这个操作。",

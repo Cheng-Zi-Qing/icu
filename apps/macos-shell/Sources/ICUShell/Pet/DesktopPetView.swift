@@ -13,6 +13,7 @@ class DesktopPetView: NSView {
     private var transientBubbleContainer: NSView!
     private var transientBubbleLabel: NSTextField!
     private var transientBubbleTail: NSView!
+    private var reminderCardView: ReminderCardView!
     private var currentImage: NSImage?
     private let assetLocator: PetAssetLocator
     private let animationPlayer = PetAnimationPlayer()
@@ -73,6 +74,7 @@ class DesktopPetView: NSView {
         setupImageView()
         loadAnimation(for: .idle)
         setupTransientBubble()
+        setupReminderCard()
         setupStatusLabel()
         applyTheme()
         subscribeToThemeChanges()
@@ -119,6 +121,13 @@ class DesktopPetView: NSView {
         addSubview(transientBubbleTail)
     }
 
+    private func setupReminderCard() {
+        reminderCardView = ReminderCardView(frame: .zero)
+        reminderCardView.identifier = NSUserInterfaceItemIdentifier("desktopPet.reminderCard")
+        reminderCardView.isHidden = true
+        addSubview(reminderCardView)
+    }
+
     func setStatusText(_ text: String, showBubble: Bool = false) {
         persistentStatusText = text
         statusLabel.stringValue = text
@@ -154,6 +163,15 @@ class DesktopPetView: NSView {
         }
         transientBubbleDismissTimer = timer
         RunLoop.main.add(timer, forMode: .common)
+    }
+
+    func showReminderCard(_ payload: ReminderPresentationPayload) {
+        transientBubbleDismissTimer?.invalidate()
+        hideTransientBubble()
+        reminderCardView.configure(with: payload)
+        layoutReminderCard()
+        reminderCardView.isHidden = false
+        toolTip = payload.text
     }
 
     // MARK: - Image Loading
@@ -383,6 +401,17 @@ class DesktopPetView: NSView {
         toolTip = persistentStatusText
     }
 
+    private func layoutReminderCard() {
+        let width = min(max(120, bounds.width - 12), 220)
+        let height: CGFloat = 108
+        reminderCardView.frame = NSRect(
+            x: (bounds.width - width) / 2,
+            y: max(26, bounds.height - height - 8),
+            width: width,
+            height: height
+        )
+    }
+
     private func preferredAction(for state: ShellWorkState) -> String? {
         switch state {
         case .idle:
@@ -572,6 +601,8 @@ class DesktopPetView: NSView {
         transientBubbleTail.layer?.cornerRadius = 1
         transientBubbleTail.layer?.setAffineTransform(CGAffineTransform(rotationAngle: .pi / 4))
         layoutTransientBubble()
+        reminderCardView.applyTheme(theme)
+        layoutReminderCard()
         toolTip = persistentStatusText
     }
 
