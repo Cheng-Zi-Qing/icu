@@ -24,6 +24,13 @@ func testWorkingStateArmsEyeReminder() throws {
 }
 
 @MainActor
+func testWorkingStateArmsHydrationReminder() throws {
+    let scheduler = ReminderScheduler(eyeInterval: 1200, hydrationInterval: 3600)
+    scheduler.startWorking()
+    try expect(scheduler.isHydrationReminderArmed, "working state should arm hydration reminder")
+}
+
+@MainActor
 func testFocusSuspendsEyeReminder() throws {
     let scheduler = ReminderScheduler(eyeInterval: 1200)
     scheduler.startWorking()
@@ -101,5 +108,24 @@ func testSnoozeSchedulesOneFollowUpReminder() throws {
     try expect(
         followUps.count == 1,
         "snooze should emit exactly one follow-up for the same reminder id"
+    )
+}
+
+@MainActor
+func testHydrationReminderCallbackIncludesHydrationType() throws {
+    var reminders: [ReminderPresentationPayload] = []
+    let scheduler = ReminderScheduler(
+        eyeInterval: 999,
+        hydrationInterval: 0.2,
+        snoozeInterval: 0.01
+    ) { payload in
+        reminders.append(payload)
+    }
+    defer { scheduler.stop() }
+
+    scheduler.startWorking()
+    try expect(
+        waitForCondition(timeout: 0.35) { reminders.contains(where: { $0.type == .hydration }) },
+        "scheduler should emit hydration reminder payloads"
     )
 }

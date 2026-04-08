@@ -238,7 +238,8 @@ func testDesktopPetCopyUsesInstalledCatalogForSessionMessages() throws {
             "focus_end_light": "抬头缓一缓，再接着做。",
             "focus_end_heavy": "这一段够久了，先休息一下。",
             "stop_work_message": "收工，歇会儿。",
-            "eye_reminder": "看看远处，护护眼。"
+            "eye_reminder": "看看远处，护护眼。",
+            "hydration_reminder": "喝口水，慢慢来。"
           }
         }
         """,
@@ -252,7 +253,8 @@ func testDesktopPetCopyUsesInstalledCatalogForSessionMessages() throws {
             "focus_end_light": "抬头看远一点，再继续。",
             "focus_end_heavy": "已经持续很久了，先完整休息一下。",
             "stop_work_message": "今天先到这里。",
-            "eye_reminder": "看向远处，放松一下眼睛。"
+            "eye_reminder": "看向远处，放松一下眼睛。",
+            "hydration_reminder": "喝口水，慢一点也没关系。"
           }
         }
         """
@@ -293,6 +295,10 @@ func testDesktopPetCopyUsesInstalledCatalogForSessionMessages() throws {
     try expect(
         DesktopPetCopy.eyeReminderMessage() == "看向远处，放松一下眼睛。",
         "desktop pet copy should use the override for the eye reminder"
+    )
+    try expect(
+        DesktopPetCopy.hydrationReminderMessage() == "喝口水，慢一点也没关系。",
+        "desktop pet copy should use the override for the hydration reminder"
     )
 }
 

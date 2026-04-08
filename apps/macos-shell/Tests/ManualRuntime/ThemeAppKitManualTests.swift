@@ -2016,7 +2016,8 @@ func testAvatarSelectorSpeechTabShowsAllGeneratedSpeechEntriesAsGroupedContent()
         focusEndLight: "抬头看远一点，再继续。",
         focusEndHeavy: "已经持续很久了，先完整休息一下。",
         stopWorkMessage: "今天先到这里。",
-        eyeReminder: "看向远处，放松一下眼睛。"
+        eyeReminder: "看向远处，放松一下眼睛。",
+        hydrationReminder: "喝口水，慢一点也没关系。"
     )
     let controller = AvatarSelectorWindowController(
         avatars: [
@@ -2052,6 +2053,7 @@ func testAvatarSelectorSpeechTabShowsAllGeneratedSpeechEntriesAsGroupedContent()
     _ = try requireLabel(in: contentView, stringValue: "重提醒：已经持续很久了，先完整休息一下。")
     _ = try requireLabel(in: contentView, stringValue: "收工：今天先到这里。")
     _ = try requireLabel(in: contentView, stringValue: "护眼：看向远处，放松一下眼睛。")
+    _ = try requireLabel(in: contentView, stringValue: "喝水：喝口水，慢一点也没关系。")
 }
 
 func testAvatarSelectorSpeechTabOmitsStyleChromeAndModelSummary() throws {
@@ -2517,7 +2519,7 @@ func testDesktopPetViewHitTestUsesAspectFitImageRectForTransparency() throws {
         petID: "capybara"
     )
 
-    let transparentPaddingPoint = NSPoint(x: 70, y: 20)
+    let transparentPaddingPoint = NSPoint(x: 70, y: 34)
     let opaqueImagePoint = NSPoint(x: 50, y: 20)
 
     try expect(
@@ -2527,6 +2529,80 @@ func testDesktopPetViewHitTestUsesAspectFitImageRectForTransparency() throws {
     try expect(
         view.hitTest(opaqueImagePoint) != nil,
         "hit testing should still hit opaque pixels inside the drawn image rect"
+    )
+}
+
+func testDesktopPetViewRoutesOpaquePetHitsToSelfForDragging() throws {
+    let appPaths = try makeTemporaryAppPaths()
+    let frameURL = appPaths.assetsDirectory
+        .appendingPathComponent("pets", isDirectory: true)
+        .appendingPathComponent("capybara", isDirectory: true)
+        .appendingPathComponent("idle", isDirectory: true)
+        .appendingPathComponent("0.png", isDirectory: false)
+    try makeColorPNG(at: frameURL, color: NSColor(deviceRed: 1, green: 0, blue: 0, alpha: 1))
+
+    let view = DesktopPetView(
+        frame: NSRect(x: 0, y: 0, width: 80, height: 80),
+        assetLocator: PetAssetLocator(appPaths: appPaths),
+        petID: "capybara"
+    )
+
+    let hitView = view.hitTest(NSPoint(x: 40, y: 40))
+    let actualDescription = hitView.map { String(describing: type(of: $0)) } ?? "nil"
+    try expect(
+        hitView === view,
+        "opaque pet clicks should resolve to the desktop pet view so dragging can start (got \(actualDescription))"
+    )
+}
+
+func testDesktopPetViewRoutesStatusChipHitsToSelfForDragging() throws {
+    let view = DesktopPetView(frame: NSRect(x: 0, y: 0, width: 128, height: 128))
+    let statusLabel = try requireStatusLabel(in: view)
+    let statusPoint = NSPoint(x: statusLabel.frame.midX, y: statusLabel.frame.midY)
+
+    let hitView = view.hitTest(statusPoint)
+    try expect(
+        hitView === view,
+        "status chip clicks should stay on the desktop pet view so the window remains draggable"
+    )
+}
+
+func testDesktopPetViewAcceptsFirstMouseForDesktopDragging() throws {
+    let view = DesktopPetView(frame: NSRect(x: 0, y: 0, width: 128, height: 128))
+
+    try expect(
+        view.acceptsFirstMouse(for: nil),
+        "desktop pet should accept first mouse so dragging works from the inactive desktop"
+    )
+}
+
+@MainActor
+func testDesktopPetWindowAllowsBackgroundDragging() throws {
+    _ = try makeInstalledThemeManager()
+    let appPaths = try makeTemporaryAppPaths()
+    let stateStore = try StateStore(paths: appPaths)
+    let workSessionController = try WorkSessionController(store: stateStore)
+    let healthStore = try HealthMetricsStore(appPaths: appPaths)
+    let healthTracker = HealthSessionTracker(store: healthStore)
+    let assetLocator = PetAssetLocator(appPaths: appPaths)
+    let scheduler = ReminderScheduler()
+
+    let controller = DesktopPetWindowController(
+        workSessionController: workSessionController,
+        reminderScheduler: scheduler,
+        healthTracker: healthTracker,
+        healthReportPresenter: { _, _ in },
+        assetLocator: assetLocator,
+        petID: "missing_pet",
+        onChangeAvatarRequested: {},
+        onOpenGenerationConfigRequested: {},
+        onQuitRequested: {}
+    )
+    defer { controller.close() }
+
+    try expect(
+        controller.window?.isMovableByWindowBackground == true,
+        "desktop pet window should allow background dragging"
     )
 }
 
@@ -2979,7 +3055,8 @@ func testAvatarSelectorSpeechTabAppliesGeneratedCopyToDesktopPetRuntime() throws
             "focus_end_light": "抬头缓一缓，再接着做。",
             "focus_end_heavy": "这一段够久了，先休息一下。",
             "stop_work_message": "收工，歇会儿。",
-            "eye_reminder": "看看远处，护护眼。"
+            "eye_reminder": "看看远处，护护眼。",
+            "hydration_reminder": "喝口水，慢慢来。"
           }
         }
         """
@@ -3006,7 +3083,8 @@ func testAvatarSelectorSpeechTabAppliesGeneratedCopyToDesktopPetRuntime() throws
         focusEndLight: "抬头看远一点，再继续。",
         focusEndHeavy: "已经持续很久了，先完整休息一下。",
         stopWorkMessage: "今天先到这里。",
-        eyeReminder: "看向远处，放松一下眼睛。"
+        eyeReminder: "看向远处，放松一下眼睛。",
+        hydrationReminder: "喝口水，慢一点也没关系。"
     )
     let store = CopyOverrideStore(appPaths: appPaths, repoRootURL: repoRoot)
     var generatedPrompts: [String] = []
@@ -3063,6 +3141,10 @@ func testAvatarSelectorSpeechTabAppliesGeneratedCopyToDesktopPetRuntime() throws
     try expect(
         DesktopPetCopy.statusText(for: .idle) == "空闲待命",
         "speech apply should replace the active desktop pet idle status copy"
+    )
+    try expect(
+        DesktopPetCopy.hydrationReminderMessage() == "喝口水，慢一点也没关系。",
+        "speech apply should replace the active hydration reminder copy"
     )
     let statusLabelAfterApply = try requireStatusLabel(in: petView)
     try expect(

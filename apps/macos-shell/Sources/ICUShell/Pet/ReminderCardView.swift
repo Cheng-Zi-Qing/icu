@@ -124,6 +124,10 @@ final class ReminderCardView: NSView {
     }
 
     func interactiveHitView(at point: NSPoint) -> NSView? {
+        guard !isHidden, alphaValue > 0.001 else {
+            return nil
+        }
+
         for button in [completeButton, snoozeButton, skipButton] {
             let buttonPoint = convert(point, to: button)
             if button.bounds.contains(buttonPoint) {

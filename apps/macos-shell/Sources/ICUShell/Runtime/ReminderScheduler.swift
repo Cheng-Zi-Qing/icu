@@ -9,20 +9,25 @@ struct ReminderPresentationPayload {
 @MainActor
 final class ReminderScheduler {
     private(set) var isEyeReminderArmed = false
+    private(set) var isHydrationReminderArmed = false
 
     private let eyeInterval: TimeInterval
+    private let hydrationInterval: TimeInterval
     private let snoozeInterval: TimeInterval
     private let onReminder: ((ReminderPresentationPayload) -> Void)?
     private let onEyeReminder: (() -> Void)?
     private var eyeTimer: DispatchSourceTimer?
+    private var hydrationTimer: DispatchSourceTimer?
     private var snoozeTimers: [UUID: DispatchSourceTimer] = [:]
 
     init(
         eyeInterval: TimeInterval = 20 * 60,
+        hydrationInterval: TimeInterval = 45 * 60,
         snoozeInterval: TimeInterval = 5 * 60,
         onReminder: ((ReminderPresentationPayload) -> Void)? = nil
     ) {
         self.eyeInterval = eyeInterval
+        self.hydrationInterval = hydrationInterval
         self.snoozeInterval = snoozeInterval
         self.onReminder = onReminder
         self.onEyeReminder = nil
@@ -30,9 +35,11 @@ final class ReminderScheduler {
 
     init(
         eyeInterval: TimeInterval = 20 * 60,
+        hydrationInterval: TimeInterval = 45 * 60,
         onEyeReminder: (() -> Void)? = nil
     ) {
         self.eyeInterval = eyeInterval
+        self.hydrationInterval = hydrationInterval
         self.snoozeInterval = 5 * 60
         self.onReminder = nil
         self.onEyeReminder = onEyeReminder
@@ -40,19 +47,23 @@ final class ReminderScheduler {
 
     func startWorking() {
         armEyeReminder()
+        armHydrationReminder()
     }
 
     func enterFocus() {
         cancelEyeReminder()
+        cancelHydrationReminder()
         cancelSnoozeReminders()
     }
 
     func resumeWorking() {
         armEyeReminder()
+        armHydrationReminder()
     }
 
     func stop() {
         cancelEyeReminder()
+        cancelHydrationReminder()
         cancelSnoozeReminders()
     }
 
@@ -91,10 +102,37 @@ final class ReminderScheduler {
         timer.resume()
     }
 
+    private func armHydrationReminder() {
+        cancelHydrationReminder()
+        isHydrationReminderArmed = true
+
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(deadline: .now() + hydrationInterval)
+        timer.setEventHandler { [weak self] in
+            guard let self else { return }
+            self.emitReminder(
+                ReminderPresentationPayload(
+                    id: UUID(),
+                    type: .hydration,
+                    text: DesktopPetCopy.hydrationReminderMessage()
+                )
+            )
+            self.armHydrationReminder()
+        }
+        hydrationTimer = timer
+        timer.resume()
+    }
+
     private func cancelEyeReminder() {
         eyeTimer?.cancel()
         eyeTimer = nil
         isEyeReminderArmed = false
+    }
+
+    private func cancelHydrationReminder() {
+        hydrationTimer?.cancel()
+        hydrationTimer = nil
+        isHydrationReminderArmed = false
     }
 
     private func emitReminder(_ payload: ReminderPresentationPayload) {

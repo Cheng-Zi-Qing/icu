@@ -37,6 +37,10 @@ enum DesktopPetCopy {
         text("pet.eye_reminder", fallback: "看看远处，护护眼。")
     }
 
+    static func hydrationReminderMessage() -> String {
+        text("pet.hydration_reminder", fallback: "喝口水，慢慢来。")
+    }
+
     static func reminderCompleteActionTitle() -> String {
         TextCatalog.shared.text(.petReminderCompleteAction)
     }

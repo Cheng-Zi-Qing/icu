@@ -42,6 +42,7 @@ final class SpeechGenerationService {
         - focus_end_heavy
         - stop_work_message
         - eye_reminder
+        - hydration_reminder
         Return JSON only.
 
         user_prompt:

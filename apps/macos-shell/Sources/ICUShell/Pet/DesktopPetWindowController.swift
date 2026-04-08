@@ -59,6 +59,7 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
 
         // 浮在所有普通窗口之上
         window.level = .floating
+        window.isMovableByWindowBackground = true
 
         // 不抢焦点
         window.ignoresMouseEvents = false
