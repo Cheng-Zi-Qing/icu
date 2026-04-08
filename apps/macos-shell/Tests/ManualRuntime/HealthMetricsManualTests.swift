@@ -20,6 +20,67 @@ func testHealthMetricsStorePersistsReminderEventsAndIgnoresDuplicateOutcomes() t
     try expect(summary.eyeReminder.skipped == 0, "duplicate outcome should be ignored")
 }
 
+func testHealthMetricsStoreTracksHydrationCountsSeparatelyInDayAndWeekSummaries() throws {
+    let appPaths = try makeTemporaryAppPaths()
+    let store = try HealthMetricsStore(appPaths: appPaths)
+    let firstDay = Date(timeIntervalSince1970: 1_744_000_000)
+    let secondDay = firstDay.addingTimeInterval(86_400)
+    var utcCalendar = Calendar(identifier: .gregorian)
+    utcCalendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
+
+    try store.recordReminderShown(
+        id: UUID(uuidString: "12121212-1212-1212-1212-121212121212")!,
+        type: .eyeCare,
+        at: firstDay
+    )
+    try store.recordReminderOutcome(
+        id: UUID(uuidString: "12121212-1212-1212-1212-121212121212")!,
+        outcome: .completed,
+        at: firstDay.addingTimeInterval(30)
+    )
+
+    try store.recordReminderShown(
+        id: UUID(uuidString: "34343434-3434-3434-3434-343434343434")!,
+        type: .hydration,
+        at: firstDay.addingTimeInterval(120)
+    )
+    try store.recordReminderOutcome(
+        id: UUID(uuidString: "34343434-3434-3434-3434-343434343434")!,
+        outcome: .skipped,
+        at: firstDay.addingTimeInterval(150)
+    )
+
+    try store.recordReminderShown(
+        id: UUID(uuidString: "56565656-5656-5656-5656-565656565656")!,
+        type: .hydration,
+        at: secondDay
+    )
+    try store.recordReminderOutcome(
+        id: UUID(uuidString: "56565656-5656-5656-5656-565656565656")!,
+        outcome: .completed,
+        at: secondDay.addingTimeInterval(30)
+    )
+
+    let firstDaySummary = try store.daySummary(for: firstDay)
+    try expect(firstDaySummary.eyeReminder.completed == 1, "eye reminder counts should stay independent from hydration reminders")
+    try expect(firstDaySummary.hydrationReminder.shown == 1, "day summary should expose hydration shown totals")
+    try expect(firstDaySummary.hydrationReminder.skipped == 1, "day summary should expose hydration skipped totals")
+
+    let weekSummary = try store.weekSummary(containing: secondDay)
+    try expect(weekSummary.hydrationReminder.shown == 2, "week summary should total hydration reminders across the week")
+    try expect(weekSummary.hydrationReminder.completed == 1, "week summary should total completed hydration reminders")
+    try expect(weekSummary.hydrationReminder.skipped == 1, "week summary should total skipped hydration reminders")
+    try expect(abs(weekSummary.hydrationReminderCompletionRate - 0.5) < 0.0001, "hydration completion rate should use completed over shown")
+    try expect(
+        weekSummary.days.contains(where: {
+            $0.date == utcCalendar.startOfDay(for: firstDay)
+                && $0.hydrationReminder.shown == 1
+                && $0.hydrationReminder.skipped == 1
+        }),
+        "week summary should preserve per-day hydration totals"
+    )
+}
+
 func testHealthMetricsStoreBuildsWeekSummaryFromMultipleDays() throws {
     let appPaths = try makeTemporaryAppPaths()
     let store = try HealthMetricsStore(appPaths: appPaths)
@@ -77,6 +138,7 @@ func testHealthMetricsStoreBuildsWeekSummaryFromMultipleDays() throws {
     try expect(summary.focusCount == 1, "week summary should total focus counts across the week")
     try expect(summary.focusDuration == 900, "week summary should total focus duration across the week")
     try expect(summary.breakCount == 1, "week summary should total break counts across the week")
+    try expect(summary.hydrationReminder.shown == 0, "week summary should keep hydration totals separate when no hydration reminders were shown")
     try expect(summary.days.count == 7, "week summary should expose all seven days for compact trend rendering")
     try expect(
         summary.days.contains(where: {
@@ -86,6 +148,7 @@ func testHealthMetricsStoreBuildsWeekSummaryFromMultipleDays() throws {
                 && $0.focusDuration == 900
                 && $0.breakCount == 1
                 && $0.eyeReminder.completed == 1
+                && $0.hydrationReminder.shown == 0
         }),
         "week summary should preserve per-day totals for the first active day"
     )
@@ -96,6 +159,7 @@ func testHealthMetricsStoreBuildsWeekSummaryFromMultipleDays() throws {
                 && $0.eyeReminder.shown == 2
                 && $0.eyeReminder.skipped == 1
                 && $0.eyeReminder.completed == 1
+                && $0.hydrationReminder.shown == 0
         }),
         "week summary should preserve per-day totals for the second active day"
     )
@@ -186,6 +250,7 @@ func testHealthMetricsStoreSerializesConcurrentWrites() throws {
     try expect(errors.isEmpty, "concurrent writes should not throw errors")
     let summary = try store.daySummary(for: shownAt)
     try expect(summary.eyeReminder.shown == writeCount, "serial store writes should not lose events")
+    try expect(summary.hydrationReminder.shown == 0, "serial eye reminder writes should not leak into hydration totals")
 }
 
 func testHealthSessionTrackerSettlesWorkFocusAndBreakMetricsAcrossTransitions() throws {

@@ -9,6 +9,7 @@ struct SpeechDraft: Codable, Equatable {
     var focusEndHeavy: String
     var stopWorkMessage: String
     var eyeReminder: String
+    var hydrationReminder: String
 
     enum CodingKeys: String, CodingKey {
         case statusIdle = "status_idle"
@@ -19,6 +20,7 @@ struct SpeechDraft: Codable, Equatable {
         case focusEndHeavy = "focus_end_heavy"
         case stopWorkMessage = "stop_work_message"
         case eyeReminder = "eye_reminder"
+        case hydrationReminder = "hydration_reminder"
     }
 
     func validate() throws {
@@ -31,6 +33,7 @@ struct SpeechDraft: Codable, Equatable {
             focusEndHeavy,
             stopWorkMessage,
             eyeReminder,
+            hydrationReminder,
         ]
 
         guard requiredValues.allSatisfy({ !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else {
@@ -49,6 +52,7 @@ struct SpeechDraft: Codable, Equatable {
                 "focus_end_heavy": focusEndHeavy,
                 "stop_work_message": stopWorkMessage,
                 "eye_reminder": eyeReminder,
+                "hydration_reminder": hydrationReminder,
             ]
         ]
     }
@@ -68,6 +72,7 @@ struct SpeechDraft: Codable, Equatable {
             "重提醒：\(focusEndHeavy)",
             "收工：\(stopWorkMessage)",
             "护眼：\(eyeReminder)",
+            "喝水：\(hydrationReminder)",
         ]
     }
 

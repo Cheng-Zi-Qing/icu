@@ -10,7 +10,8 @@ func validSpeechDraftJSONString() -> String {
   "focus_end_light": "抬头看远一点，再继续。",
   "focus_end_heavy": "已经持续很久了，先完整休息一下。",
   "stop_work_message": "今天先到这里。",
-  "eye_reminder": "看向远处，放松一下眼睛。"
+  "eye_reminder": "看向远处，放松一下眼睛。",
+  "hydration_reminder": "喝口水，慢一点也没关系。"
 }
 """#
 }
@@ -31,6 +32,7 @@ func testSpeechGenerationServiceUsesTextCapabilityAndReturnsDraft() throws {
 
     try expect(draft.statusIdle == "空闲待命", "speech service should decode the generated idle status")
     try expect(draft.stopWorkMessage == "今天先到这里。", "speech service should decode the generated stop work message")
+    try expect(draft.hydrationReminder == "喝口水，慢一点也没关系。", "speech service should decode the generated hydration reminder")
     try expect(transport.requestedProviders == [.ollama], "speech service should use the text capability only")
     try expect(transport.requestedPrompts.count == 1, "speech service should make exactly one generation request")
 
@@ -118,7 +120,8 @@ func testCopyOverrideStoreAppliesSpeechDraftAndPreservesUnrelatedOverrides() thr
         focusEndLight: "抬头看远一点，再继续。",
         focusEndHeavy: "已经持续很久了，先完整休息一下。",
         stopWorkMessage: "今天先到这里。",
-        eyeReminder: "看向远处，放松一下眼睛。"
+        eyeReminder: "看向远处，放松一下眼睛。",
+        hydrationReminder: "喝口水，慢一点也没关系。"
     )
 
     try store.applySpeechDraft(draft)
@@ -135,6 +138,10 @@ func testCopyOverrideStoreAppliesSpeechDraftAndPreservesUnrelatedOverrides() thr
     try expect(
         DesktopPetCopy.stopWorkMessage() == "今天先到这里。",
         "copy override store should reload the active catalog for transient pet copy"
+    )
+    try expect(
+        DesktopPetCopy.hydrationReminderMessage() == "喝口水，慢一点也没关系。",
+        "copy override store should reload the active catalog for hydration reminder copy"
     )
 }
 

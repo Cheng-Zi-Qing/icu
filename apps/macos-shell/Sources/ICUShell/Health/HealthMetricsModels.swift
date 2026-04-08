@@ -2,6 +2,7 @@ import Foundation
 
 enum HealthReminderType: String, Codable {
     case eyeCare = "eye_care"
+    case hydration
 }
 
 enum HealthReminderOutcome: String, Codable {
@@ -18,22 +19,31 @@ struct HealthReminderCounts: Codable {
     var skipped: Int
 
     static let empty = HealthReminderCounts(shown: 0, completed: 0, snoozed: 0, skipped: 0)
+
+    var completionRate: Double {
+        guard shown > 0 else {
+            return 0
+        }
+
+        return Double(completed) / Double(shown)
+    }
 }
 
 struct HealthDaySummary: Codable {
     var date: Date
     var eyeReminder: HealthReminderCounts
+    var hydrationReminder: HealthReminderCounts
     var workDuration: Int
     var focusCount: Int
     var focusDuration: Int
     var breakCount: Int
 
     var eyeReminderCompletionRate: Double {
-        guard eyeReminder.shown > 0 else {
-            return 0
-        }
+        eyeReminder.completionRate
+    }
 
-        return Double(eyeReminder.completed) / Double(eyeReminder.shown)
+    var hydrationReminderCompletionRate: Double {
+        hydrationReminder.completionRate
     }
 
     var hasActivity: Bool {
@@ -45,6 +55,10 @@ struct HealthDaySummary: Codable {
             || eyeReminder.completed > 0
             || eyeReminder.snoozed > 0
             || eyeReminder.skipped > 0
+            || hydrationReminder.shown > 0
+            || hydrationReminder.completed > 0
+            || hydrationReminder.snoozed > 0
+            || hydrationReminder.skipped > 0
     }
 }
 
@@ -53,6 +67,8 @@ struct HealthWeekSummary: Codable {
     var weekEndExclusiveDate: Date
     var eyeReminder: HealthReminderCounts
     var eyeReminderCompletionRate: Double
+    var hydrationReminder: HealthReminderCounts
+    var hydrationReminderCompletionRate: Double
     var workDuration: Int
     var focusCount: Int
     var focusDuration: Int

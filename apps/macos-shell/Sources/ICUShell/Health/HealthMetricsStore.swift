@@ -146,6 +146,7 @@ final class HealthMetricsStore {
                 return HealthDaySummary(
                     date: startOfDay,
                     eyeReminder: .empty,
+                    hydrationReminder: .empty,
                     workDuration: 0,
                     focusCount: 0,
                     focusDuration: 0,
@@ -167,22 +168,18 @@ final class HealthMetricsStore {
             let weekStart = calendar.date(from: weekComponents) ?? calendar.startOfDay(for: date)
             let weekEndExclusive = calendar.date(byAdding: .day, value: 7, to: weekStart) ?? weekStart
             let metrics = try loadMetrics(pendingDiagnostics: &pendingDiagnostics)
-            let counts = aggregateReminderCounts(from: weekStart, to: weekEndExclusive, metrics: metrics)
+            let eyeCounts = aggregateReminderCounts(for: .eyeCare, from: weekStart, to: weekEndExclusive, metrics: metrics)
+            let hydrationCounts = aggregateReminderCounts(for: .hydration, from: weekStart, to: weekEndExclusive, metrics: metrics)
             let sessionMetrics = aggregateSessionTotals(from: weekStart, to: weekEndExclusive, metrics: metrics)
             let days = makeDaySummaries(from: weekStart, to: weekEndExclusive, metrics: metrics)
-
-            let completionRate: Double
-            if counts.shown > 0 {
-                completionRate = Double(counts.completed) / Double(counts.shown)
-            } else {
-                completionRate = 0
-            }
 
             return HealthWeekSummary(
                 weekStartDate: weekStart,
                 weekEndExclusiveDate: weekEndExclusive,
-                eyeReminder: counts,
-                eyeReminderCompletionRate: completionRate,
+                eyeReminder: eyeCounts,
+                eyeReminderCompletionRate: eyeCounts.completionRate,
+                hydrationReminder: hydrationCounts,
+                hydrationReminderCompletionRate: hydrationCounts.completionRate,
                 workDuration: sessionMetrics.workDuration,
                 focusCount: sessionMetrics.focusCount,
                 focusDuration: sessionMetrics.focusDuration,
@@ -248,9 +245,14 @@ final class HealthMetricsStore {
         emitDiagnostics(pendingDiagnostics)
     }
 
-    private func aggregateReminderCounts(from start: Date, to end: Date, metrics: PersistedHealthMetricsDocument) -> HealthReminderCounts {
+    private func aggregateReminderCounts(
+        for type: HealthReminderType,
+        from start: Date,
+        to end: Date,
+        metrics: PersistedHealthMetricsDocument
+    ) -> HealthReminderCounts {
         let filtered = metrics.reminders.filter { reminder in
-            reminder.type == .eyeCare && reminder.shownAt >= start && reminder.shownAt < end
+            reminder.type == type && reminder.shownAt >= start && reminder.shownAt < end
         }
 
         var counts = HealthReminderCounts.empty
@@ -318,11 +320,13 @@ final class HealthMetricsStore {
         endingBefore end: Date,
         metrics: PersistedHealthMetricsDocument
     ) -> HealthDaySummary {
-        let counts = aggregateReminderCounts(from: start, to: end, metrics: metrics)
+        let eyeCounts = aggregateReminderCounts(for: .eyeCare, from: start, to: end, metrics: metrics)
+        let hydrationCounts = aggregateReminderCounts(for: .hydration, from: start, to: end, metrics: metrics)
         let sessionMetrics = aggregateSessionTotals(from: start, to: end, metrics: metrics)
         return HealthDaySummary(
             date: start,
-            eyeReminder: counts,
+            eyeReminder: eyeCounts,
+            hydrationReminder: hydrationCounts,
             workDuration: sessionMetrics.workDuration,
             focusCount: sessionMetrics.focusCount,
             focusDuration: sessionMetrics.focusDuration,

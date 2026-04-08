@@ -147,10 +147,10 @@ Desktop pet right-click menu while in focus or break:
 
 Current reminder behavior:
 
-- Entering `working` arms the eye-care reminder.
+- Entering `working` arms the eye-care and hydration reminders.
 - Entering `focus` pauses reminders.
 - Returning from `focus` or `break` re-arms reminders.
-- The migrated Swift shell currently ships the eye-care reminder; stretch, hydration, and report flows are not fully migrated yet.
+- The migrated Swift shell currently ships eye-care + hydration reminders plus the daily/weekly health report flow; stretch remains roadmap work.
 
 ### Model Workbench (`生成配置`)
 
@@ -257,7 +257,7 @@ The following runtime surfaces are now native Swift/AppKit and do not depend on 
 
 ## 📚 Scientific Foundation
 
-The research links below describe the broader product direction. In the current Swift shell, the eye-care reminder is the part that is already migrated and active. Stretch, hydration, and richer reporting remain roadmap work.
+The research links below describe the broader product direction. In the current Swift shell, eye-care and hydration reminders plus the health report flow are already active. Stretch and richer coaching remain roadmap work.
 
 ### 👁️ Eye Care Module: 20-20-20 Rule & Digital Eye Strain (DES)
 

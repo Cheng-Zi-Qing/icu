@@ -71,6 +71,10 @@ class DesktopPetView: NSView {
     private var copyObserver: NSObjectProtocol?
     var onOverlayLayoutModeChanged: ((OverlayLayoutMode) -> Void)?
 
+    override var mouseDownCanMoveWindow: Bool {
+        true
+    }
+
     // MARK: - Init
 
     init(
@@ -572,6 +576,16 @@ class DesktopPetView: NSView {
             }
         }
 
+        let fallbackHitView = super.hitTest(point)
+        if
+            fallbackHitView === statusLabel
+                || fallbackHitView === transientBubbleContainer
+                || fallbackHitView === transientBubbleLabel
+                || fallbackHitView === transientBubbleTail
+        {
+            return self
+        }
+
         guard let image = currentImage else { return super.hitTest(point) }
         guard let imagePoint = imagePixelPoint(for: point, image: image) else {
             return nil
@@ -582,7 +596,11 @@ class DesktopPetView: NSView {
             return nil  // 透明区域穿透
         }
 
-        return super.hitTest(point)
+        if fallbackHitView === imageView || fallbackHitView === self {
+            return self
+        }
+
+        return fallbackHitView
     }
 
     private func imagePixelPoint(for point: NSPoint, image: NSImage) -> NSPoint? {
@@ -621,6 +639,10 @@ class DesktopPetView: NSView {
     }
 
     // MARK: - 拖拽传递给 window
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
 
     override func mouseDown(with event: NSEvent) {
         window?.performDrag(with: event)

@@ -195,6 +195,26 @@ func testHealthReportWindowUsesTodayAccumulationTitle() throws {
     _ = try requireLabel(in: contentView, stringValue: "今日累计")
 }
 
+func testHealthReportWindowRendersHydrationReminderMetrics() throws {
+    _ = try makeInstalledThemeManager()
+    let controller = HealthReportWindowController(
+        todaySummary: makeFixtureTodaySummary(),
+        weekSummary: makeFixtureWeekSummary()
+    )
+
+    controller.showWindow(nil)
+
+    let contentView = try requireWindowContentView(of: controller)
+    _ = try requireLabelContaining(in: contentView, text: "喝水提醒")
+    _ = try requireLabelContaining(in: contentView, text: "喝水完成率")
+
+    let segmentedControl = try requireSegmentedControl(in: contentView, identifier: "healthReport.modeControl")
+    segmentedControl.setSelected(true, forSegment: 1)
+    controller.handleModeChange(segmentedControl)
+
+    _ = try requireLabelContaining(in: contentView, text: "本周喝水完成率")
+}
+
 @MainActor
 func testReminderCompleteAndSkipLogExpectedOutcomes() throws {
     let harness = try makeHealthFlowHarness()
@@ -332,6 +352,7 @@ private func makeFixtureTodaySummary() -> HealthDaySummary {
     HealthDaySummary(
         date: Date(timeIntervalSince1970: 1_744_000_000),
         eyeReminder: HealthReminderCounts(shown: 3, completed: 2, snoozed: 1, skipped: 0),
+        hydrationReminder: HealthReminderCounts(shown: 2, completed: 1, snoozed: 0, skipped: 1),
         workDuration: 5_400,
         focusCount: 2,
         focusDuration: 2_700,
@@ -344,6 +365,7 @@ private func makeFixtureWeekSummary() -> HealthWeekSummary {
     let secondDay = HealthDaySummary(
         date: firstDay.date.addingTimeInterval(86_400),
         eyeReminder: HealthReminderCounts(shown: 2, completed: 1, snoozed: 0, skipped: 1),
+        hydrationReminder: HealthReminderCounts(shown: 1, completed: 1, snoozed: 0, skipped: 0),
         workDuration: 1_800,
         focusCount: 1,
         focusDuration: 900,
@@ -353,6 +375,7 @@ private func makeFixtureWeekSummary() -> HealthWeekSummary {
         HealthDaySummary(
             date: firstDay.date.addingTimeInterval(TimeInterval(offset * 86_400)),
             eyeReminder: .empty,
+            hydrationReminder: .empty,
             workDuration: 0,
             focusCount: 0,
             focusDuration: 0,
@@ -365,6 +388,8 @@ private func makeFixtureWeekSummary() -> HealthWeekSummary {
         weekEndExclusiveDate: firstDay.date.addingTimeInterval(7 * 86_400),
         eyeReminder: HealthReminderCounts(shown: 5, completed: 3, snoozed: 1, skipped: 1),
         eyeReminderCompletionRate: 0.6,
+        hydrationReminder: HealthReminderCounts(shown: 3, completed: 2, snoozed: 0, skipped: 1),
+        hydrationReminderCompletionRate: 2.0 / 3.0,
         workDuration: 7_200,
         focusCount: 3,
         focusDuration: 3_600,

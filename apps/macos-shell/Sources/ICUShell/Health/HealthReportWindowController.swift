@@ -175,11 +175,11 @@ final class HealthReportWindowController: NSWindowController, NSWindowDelegate {
     }
 
     private func todaySummaryText() -> String {
-        "完成率 \(formatPercent(todaySummary.eyeReminderCompletionRate))，工作 \(formatDuration(todaySummary.workDuration))"
+        "护眼 \(formatPercent(todaySummary.eyeReminderCompletionRate)) / 喝水 \(formatPercent(todaySummary.hydrationReminderCompletionRate))，工作 \(formatDuration(todaySummary.workDuration))"
     }
 
     private func weekSummaryText() -> String {
-        "活跃 \(weekSummary.activeDayCount) 天，提醒完成率 \(formatPercent(weekSummary.eyeReminderCompletionRate))"
+        "活跃 \(weekSummary.activeDayCount) 天，护眼 \(formatPercent(weekSummary.eyeReminderCompletionRate)) / 喝水 \(formatPercent(weekSummary.hydrationReminderCompletionRate))"
     }
 
     private func todayMetricLines() -> [String] {
@@ -188,9 +188,10 @@ final class HealthReportWindowController: NSWindowController, NSWindowDelegate {
             "专注次数 \(todaySummary.focusCount)",
             "专注时长 \(formatDuration(todaySummary.focusDuration))",
             "休息次数 \(todaySummary.breakCount)",
-            "护眼提醒 已展示 \(todaySummary.eyeReminder.shown) / 已完成 \(todaySummary.eyeReminder.completed)",
-            "稍后 \(todaySummary.eyeReminder.snoozed) / 跳过 \(todaySummary.eyeReminder.skipped)",
-            "完成率 \(formatPercent(todaySummary.eyeReminderCompletionRate))",
+            reminderLine(title: "护眼提醒", counts: todaySummary.eyeReminder),
+            "护眼完成率 \(formatPercent(todaySummary.eyeReminderCompletionRate))",
+            reminderLine(title: "喝水提醒", counts: todaySummary.hydrationReminder),
+            "喝水完成率 \(formatPercent(todaySummary.hydrationReminderCompletionRate))",
         ]
     }
 
@@ -201,6 +202,7 @@ final class HealthReportWindowController: NSWindowController, NSWindowDelegate {
             "本周专注时长 \(formatDuration(weekSummary.focusDuration))",
             "本周休息次数 \(weekSummary.breakCount)",
             "护眼完成率 \(formatPercent(weekSummary.eyeReminderCompletionRate))",
+            "本周喝水完成率 \(formatPercent(weekSummary.hydrationReminderCompletionRate))",
             trendLine(),
         ]
     }
@@ -229,10 +231,15 @@ final class HealthReportWindowController: NSWindowController, NSWindowDelegate {
         if summary.focusDuration > 0 {
             return "专注 \(formatDuration(summary.focusDuration))"
         }
-        if summary.eyeReminder.shown > 0 {
-            return "提醒 \(summary.eyeReminder.shown)"
+        let reminderCount = summary.eyeReminder.shown + summary.hydrationReminder.shown
+        if reminderCount > 0 {
+            return "提醒 \(reminderCount)"
         }
         return "有活动"
+    }
+
+    private func reminderLine(title: String, counts: HealthReminderCounts) -> String {
+        "\(title) 已展示 \(counts.shown) / 已完成 \(counts.completed) / 稍后 \(counts.snoozed) / 跳过 \(counts.skipped)"
     }
 
     private func formatDuration(_ seconds: Int) -> String {
