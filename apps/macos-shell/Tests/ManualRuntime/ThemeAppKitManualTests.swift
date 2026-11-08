@@ -1179,6 +1179,41 @@ func testPetEdgeDockControllerDucksBehindEdgeThenPeeksOut() throws {
     try expect(!peeking, "grabbing a peeking pet should restore the normal pose")
 }
 
+/// 鼠标碰到探出来的头：先吓一跳（> < 眼、往后缩），再缩回边后，换正常形象滑出来
+func testPetEdgeDockControllerFlinchesBeforeDuckingBackIn() throws {
+    let screen = CGRect(x: 0, y: 25, width: 1440, height: 875)
+    let window = NSWindow(contentRect: NSRect(x: 1321, y: 300, width: 128, height: 152), styleMask: [.borderless], backing: .buffered, defer: true)
+    let mover = ImmediateWindowMover()
+    let scheduler = ManualHideScheduler()
+    var peeking = false
+    var events: [String] = []
+    let controller = PetEdgeDockController(
+        window: window,
+        settings: EdgeSnapSettings(isEnabled: true, snapDistance: 20, peekWidth: 40, autoHideDelay: 2),
+        bodyRectProvider: { peeking ? CGRect(x: 56, y: 8, width: 72, height: 112) : CGRect(x: 0, y: 4, width: 104, height: 116) },
+        visibleFrameProvider: { _ in screen },
+        mover: mover,
+        hideScheduler: scheduler
+    )
+    controller.canPeek = { true }
+    controller.onPeekChanged = { peeking = $0; events.append($0 ? "peek" : "normal") }
+    controller.onPeekFlinch = { events.append("flinch") }
+
+    controller.dragEnded()
+    scheduler.fire()
+    try expect(events == ["peek"], "no flinch while hiding (got \(events))")
+
+    controller.pointerEntered()
+    try expect(events == ["peek", "flinch", "normal"], "touching the head flinches first, then swaps back (got \(events))")
+    try expect(window.frame.origin == CGPoint(x: 1336, y: 300), "and still comes back out to the docked spot (got \(window.frame.origin))")
+
+    // 一直是正常形象时（没探头）碰它不会吓一跳
+    events.removeAll()
+    controller.pointerExited()
+    controller.overlayVisibilityChanged(true)
+    try expect(!events.contains("flinch"), "only a peeking head flinches (got \(events))")
+}
+
 func testPetEdgeDockControllerDoesNothingWhenDisabled() throws {
     let window = NSWindow(contentRect: NSRect(x: 1321, y: 300, width: 128, height: 128), styleMask: [.borderless], backing: .buffered, defer: true)
     let scheduler = ManualHideScheduler()

@@ -7,6 +7,8 @@ import { tmpdir } from 'node:os';
 import { DEFAULT_MODEL, PALETTE } from './model.mjs';
 import { allFrames, birdVisitOptions, napOptions, pettedOptions, renderPose, resolvePose, yuzuWobbleOptions } from './render.mjs';
 import { Grid } from './raster.mjs';
+import { renderFrontPeek, renderFrontUpright } from './front-peek.mjs';
+import { OUTFIT_HEADWEAR } from './headwear.mjs';
 import { CURSOR_POINT_SIZE, CURSOR_SIZE, cursorDefinitions, cursorManifest } from './cursors.mjs';
 import { validateModel } from './validate.mjs';
 import {
@@ -140,7 +142,8 @@ test('validation rejects odd rotations', () => {
 });
 
 test('every frame is 32 rows and the head looks the same size in every pose', () => {
-  for (const [path, grid] of allFrames(DEFAULT_MODEL)) assert.equal(grid.height, 32, path);
+  // ui/item_*.png 是衣柜格子里的 16×16 小图，不是宠物帧
+  for (const [path, grid] of allFrames(DEFAULT_MODEL)) if (!path.startsWith('ui/item_')) assert.equal(grid.height, 32, path);
   for (const name of ['sit', 'lie', 'hold']) assert.equal(resolvePose(DEFAULT_MODEL, name).head.scale ?? 1, 1, name);
 });
 
@@ -187,6 +190,77 @@ test('peek reach frame pokes out a little further', () => {
   const rest = Math.min(...opaqueColumns(renderPose(DEFAULT_MODEL, 'peek', {})));
   const reach = Math.min(...opaqueColumns(renderPose(DEFAULT_MODEL, 'peek', { reach: true })));
   assert.equal(rest - reach, DEFAULT_MODEL.poses.peek.reachPixels);
+});
+
+const leftmostColumn = (grid) => {
+  for (let x = 0; x < grid.width; x += 1) {
+    for (let y = 0; y < grid.height; y += 1) if (grid.get(x, y) !== 'clear') return x;
+  }
+  return -1;
+};
+const inkCount = (grid, ink) => grid.cells.filter((c) => c === ink).length;
+
+test('front peek lies flush against the right screen edge in every frame', () => {
+  for (const opts of [{}, { blink: true }, { reach: true }]) {
+    const peek = renderFrontPeek(opts);
+    assert.equal(peek.width, 32);
+    assert.equal(peek.height, 32);
+    assert.ok(opaqueColumns(peek).has(31), `paws touch the screen edge (${JSON.stringify(opts)})`);
+  }
+});
+
+test('front peek shows the whole face: orange, both cheeks and both eyes', () => {
+  const peek = renderFrontPeek({});
+  assert.ok(inkCount(peek, 'orange') > 0, 'orange on the head');
+  assert.ok(inkCount(peek, 'blush') >= 4, 'two blushing cheeks');
+  assert.equal(inkCount(peek, 'white') >= 3, true, 'two eye highlights plus the orange highlight');
+});
+
+test('front peek head top points into the screen (turned 90 degrees)', () => {
+  const peek = renderFrontPeek({});
+  const orangeColumns = [];
+  peek.cells.forEach((c, i) => { if (c === 'orange') orangeColumns.push(i % 32); });
+  assert.ok(Math.max(...orangeColumns) < 31 - 8, 'the orange sits away from the edge');
+  assert.ok(Math.min(...orangeColumns) <= leftmostColumn(peek) + 2, 'the orange is the part sticking out furthest');
+});
+
+test('front peek head is about as big as the side head-turn frame', () => {
+  const size = (g) => { const c = opaqueColumns(g); return Math.max(...c) - Math.min(...c) + 1; };
+  const rows = (g) => { const r = []; g.cells.forEach((c, i) => { if (c !== 'clear') r.push(Math.floor(i / 32)); }); return Math.max(...r) - Math.min(...r) + 1; };
+  const front = renderFrontPeek({});
+  const side = renderPose(DEFAULT_MODEL, 'peek', {});
+  assert.ok(size(front) - size(side) <= 6, `sticks out about as far (only the orange on top adds a few pixels) (${size(front)} vs ${size(side)})`);
+  assert.ok(Math.abs(rows(front) - rows(side)) <= 3, `about as tall (${rows(front)} vs ${rows(side)})`);
+});
+
+test('front peek blink closes the eyes and reach pokes out one pixel further', () => {
+  assert.ok(inkCount(renderFrontPeek({ blink: true }), 'white') < inkCount(renderFrontPeek({}), 'white'), 'no eye highlights while blinking');
+  assert.equal(leftmostColumn(renderFrontPeek({})) - leftmostColumn(renderFrontPeek({ reach: true })), 1);
+});
+
+test('front peek flinch squeezes the eyes shut and ducks one pixel toward the edge', () => {
+  const rest = renderFrontPeek({});
+  const flinch = renderFrontPeek({ flinch: true });
+  assert.equal(leftmostColumn(flinch) - leftmostColumn(rest), 1, 'the head sinks one pixel behind the edge');
+  assert.equal(inkCount(flinch, 'white'), 1, 'no eye highlights, only the orange shine');
+  assert.ok(opaqueColumns(flinch).has(31), 'the paws still hold the edge');
+  const eyeInk = (g) => inkCount(g, 'outline');
+  assert.notDeepEqual(flinch.cells, renderFrontPeek({ blink: true }).cells, 'squeezed eyes are not a plain blink');
+  assert.ok(eyeInk(flinch) > 0);
+});
+
+test('edge frames: front peek plus a side head-turn pair', () => {
+  const names = allFrames(DEFAULT_MODEL).map(([name]) => name).filter((n) => n.startsWith('edge/'));
+  assert.deepEqual(names, ['edge/peek_0.png', 'edge/peek_1.png', 'edge/peek_2.png', 'edge/peek_3.png', 'edge/turn_0.png', 'edge/turn_1.png']);
+});
+
+test('settings title bar decoration is the upright front peek with paws on the bottom edge', () => {
+  const frames = new Map(allFrames(DEFAULT_MODEL));
+  const bar = frames.get('ui/bar_peek.png');
+  assert.ok(bar, 'ui/bar_peek.png is generated');
+  assert.deepEqual(bar.cells, renderFrontUpright({}).cells);
+  const bottom = Array.from({ length: 32 }, (_, x) => bar.get(x, 31)).filter((c) => c !== 'clear');
+  assert.ok(bottom.length >= 6, 'paws rest on the bottom edge');
 });
 
 test('lying pose is long and low', () => {
@@ -387,7 +461,8 @@ test('saving validates, writes pose.json and regenerates frames', async () => {
     const edited = setIn(DEFAULT_MODEL, ['poses', 'peek', 'offsetX'], 7);
     const res = await (await post(JSON.stringify({ model: edited }))).json();
     assert.equal(res.success, true);
-    assert.equal(res.data.frames, allFrames(DEFAULT_MODEL).length);
+    const outfitFrames = OUTFIT_HEADWEAR.reduce((n, headwear) => n + allFrames(DEFAULT_MODEL, { headwear }).length, 0);
+    assert.equal(res.data.frames, allFrames(DEFAULT_MODEL).length + outfitFrames);
     assert.equal(JSON.parse(readFileSync(join(dir, 'pose.json'), 'utf8')).poses.peek.offsetX, 7);
     assert.ok(existsSync(join(dir, 'assets/edge/peek_0.png')));
     assert.ok(existsSync(join(dir, 'assets/base.png')));

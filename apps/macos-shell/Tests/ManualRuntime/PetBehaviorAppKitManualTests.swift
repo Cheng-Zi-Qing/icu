@@ -323,3 +323,22 @@ private func require<T>(_ value: T?, _ message: String) throws -> T {
     guard let value else { throw TestFailure(message: message) }
     return value
 }
+
+func testPetGazeControllerSitsFacingTheMiddleOfTheScreen() throws {
+    var now: TimeInterval = 0
+    var facingRight = true
+    let controller = PetGazeController(
+        bodyFrameOnScreen: { CGRect(x: 1200, y: 100, width: 104, height: 116) },
+        isFacingRight: { facingRight },
+        onTurn: { facingRight = $0 },
+        cursor: { CGPoint(x: 100, y: 800) },
+        screenFrame: { _ in CGRect(x: 0, y: 0, width: 1440, height: 900) },
+        now: { now },
+        startsTimer: false
+    )
+    try expect(controller.homeFacingRight(body: CGRect(x: 1200, y: 100, width: 104, height: 116)) == false, "right half → home is facing left")
+    controller.tick()
+    now += PetGazeTracker.cooldown + PetGazeTracker.dwell
+    controller.tick()
+    try expect(!facingRight, "on the right half of the screen, with the cursor far away, it should sit facing left")
+}

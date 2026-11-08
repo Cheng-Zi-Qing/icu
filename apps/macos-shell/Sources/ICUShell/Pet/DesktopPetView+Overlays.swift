@@ -122,8 +122,9 @@ extension DesktopPetView {
     }
 
     func layoutReminderCard() {
-        let width = min(max(120, bounds.width - 12), 220)
-        let height = LayoutMetrics.reminderCardHeight
+        // 窗口只有 128 宽：卡片几乎贴满，左右各留 2pt
+        let width = min(bounds.width - 4, 200)
+        let height = reminderCardView.preferredHeight
         let y: CGFloat
         if usesExpandedReminderLayout {
             y = petStageTop + LayoutMetrics.reminderGap
@@ -202,7 +203,6 @@ extension DesktopPetView {
         transientBubbleTail.layer?.cornerRadius = 1
         transientBubbleTail.layer?.setAffineTransform(CGAffineTransform(rotationAngle: .pi / 4))
         layoutTransientBubble()
-        reminderCardView.applyTheme(theme)
         layoutReminderCard()
         updateToolTipForVisibleContent()
     }

@@ -4,6 +4,8 @@ struct ReminderPresentationPayload {
     let id: UUID
     let type: HealthReminderType
     let text: String
+    /// 护眼提醒要休息多久（提醒卡倒计时用）
+    var restSeconds: TimeInterval = 20
 }
 
 @MainActor
@@ -11,8 +13,9 @@ final class ReminderScheduler {
     private(set) var isEyeReminderArmed = false
     private(set) var isHydrationReminderArmed = false
 
-    private let eyeInterval: TimeInterval
-    private let hydrationInterval: TimeInterval
+    private(set) var eyeInterval: TimeInterval
+    private(set) var hydrationInterval: TimeInterval
+    private(set) var eyeRestSeconds: TimeInterval = 20
     private let snoozeInterval: TimeInterval
     private let onReminder: ((ReminderPresentationPayload) -> Void)?
     private let onEyeReminder: (() -> Void)?
@@ -67,6 +70,15 @@ final class ReminderScheduler {
         cancelSnoozeReminders()
     }
 
+    /// 设置里改了间隔：已经在计时的提醒按新间隔重新计时，没在计时的不动
+    func updateIntervals(eye: TimeInterval, hydration: TimeInterval, eyeRest: TimeInterval = 20) {
+        eyeInterval = eye
+        hydrationInterval = hydration
+        eyeRestSeconds = eyeRest
+        if isEyeReminderArmed { armEyeReminder() }
+        if isHydrationReminderArmed { armHydrationReminder() }
+    }
+
     func scheduleSnooze(for payload: ReminderPresentationPayload) {
         cancelSnoozeReminder(for: payload.id)
 
@@ -93,7 +105,8 @@ final class ReminderScheduler {
                 ReminderPresentationPayload(
                     id: UUID(),
                     type: .eyeCare,
-                    text: DesktopPetCopy.eyeReminderMessage()
+                    text: DesktopPetCopy.eyeReminderMessage(),
+                    restSeconds: self.eyeRestSeconds
                 )
             )
             self.armEyeReminder()

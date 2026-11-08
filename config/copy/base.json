@@ -7,7 +7,9 @@
     "take_break": "暂离",
     "resume_working": "回来工作",
     "stop_work": "下班",
-    "hide_pet": "隐藏桌宠"
+    "hide_pet": "隐藏桌宠",
+    "open_wardrobe": "衣柜",
+    "open_settings": "设置…"
   },
   "pet": {
     "status_idle": "待机中",
@@ -18,10 +20,7 @@
     "focus_end_heavy": "这一段够久了，先休息一下。",
     "stop_work_message": "收工，歇会儿。",
     "eye_reminder": "看看远处，护护眼。",
-    "hydration_reminder": "喝口水，慢慢来。",
-    "reminder_complete_action": "已完成",
-    "reminder_snooze_action": "稍后提醒",
-    "reminder_skip_action": "跳过"
+    "hydration_reminder": "喝口水，慢慢来。"
   },
   "errors": {
     "work_invalid_transition": "当前状态下不能执行这个操作。",

@@ -6,21 +6,31 @@ struct DragPhysicsConfig {
     /// 按下后移动超过该距离才算拖拽，否则视为点击
     var dragThreshold: CGFloat = 3
     /// 拎着不动时的麻糬拉长量（相对原高度）
-    var holdStretch: CGFloat = 0.10
-    /// 向上甩时额外拉长的上限
-    var maxExtraStretch: CGFloat = 0.06
-    /// 每 1pt/s 向上速度带来的额外拉长
-    var stretchPerUpwardVelocity: CGFloat = 0.0001
-    /// 钟摆最大角度（度）
-    var maxSwingDegrees: CGFloat = 18
+    var holdStretch: CGFloat = 0.14
+    /// 甩得快时额外拉长的上限
+    var maxExtraStretch: CGFloat = 0.16
+    /// 每 1pt/s 指针速度（任意方向）带来的额外拉长
+    var stretchPerSpeed: CGFloat = 0.00025
+    /// 钟摆最大角度（度）：夸张一点，甩起来整个身子荡出去
+    var maxSwingDegrees: CGFloat = 40
     /// 每 1pt/s 横向速度对应的目标摆角（度）
-    var swingPerVelocity: CGFloat = 0.03
-    var swingStiffness: CGFloat = 140
-    var swingDamping: CGFloat = 9
-    var stretchStiffness: CGFloat = 200
-    var stretchDamping: CGFloat = 16
-    /// 没有新的移动事件时，指针速度的衰减速率（1/s）
-    var velocityDecay: CGFloat = 10
+    var swingPerVelocity: CGFloat = 0.07
+    /// 摆的弹簧够硬（固有频率约 4Hz），鼠标晃多快身子就晃多快；
+    /// 阻尼比约 0.4，鼠标一停还会来回荡两下
+    var swingStiffness: CGFloat = 700
+    var swingDamping: CGFloat = 22
+    /// 波浪感：下半身是另一根更软的弹簧，追着上半身的摆角跑，慢半拍、还会甩过头。
+    /// 两者之差就是身体弯的程度，挑对应歪向的像素帧
+    var tailStiffness: CGFloat = 260
+    var tailDamping: CGFloat = 8
+    var maxBendDegrees: CGFloat = 16
+    /// Q 弹感：拉长弹簧阻尼很小（阻尼比约 0.15），一拎起来先拉过头再缩回去，boing 两下
+    var stretchStiffness: CGFloat = 260
+    var stretchDamping: CGFloat = 5
+    /// 甩得越猛身子越被甩长：每 1°/s 摆动速度带来的额外拉长
+    var stretchPerSwingSpeed: CGFloat = 0.0008
+    /// 没有新的移动事件时，指针速度的衰减速率（1/s）：鼠标一停就算停，身子才会往前荡过头
+    var velocityDecay: CGFloat = 25
     /// 横向速度超过它才算“甩”了一下
     var shakeSpeed: CGFloat = 350
     /// 在 dizzyWindow 秒内换向这么多次就甩晕
@@ -51,6 +61,8 @@ struct DragOutput: Equatable {
     var stretchY: CGFloat
     /// 钟摆角度（度），负数表示下半身往左
     var swingDegrees: CGFloat
+    /// 下半身相对上半身多弯了多少（度），负数表示更往左；拿来挑歪向帧，做出波浪
+    var bendDegrees: CGFloat = 0
     /// 以脚底为锚的纵向压扁，1 表示不变
     var landingSquash: CGFloat
 
@@ -77,6 +89,8 @@ struct DragPhysics {
     private var velocity = CGVector(dx: 0, dy: 0)
     private var swingAngle: CGFloat = 0
     private var swingVelocity: CGFloat = 0
+    private var tailAngle: CGFloat = 0
+    private var tailVelocity: CGFloat = 0
     private var stretch: CGFloat = 0
     private var stretchVelocity: CGFloat = 0
     private var shakeDirection = 0
@@ -188,7 +202,7 @@ struct DragPhysics {
             let pose: DragPose = isDizzy(at: time)
                 ? .dizzy(tilt: tilt, twinkle: twinkle(at: time))
                 : .hold(tilt: tilt)
-            return DragOutput(pose: pose, stretchY: 1 + stretch, swingDegrees: swingAngle, landingSquash: 1)
+            return DragOutput(pose: pose, stretchY: 1 + stretch, swingDegrees: swingAngle, bendDegrees: bend, landingSquash: 1)
         case let .settling(releasedAt):
             let elapsed = time - releasedAt
             let pose: DragPose
@@ -210,8 +224,12 @@ struct DragPhysics {
 
     // MARK: - Private
 
+    private var bend: CGFloat {
+        max(-config.maxBendDegrees, min(config.maxBendDegrees, tailAngle - swingAngle))
+    }
+
     private var tilt: Int {
-        let normalized = swingAngle / max(config.maxSwingDegrees, 1) * 2
+        let normalized = bend / max(config.maxBendDegrees, 1) * 2
         return max(-2, min(2, Int(normalized.rounded())))
     }
 
@@ -264,12 +282,22 @@ struct DragPhysics {
             ? max(-config.maxSwingDegrees, min(config.maxSwingDegrees, -next.velocity.dx * config.swingPerVelocity))
             : 0
         let swingAcceleration = config.swingStiffness * (swingTarget - swingAngle) - config.swingDamping * swingVelocity
-        next.swingVelocity = swingVelocity + swingAcceleration * dt
-        next.swingAngle = max(-config.maxSwingDegrees, min(config.maxSwingDegrees, swingAngle + next.swingVelocity * dt))
+        let swingVelocity = swingVelocity + swingAcceleration * dt
+        let swingAngle = swingAngle + swingVelocity * dt
+        next.swingAngle = max(-config.maxSwingDegrees, min(config.maxSwingDegrees, swingAngle))
+        // 顶到最大角度就停在那里，不攒着速度（否则松开限位时会猛地弹回来）
+        next.swingVelocity = next.swingAngle == swingAngle ? swingVelocity : 0
 
-        let upwardExtra = max(0, min(config.maxExtraStretch, next.velocity.dy * config.stretchPerUpwardVelocity))
-        let stretchTarget = dragging ? config.holdStretch + upwardExtra : 0
-        let stretchAcceleration = config.stretchStiffness * (stretchTarget - stretch) - config.stretchDamping * stretchVelocity
+        let tailAcceleration = config.tailStiffness * (next.swingAngle - tailAngle) - config.tailDamping * tailVelocity
+        next.tailVelocity = tailVelocity + tailAcceleration * dt
+        next.tailAngle = tailAngle + next.tailVelocity * dt
+
+        let speed = hypot(next.velocity.dx, next.velocity.dy)
+        let fling = speed * config.stretchPerSpeed + abs(next.swingVelocity) * config.stretchPerSwingSpeed
+        let stretchTarget = dragging ? config.holdStretch + min(config.maxExtraStretch, fling) : 0
+        // 放下后不再弹：临界阻尼，落地前干脆地缩回原样
+        let damping = dragging ? config.stretchDamping : 2 * config.stretchStiffness.squareRoot()
+        let stretchAcceleration = config.stretchStiffness * (stretchTarget - stretch) - damping * stretchVelocity
         next.stretchVelocity = stretchVelocity + stretchAcceleration * dt
         let maxStretch = config.holdStretch + config.maxExtraStretch
         next.stretch = max(-maxStretch, min(maxStretch, stretch + next.stretchVelocity * dt))
@@ -283,6 +311,8 @@ struct DragPhysics {
         next.velocity = CGVector(dx: 0, dy: 0)
         next.swingAngle = 0
         next.swingVelocity = 0
+        next.tailAngle = 0
+        next.tailVelocity = 0
         next.stretch = phase == .dragging ? config.holdStretch : 0
         next.stretchVelocity = 0
         return next
@@ -301,5 +331,22 @@ extension DragPose {
     var isLanding: Bool {
         if case .landing = self { return true }
         return false
+    }
+
+    /// 悬在半空（拎着、甩晕）：这时整只画在更大的拎起窗口里，跟着摆角转
+    var isLifted: Bool {
+        switch self {
+        case .hold, .dizzy: return true
+        case .none, .landing: return false
+        }
+    }
+
+    /// 镜像显示（朝右）时，画出来的歪向也反过来，所以要取反方向的那张帧
+    var mirrored: DragPose {
+        switch self {
+        case let .hold(tilt): return .hold(tilt: -tilt)
+        case let .dizzy(tilt, twinkle): return .dizzy(tilt: -tilt, twinkle: twinkle)
+        case .none, .landing: return self
+        }
     }
 }

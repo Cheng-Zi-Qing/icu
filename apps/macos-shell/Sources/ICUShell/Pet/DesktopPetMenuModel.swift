@@ -6,6 +6,8 @@ enum DesktopPetMenuAction: String, Equatable {
     case takeBreak
     case resumeWorking
     case stopWork
+    case openWardrobe
+    case openSettings
     case closeWindow
     case quitApp
 
@@ -21,6 +23,10 @@ enum DesktopPetMenuAction: String, Equatable {
             return TextCatalog.shared.text(.menuResumeWorking)
         case .stopWork:
             return TextCatalog.shared.text(.menuStopWork)
+        case .openWardrobe:
+            return TextCatalog.shared.text(.menuOpenWardrobe)
+        case .openSettings:
+            return TextCatalog.shared.text(.menuOpenSettings)
         case .closeWindow:
             return TextCatalog.shared.text(.menuHidePet)
         case .quitApp:
@@ -37,16 +43,19 @@ struct DesktopPetMenuModel: Equatable {
         case .idle:
             return [
                 [.startWork],
+                [.openWardrobe, .openSettings],
                 [.closeWindow, .quitApp],
             ]
         case .working:
             return [
                 [.enterFocus, .takeBreak, .stopWork],
+                [.openWardrobe, .openSettings],
                 [.closeWindow, .quitApp],
             ]
         case .focus, .breakState:
             return [
                 [.resumeWorking, .stopWork],
+                [.openWardrobe, .openSettings],
                 [.closeWindow, .quitApp],
             ]
         }

@@ -19,6 +19,7 @@ final class ContextMenuPanelController {
 
     func present(
         from model: DesktopPetMenuModel,
+        summary: MenuTodaySummary? = nil,
         event: NSEvent,
         in contentView: NSView
     ) {
@@ -27,7 +28,7 @@ final class ContextMenuPanelController {
         }
 
         let sections = makeSections(from: model)
-        let panel = ThemedMenuPanel(sections: sections) { [weak self] id in
+        let panel = ThemedMenuPanel(sections: sections, summary: summary) { [weak self] id in
             guard
                 let self,
                 let action = DesktopPetMenuAction(rawValue: id)
@@ -39,7 +40,7 @@ final class ContextMenuPanelController {
             self.onAction(action)
         }
 
-        let size = ThemedMenuPanel.preferredSize(for: sections)
+        let size = ThemedMenuPanel.preferredSize(for: sections, hasSummary: summary != nil)
         let clickPoint = window.convertPoint(toScreen: event.locationInWindow)
         let frame = NSRect(
             x: clickPoint.x - 12,
@@ -63,10 +64,18 @@ final class ContextMenuPanelController {
                     ThemedMenuPanelItem(
                         id: action.rawValue,
                         title: action.title,
-                        tone: action == .quitApp ? .destructive : .standard
+                        tone: Self.tone(for: action)
                     )
                 }
             )
+        }
+    }
+
+    private static func tone(for action: DesktopPetMenuAction) -> ThemedMenuPanelItem.Tone {
+        switch action {
+        case .startWork, .resumeWorking: return .primary
+        case .quitApp: return .destructive
+        default: return .standard
         }
     }
 }

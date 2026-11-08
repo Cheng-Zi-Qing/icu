@@ -9,6 +9,7 @@ final class PetGazeController {
 
     private let bodyFrameOnScreen: () -> CGRect?
     private let isFacingRight: () -> Bool
+    private let screenFrame: (CGRect) -> CGRect?
     private let onTurn: (Bool) -> Void
     private let cursor: () -> CGPoint
     private let now: () -> TimeInterval
@@ -20,6 +21,7 @@ final class PetGazeController {
         isFacingRight: @escaping () -> Bool,
         onTurn: @escaping (Bool) -> Void,
         cursor: @escaping () -> CGPoint = { NSEvent.mouseLocation },
+        screenFrame: @escaping (CGRect) -> CGRect? = PetGazeController.visibleFrame(containing:),
         now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
         startsTimer: Bool = true
     ) {
@@ -27,6 +29,7 @@ final class PetGazeController {
         self.isFacingRight = isFacingRight
         self.onTurn = onTurn
         self.cursor = cursor
+        self.screenFrame = screenFrame
         self.now = now
         guard startsTimer else { return }
         let timer = Timer(timeInterval: Self.pollInterval, repeats: true) { [weak self] _ in
@@ -45,10 +48,21 @@ final class PetGazeController {
             tracker = tracker.paused()
             return
         }
-        let (next, turn) = tracker.observing(cursor: cursor(), body: body, facingRight: isFacingRight(), at: now())
+        let home = homeFacingRight(body: body)
+        let (next, turn) = tracker.observing(cursor: cursor(), body: body, facingRight: isFacingRight(), homeFacingRight: home, at: now())
         tracker = next
         if let turn {
             onTurn(turn)
         }
+    }
+
+    /// 在屏幕哪半边就朝屏幕中间（放下桌宠、开机时也用）
+    func homeFacingRight(body: CGRect) -> Bool? {
+        screenFrame(body).map { PetGazeTracker.homeFacingRight(body: body, screen: $0) }
+    }
+
+    static func visibleFrame(containing rect: CGRect) -> CGRect? {
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        return (NSScreen.screens.first { $0.frame.contains(center) } ?? NSScreen.main)?.visibleFrame
     }
 }

@@ -110,6 +110,21 @@ func testDesktopPetStatusChipHidesWhilePeekingFromTheEdge() throws {
     try expect(!chip.isHidden, "status chip should come back when the pet slides back out")
 }
 
+func testDesktopPetFlinchFreezesOnTheFlinchFrame() throws {
+    let view = try makePeekablePetView()
+    view.flinchPeek()
+    try expect(view.shownPeekFrame == nil, "a pet that is not peeking does not flinch")
+
+    view.setEdgePeek(true)
+    try expect(view.shownPeekFrame == .rest, "peeking starts on the rest frame")
+    view.flinchPeek()
+    try expect(view.shownPeekFrame == .flinch, "touching it shows the flinch frame")
+    try expect(view.peekTimer == nil, "the idle peek loop stops so the flinch is not overwritten")
+
+    view.setEdgePeek(false)
+    try expect(view.shownPeekFrame == nil, "leaving the peek pose clears the peek frame")
+}
+
 /// Core Animation 会按深度给同级图层排序：桌宠图层带上 3D 变换（以前的悬停偏头就是）时，
 /// 往前倾的那半边身体会盖住状态标签 / 气泡 / 提醒卡片，所以这些浮层必须固定在更前面。
 /// 用以前偏头的最大幅度当最坏情况。

@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { DEFAULT_MODEL } from './model.mjs';
 import { encodePNG } from './png.mjs';
 import { allFrames, GENERATED_DIRECTORIES, renderPose } from './render.mjs';
+import { OUTFIT_HEADWEAR } from './headwear.mjs';
 import { CURSOR_SCALE, cursorDefinitions, cursorManifest } from './cursors.mjs';
 import { validateModel } from './validate.mjs';
 
@@ -32,17 +33,28 @@ function writeCursors(assetsDir) {
   writeFileSync(join(dir, 'cursors.json'), `${JSON.stringify(cursorManifest(), null, 2)}\n`);
 }
 
-/** 写全部素材帧（和像素光标），返回写入的帧数 */
-export function writeAssets(model, assetsDir = DEFAULT_ASSETS) {
-  for (const sub of GENERATED_DIRECTORIES) rmSync(join(assetsDir, sub), { recursive: true, force: true });
-  writeCursors(assetsDir);
-  const frames = allFrames(model);
+function writeFrames(frames, dir) {
   for (const [path, grid] of frames) {
-    const target = join(assetsDir, path);
+    const target = join(dir, path);
     mkdirSync(dirname(target), { recursive: true });
     writeFileSync(target, encodePNG(grid));
   }
   return frames.length;
+}
+
+/**
+ * 写全部素材帧（和像素光标），返回写入的帧数。
+ * 默认装扮（橙子）的帧在根目录；其他头顶装扮各一整套，放在 outfits/<装扮>/ 下，光标共用
+ */
+export function writeAssets(model, assetsDir = DEFAULT_ASSETS) {
+  for (const sub of GENERATED_DIRECTORIES) rmSync(join(assetsDir, sub), { recursive: true, force: true });
+  rmSync(join(assetsDir, 'outfits'), { recursive: true, force: true });
+  writeCursors(assetsDir);
+  const base = writeFrames(allFrames(model), assetsDir);
+  return OUTFIT_HEADWEAR.reduce(
+    (count, headwear) => count + writeFrames(allFrames(model, { headwear }), join(assetsDir, 'outfits', headwear)),
+    base,
+  );
 }
 
 /** 8 倍预览，含完整的趴姿（不截断） */

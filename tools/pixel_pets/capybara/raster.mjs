@@ -5,6 +5,7 @@
 export const INKS = [
   'clear', 'outline', 'body', 'shade', 'light', 'dark', 'muzzle', 'belly',
   'white', 'blush', 'grass', 'sweat', 'star', 'dust', 'bird', 'birdWing', 'orange',
+  'straw', 'strawShade', 'band',
 ];
 
 export class Grid {

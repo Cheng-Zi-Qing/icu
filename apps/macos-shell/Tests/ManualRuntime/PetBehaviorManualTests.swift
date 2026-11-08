@@ -150,6 +150,31 @@ func testGazeWaitsBetweenTurns() throws {
     try expect(second == [false], "turns back once the cooldown is over (got \(second))")
 }
 
+func testGazeHomeFacingLooksTowardTheMiddleOfTheScreen() throws {
+    let screen = CGRect(x: 0, y: 0, width: 1440, height: 900)
+    let onRight = CGRect(x: 1200, y: 100, width: 104, height: 116)
+    let onLeft = CGRect(x: 80, y: 100, width: 104, height: 116)
+    try expect(PetGazeTracker.homeFacingRight(body: onRight, screen: screen) == false, "on the right half it should sit facing left")
+    try expect(PetGazeTracker.homeFacingRight(body: onLeft, screen: screen) == true, "on the left half it should sit facing right")
+}
+
+func testGazeTurnsBackHomeOnceTheCursorWandersOff() throws {
+    let far = CGPoint(x: gazeBody.maxX + PetGazeTracker.attentionRadius + 300, y: gazeBody.midY)
+    let samples = [(far, 0.0), (far, PetGazeTracker.cooldown), (far, PetGazeTracker.cooldown + PetGazeTracker.dwell)]
+    let (_, turns) = samples.reduce((PetGazeTracker(), [Bool]())) { state, sample in
+        let (next, turn) = state.0.observing(cursor: sample.0, body: gazeBody, facingRight: true, homeFacingRight: false, at: sample.1)
+        return (next, state.1 + (turn.map { [$0] } ?? []))
+    }
+    try expect(turns == [false], "with the cursor gone it should turn back toward the middle of the screen (got \(turns))")
+
+    let onBody = CGPoint(x: gazeBody.midX, y: gazeBody.midY)
+    let (_, petting) = [(onBody, 0.0), (onBody, 2.0), (onBody, 3.0)].reduce((PetGazeTracker(), [Bool]())) { state, sample in
+        let (next, turn) = state.0.observing(cursor: sample.0, body: gazeBody, facingRight: true, homeFacingRight: false, at: sample.1)
+        return (next, state.1 + (turn.map { [$0] } ?? []))
+    }
+    try expect(petting.isEmpty, "while the cursor rests on it (petting) it should not spin around")
+}
+
 func testGazeTrackerDoesNotChangeTheOriginal() throws {
     let original = PetGazeTracker()
     _ = original.observing(cursor: CGPoint(x: 2000, y: 360), body: gazeBody, facingRight: false, at: 0)

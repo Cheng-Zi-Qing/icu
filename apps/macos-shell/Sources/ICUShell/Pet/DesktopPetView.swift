@@ -25,7 +25,7 @@ class DesktopPetView: NSView {
         static let transientBubbleTailSize: CGFloat = 8
         static let transientBubbleGap: CGFloat = 6
         static let transientBubbleTopInset: CGFloat = 8
-        static let reminderCardHeight: CGFloat = 108
+        static let reminderCardHeight: CGFloat = ReminderCardView.maximumHeight
         static let reminderGap: CGFloat = 8
         static let reminderTopInset: CGFloat = 8
         static let statusChipMargin: CGFloat = 8
@@ -67,6 +67,8 @@ class DesktopPetView: NSView {
     let animationPlayer = PetAnimationPlayer()
     let variantIndexProvider: (Int) -> Int
     var petID: String
+    /// 衣柜里换的装（头顶那件对应的整套帧，`outfits/<id>/`）；nil = 默认的橙子
+    private(set) var outfitID: String?
     var currentWorkState: ShellWorkState = .idle
     var currentAnimationStateID = "idle"
     var currentAnimationVariant: PetAnimationDescriptor?
@@ -77,6 +79,8 @@ class DesktopPetView: NSView {
     var isShowingDragPose = false
     /// 贴左边时镜像，让脸朝屏幕里
     private(set) var isFacingRight = false
+    /// 拎在半空时用的大画框（第一次拎起时才创建）
+    private(set) var liftWindow: PetLiftWindow?
     /// 当前上屏图的原图（未镜像）与实际上屏的图
     var presentedSource: NSImage?
     var presentedImage: NSImage?
@@ -85,8 +89,10 @@ class DesktopPetView: NSView {
     /// 贴边探头
     var peekFrames: PetPeekFrames?
     var peekTimer: Timer?
-    var peekTick = 0
+    var peekPlayback = PetPeekPlayback.start
     private(set) var isPeeking = false
+    /// 现在显示的探头帧；没在探头时为 nil
+    private(set) var shownPeekFrame: PetPeekFrame?
     /// 鼠标是否在形象不透明的像素上（透明区域不算，避免靠近屏幕边就误触发探出来）
     var isPointerOverPet = false
     /// 摸头 / 打盹 / 待机小动作的逐帧片段（盖在待机动画上，让位给拖拽和探头）
@@ -263,6 +269,22 @@ class DesktopPetView: NSView {
         setWorkState(currentWorkState)
     }
 
+    /// 换装：换一整套帧；正在贴边探头就接着探头，只是换成新衣服的那一帧
+    func setOutfit(_ outfit: String?) {
+        guard outfit != outfitID else { return }
+        outfitID = outfit
+        normalizedBodyBounds = nil
+        reloadPoseSprites()
+        if isPeeking {
+            if peekFrames == nil {
+                setEdgePeek(false)
+            } else {
+                showPeekFrame(peekPlayback.frame)
+            }
+        }
+        setWorkState(currentWorkState)
+    }
+
     func showTransientMessage(_ text: String, duration: TimeInterval = 3) {
         activeReminderTooltip = nil
         reminderCardView.isHidden = true
@@ -290,11 +312,12 @@ class DesktopPetView: NSView {
 
     func showReminderCard(
         _ payload: ReminderPresentationPayload,
+        cups: CupProgress? = nil,
         onAction: ((HealthReminderOutcome) -> Void)? = nil
     ) {
         transientBubbleDismissTimer?.invalidate()
         hideTransientBubble(notifyLayoutChange: false)
-        reminderCardView.configure(with: payload, onAction: onAction)
+        reminderCardView.configure(with: payload, cups: cups, onAction: onAction)
         activeReminderTooltip = payload.text
         layoutReminderCard()
         reminderCardView.isHidden = false
@@ -363,8 +386,9 @@ class DesktopPetView: NSView {
         guard active != isPeeking else { return }
         peekTimer?.invalidate()
         peekTimer = nil
-        guard active, let peekFrames else {
+        guard active, peekFrames != nil else {
             isPeeking = false
+            shownPeekFrame = nil
             statusLabel.isHidden = false
             present(restingImage)
             return
@@ -373,15 +397,28 @@ class DesktopPetView: NSView {
         isPeeking = true
         // 只探出半个脑袋时，下面的状态标签会被屏幕边截断，先藏起来
         statusLabel.isHidden = true
-        peekTick = 0
-        present(peekFrames.image(atTick: peekTick))
+        peekPlayback = .start
+        showPeekFrame(peekPlayback.frame)
         let timer = Timer(timeInterval: 1 / PetPeekFrames.framesPerSecond, repeats: true) { [weak self] _ in
             guard let self, self.isPeeking else { return }
-            self.peekTick += 1
-            self.present(self.peekFrames?.image(atTick: self.peekTick))
+            self.peekPlayback = self.peekPlayback.advanced(roll: Double.random(in: 0..<1))
+            self.showPeekFrame(self.peekPlayback.frame)
         }
         RunLoop.main.add(timer, forMode: .common)
         peekTimer = timer
+    }
+
+    /// 探着头被碰到：停下待机循环，定在吓一跳那一帧，等贴边控制器把它缩回去
+    func flinchPeek() {
+        guard isPeeking else { return }
+        peekTimer?.invalidate()
+        peekTimer = nil
+        showPeekFrame(.flinch)
+    }
+
+    private func showPeekFrame(_ frame: PetPeekFrame) {
+        shownPeekFrame = frame
+        present(peekFrames?.image(for: frame))
     }
 
     /// 身体在视图（= 窗口）里的矩形；还没加载出图时为 nil
@@ -412,34 +449,55 @@ class DesktopPetView: NSView {
         animationEngine.onDragPoseChanged = { [weak self] pose in
             self?.applyDragPose(pose)
         }
+        animationEngine.liftedLayer = { [weak self] in
+            guard let lift = self?.liftWindow, lift.isVisible else { return nil }
+            return lift.spriteLayer
+        }
     }
 
     func reloadPoseSprites() {
-        poseSprites = assetLocator.resolvePoseSpriteDirectory(for: petID).map {
+        poseSprites = assetLocator.resolvePoseSpriteDirectory(for: petID, outfit: outfitID).map {
             PetPoseSprites(directory: $0, canvasPointSize: Self.compactContentSize)
         }
         let actionDirectories = Set(PetActionClip.allCases.map(\.directory))
-        cursorSet = PetCursorSet(directory: assetLocator.resolvePoseSpriteDirectory(for: petID, subdirectory: "cursor"))
+        cursorSet = PetCursorSet(directory: assetLocator.resolvePoseSpriteDirectory(for: petID, subdirectory: "cursor", outfit: outfitID))
         actionSprites = Dictionary(uniqueKeysWithValues: actionDirectories.compactMap { name in
-            assetLocator.resolvePoseSpriteDirectory(for: petID, subdirectory: name).map {
+            assetLocator.resolvePoseSpriteDirectory(for: petID, subdirectory: name, outfit: outfitID).map {
                 (name, PetPoseSprites(directory: $0, canvasPointSize: Self.compactContentSize))
             }
         })
-        peekFrames = PetPeekFrames(sprites: assetLocator.resolvePoseSpriteDirectory(for: petID, subdirectory: "edge").map {
+        peekFrames = PetPeekFrames(sprites: assetLocator.resolvePoseSpriteDirectory(for: petID, subdirectory: "edge", outfit: outfitID).map {
             PetPoseSprites(directory: $0, canvasPointSize: Self.compactContentSize)
         })
     }
 
     func applyDragPose(_ pose: DragPose) {
-        if let image = poseSprites?.image(for: pose) {
+        if let image = poseSprites?.image(for: isFacingRight ? pose.mirrored : pose) {
             isShowingDragPose = true
             present(image)
+            if pose.isLifted { showLift() } else { hideLift() }
             return
         }
+        hideLift()
         // 姿势结束，或该宠物没有对应姿势帧：回到当前动画帧
         guard isShowingDragPose else { return }
         isShowingDragPose = false
         present(restingImage)
+    }
+
+    /// 拎起来：换到四周留足地方的拎起窗口里画，原窗口里的这只先让开
+    private func showLift() {
+        guard let window, imageView != nil else { return }
+        let canvas = window.convertToScreen(convert(imageView.frame, to: nil))
+        let lift = liftWindow ?? PetLiftWindow()
+        liftWindow = lift
+        lift.show(image: presentedImage, canvas: canvas, over: window)
+        imageView.alphaValue = 0
+    }
+
+    func hideLift() {
+        liftWindow?.hide()
+        imageView?.alphaValue = 1
     }
 
     // MARK: - 透明区域点击穿透
@@ -611,10 +669,19 @@ class DesktopPetView: NSView {
         animationEngine.layoutShadow(petCanvasBounds: petCanvasRect)
     }
 
+    /// 窗口为提醒卡变高时立刻把卡片挪到桌宠上方，不等下一次布局（否则会先盖住桌宠闪一下）
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        if reminderCardView != nil, !reminderCardView.isHidden {
+            layoutReminderCard()
+        }
+    }
+
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
 
         if window == nil {
+            hideLift()
             cancelAnimationTimer()
             animationEngine.stop()
         } else {

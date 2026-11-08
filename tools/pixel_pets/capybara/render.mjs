@@ -1,5 +1,7 @@
 // 参数 → 像素帧。浏览器编辑器和命令行构建共用这一份渲染逻辑。
 import { Grid, SIDES, canvasPixel, partMask } from './raster.mjs';
+import { renderFrontPeek, renderFrontUpright } from './front-peek.mjs';
+import { HEADWEAR, itemIcon, sideHeadwear } from './headwear.mjs';
 
 export const CANVAS_HEIGHT = 32;
 
@@ -20,12 +22,6 @@ const PATTERNS = {
     [[0, 0], [0, 1], [-1, 2], [-1, 3], [-2, 4], [0, 3]],
     [[0, 0], [-1, 1], [-1, 2], [-2, 3], [-2, 2], [0, 2]],
   ],
-  yuzuFruit: [
-    [0, -1], [1, -1], [2, -1], [3, -1],
-    [-1, 0], [0, 0], [1, 0], [2, 0], [3, 0], [4, 0],
-    [0, 1], [1, 1], [2, 1], [3, 1],
-  ],
-  yuzuLeaf: [[3, -2], [4, -3], [5, -3]],
 };
 
 const OVERLAYS = {
@@ -181,14 +177,10 @@ function birdLayer(width, { pose, at, faceRight = false }) {
   return Object.entries(shape).reduce((g, [ink, points]) => g.dots(ink, offsetPoints(at, points)), outlined);
 }
 
-/** 头顶的橙子单独一层：自己描边后叠到头顶，底边描边和头顶描边重合 */
-function yuzuLayer(width, transform, anchorMark) {
+/** 头顶装扮单独一层（默认橙子）：自己描边后叠到头顶，底边描边和头顶描边重合 */
+function headwearLayer(width, transform, anchorMark, kind) {
   const anchor = canvasPixel(transform, anchorMark.x, anchorMark.y);
-  return Grid.empty(width, CANVAS_HEIGHT)
-    .dots('orange', offsetPoints(anchor, PATTERNS.yuzuFruit))
-    .dots('white', [anchor])
-    .outlined()
-    .dots('grass', offsetPoints(anchor, PATTERNS.yuzuLeaf));
+  return sideHeadwear(kind ?? HEADWEAR[0], width, CANVAS_HEIGHT, anchor);
 }
 
 /**
@@ -196,7 +188,8 @@ function yuzuLayer(width, transform, anchorMark) {
  *   blink, inhale, earTwitch, chewPhase(0|1), face('squeeze'|'dizzy'|'happy'),
  *   tilt(-2...2), twinkle(0|1), dust(0|1), reach, props(柚子 + 草，默认跟姿势走),
  *   nod(打盹低头一格), heart(HEART_PATH 下标), zzz(ZZZ_PATH 下标), bang(醒来的感叹号),
- *   eyes('up' 抬眼), yuzuShift(柚子左右偏几格), bird({ pose: 'sit'|'wingsUp'|'wingsDown', at: [x, y] })
+ *   eyes('up' 抬眼), yuzuShift(头顶装扮左右偏几格), bird({ pose: 'sit'|'wingsUp'|'wingsDown', at: [x, y] }),
+ *   headwear(头顶戴什么，见 headwear.mjs；默认橙子)
  */
 export function renderPose(model, name, opts = {}) {
   const pose = model.poses[name];
@@ -241,7 +234,7 @@ function renderBase(model, pose, opts) {
     const grass = canvasPixel(head, model.head.marks.grass.x, model.head.marks.grass.y);
     grid = grid
       .dots('grass', offsetPoints(grass, PATTERNS.grass[opts.chewPhase === 1 ? 1 : 0]))
-      .overlaid(yuzuLayer(width, head, { ...model.head.marks.yuzu, x: model.head.marks.yuzu.x + (opts.yuzuShift ?? 0) }));
+      .overlaid(headwearLayer(width, head, { ...model.head.marks.yuzu, x: model.head.marks.yuzu.x + (opts.yuzuShift ?? 0) }, opts.headwear));
   }
   if (opts.face === 'squeeze') grid = grid.dots('sweat', OVERLAYS.sweat);
   if (opts.face === 'dizzy') grid = grid.dots('star', OVERLAYS.stars[opts.twinkle ? 1 : 0]);
@@ -322,31 +315,43 @@ export function birdVisitOptions() {
   }));
 }
 
-/** [相对 pets/capybara 的路径, 网格] */
-export function allFrames(model) {
-  const frames = [['base.png', renderPose(model, 'sit', { chewPhase: 0 })]];
-  idleMainOptions().forEach((o, i) => frames.push([`idle/main/${i}.png`, renderPose(model, 'sit', o)]));
-  idleChewOptions().forEach((o, i) => frames.push([`idle/chew/${i}.png`, renderPose(model, 'sit', o)]));
+/**
+ * [相对 pets/capybara 的路径, 网格]。headwear 换头顶装扮（默认橙子）；
+ * 衣柜格子用的小图 ui/item_<装扮>.png 每套都带着
+ */
+export function allFrames(model, { headwear = HEADWEAR[0] } = {}) {
+  const pose = (name, o) => renderPose(model, name, { ...o, headwear });
+  const front = (o) => renderFrontPeek({ ...o, headwear });
+  const frames = [['base.png', pose('sit', { chewPhase: 0 })]];
+  idleMainOptions().forEach((o, i) => frames.push([`idle/main/${i}.png`, pose('sit', o)]));
+  idleChewOptions().forEach((o, i) => frames.push([`idle/chew/${i}.png`, pose('sit', o)]));
   for (let tilt = -2; tilt <= 2; tilt += 1) {
-    frames.push([`drag/hold_${tilt}.png`, renderPose(model, 'hold', { face: 'squeeze', tilt })]);
+    frames.push([`drag/hold_${tilt}.png`, pose('hold', { face: 'squeeze', tilt })]);
     for (const twinkle of [0, 1]) {
-      frames.push([`drag/dizzy_${tilt}_${twinkle}.png`, renderPose(model, 'hold', { face: 'dizzy', tilt, twinkle })]);
+      frames.push([`drag/dizzy_${tilt}_${twinkle}.png`, pose('hold', { face: 'dizzy', tilt, twinkle })]);
     }
   }
   for (const frame of [0, 1]) {
-    frames.push([`drag/land_${frame}.png`, renderPose(model, 'sit', { blink: frame === 0, chewPhase: 0, dust: frame })]);
+    frames.push([`drag/land_${frame}.png`, pose('sit', { blink: frame === 0, chewPhase: 0, dust: frame })]);
   }
-  pettedOptions().forEach((o, i) => frames.push([`react/petted_${i}.png`, renderPose(model, 'sit', o)]));
-  frames.push(['sleep/doze_0.png', renderPose(model, 'sit', { blink: true, nod: true, chewPhase: 0 })]);
-  napOptions().forEach((o, i) => frames.push([`sleep/nap_${i}.png`, renderPose(model, 'sit', o)]));
-  frames.push(['sleep/wake_0.png', renderPose(model, 'sit', { chewPhase: 0, bang: true })]);
-  yuzuWobbleOptions().forEach((o, i) => frames.push([`idle_act/wobble_${i}.png`, renderPose(model, 'sit', o)]));
-  birdVisitOptions().forEach((o, i) => frames.push([`idle_act/bird_${i}.png`, renderPose(model, 'sit', o)]));
-  frames.push(['edge/peek_0.png', renderPose(model, 'peek', {})]);
-  frames.push(['edge/peek_1.png', renderPose(model, 'peek', { blink: true })]);
-  frames.push(['edge/peek_2.png', renderPose(model, 'peek', { reach: true })]);
+  pettedOptions().forEach((o, i) => frames.push([`react/petted_${i}.png`, pose('sit', o)]));
+  frames.push(['sleep/doze_0.png', pose('sit', { blink: true, nod: true, chewPhase: 0 })]);
+  napOptions().forEach((o, i) => frames.push([`sleep/nap_${i}.png`, pose('sit', o)]));
+  frames.push(['sleep/wake_0.png', pose('sit', { chewPhase: 0, bang: true })]);
+  yuzuWobbleOptions().forEach((o, i) => frames.push([`idle_act/wobble_${i}.png`, pose('sit', o)]));
+  birdVisitOptions().forEach((o, i) => frames.push([`idle_act/bird_${i}.png`, pose('sit', o)]));
+  // 贴边：平时正面探头；时不时把头转成侧面（就是原来侧身转 90° 那个造型）
+  frames.push(['edge/peek_0.png', front({})]);
+  frames.push(['edge/peek_1.png', front({ blink: true })]);
+  frames.push(['edge/peek_2.png', front({ reach: true })]);
+  frames.push(['edge/peek_3.png', front({ flinch: true })]);
+  frames.push(['edge/turn_0.png', pose('peek', {})]);
+  frames.push(['edge/turn_1.png', pose('peek', { blink: true })]);
+  // 设置 / 衣柜窗口标题栏上趴着的那只（正面，爪子压在画布底边）
+  frames.push(['ui/bar_peek.png', renderFrontUpright({ headwear })]);
+  for (const kind of HEADWEAR) frames.push([`ui/item_${kind}.png`, itemIcon(kind)]);
   return frames;
 }
 
 /** 素材里按帧重新生成的目录（写之前清空，避免旧帧残留） */
-export const GENERATED_DIRECTORIES = ['idle/main', 'idle/chew', 'drag', 'edge', 'react', 'sleep', 'idle_act'];
+export const GENERATED_DIRECTORIES = ['idle/main', 'idle/chew', 'drag', 'edge', 'react', 'sleep', 'idle_act', 'ui'];

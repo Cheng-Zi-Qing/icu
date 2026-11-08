@@ -3,7 +3,7 @@ import Foundation
 func testIdleMenuShowsStartWork() throws {
     let model = DesktopPetMenuModel(state: .idle)
     try expect(
-        model.items == [.startWork, .closeWindow, .quitApp],
+        model.items == [.startWork, .openWardrobe, .openSettings, .closeWindow, .quitApp],
         "idle menu items should be flattened from themed sections"
     )
 }
@@ -11,18 +11,18 @@ func testIdleMenuShowsStartWork() throws {
 func testWorkingMenuShowsFocusAndBreakActions() throws {
     let model = DesktopPetMenuModel(state: .working)
     try expect(
-        model.items == [.enterFocus, .takeBreak, .stopWork, .closeWindow, .quitApp],
+        model.items == [.enterFocus, .takeBreak, .stopWork, .openWardrobe, .openSettings, .closeWindow, .quitApp],
         "working menu items should be flattened from themed sections"
     )
 }
 
 func testPausedStatesShowResumeAction() throws {
     try expect(
-        DesktopPetMenuModel(state: .focus).items == [.resumeWorking, .stopWork, .closeWindow, .quitApp],
+        DesktopPetMenuModel(state: .focus).items == [.resumeWorking, .stopWork, .openWardrobe, .openSettings, .closeWindow, .quitApp],
         "focus menu items should be flattened from themed sections"
     )
     try expect(
-        DesktopPetMenuModel(state: .breakState).items == [.resumeWorking, .stopWork, .closeWindow, .quitApp],
+        DesktopPetMenuModel(state: .breakState).items == [.resumeWorking, .stopWork, .openWardrobe, .openSettings, .closeWindow, .quitApp],
         "break menu items should be flattened from themed sections"
     )
 }
@@ -32,6 +32,7 @@ func testWorkingMenuSectionsStayGroupedForThemedPanel() throws {
     try expect(
         model.sections == [
             [.enterFocus, .takeBreak, .stopWork],
+            [.openWardrobe, .openSettings],
             [.closeWindow, .quitApp]
         ],
         "working menu sections should remain grouped for the themed context panel"
@@ -41,9 +42,13 @@ func testWorkingMenuSectionsStayGroupedForThemedPanel() throws {
 func testStatusItemMenuShowsPetAndQuit() throws {
     let model = StatusItemMenuModel()
     try expect(
-        model.sections == [[.showPet], [.quitApp]],
-        "status item menu should only keep show pet and quit"
+        model.sections == [[.showPet], [.openWardrobe, .openSettings], [.quitApp]],
+        "status item menu should keep show pet, wardrobe, settings and quit"
     )
+}
+
+func testWardrobeMenuEntryIsCalledWardrobe() throws {
+    try expect(UserVisibleCopyKey.menuOpenWardrobe.defaultValue == "衣柜", "the wardrobe entry reads 衣柜")
 }
 
 func testMenuActionTitlesCanBeOverriddenByTextCatalog() throws {

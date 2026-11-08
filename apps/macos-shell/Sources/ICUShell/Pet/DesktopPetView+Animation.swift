@@ -15,7 +15,8 @@ extension DesktopPetView {
 
         if let animationFamily = assetLocator.resolveAnimationFamily(
             for: petID,
-            preferredAction: preferredStateID
+            preferredAction: preferredStateID,
+            outfit: outfitID
         ) {
             applyAnimationFamily(animationFamily)
             return
@@ -58,6 +59,9 @@ extension DesktopPetView {
         let shown = isFacingRight ? image.map(PixelArtScaler.mirroredHorizontally) : image
         presentedImage = shown
         imageView?.image = shown
+        if liftWindow?.isVisible == true {
+            liftWindow?.setImage(shown)
+        }
     }
 
     func scheduleAnimationIfNeeded() {

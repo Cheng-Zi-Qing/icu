@@ -17,6 +17,8 @@ final class PetAnimationEngine {
     var dragOutputProvider: ((CFTimeInterval) -> DragOutput)?
     /// 拖拽姿势变化时回调（用于切换像素姿势帧）
     var onDragPoseChanged: ((DragPose) -> Void)?
+    /// 拎在半空时实际显示桌宠的图层（拎起窗口里的那张）；nil 表示还在原窗口里画
+    var liftedLayer: (() -> CALayer?)?
 
     var groundShadowLayer: CALayer { groundShadow.shadowLayer }
 
@@ -76,7 +78,12 @@ final class PetAnimationEngine {
 
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        layer.transform = Self.composedTransform(base: base, drag: drag, layerBounds: layer.bounds, anchorPoint: layer.anchorPoint)
+        if drag.pose.isLifted, let lifted = liftedLayer?() {
+            lifted.transform = Self.liftedTransform(drag: drag, layerBounds: lifted.bounds, anchorPoint: lifted.anchorPoint)
+            layer.transform = CATransform3DIdentity
+        } else {
+            layer.transform = Self.composedTransform(base: base, drag: drag, layerBounds: layer.bounds, anchorPoint: layer.anchorPoint)
+        }
         CATransaction.commit()
 
         let lifted = drag.pose == .none || drag.pose.isLanding ? 0 : Self.liftedShadowHeight
@@ -108,6 +115,17 @@ final class PetAnimationEngine {
         let landingMatrix = pivoted(landing.caTransform, around: bottomCenter)
         let stretchMatrix = pivoted(stretch.caTransform, around: topCenter)
         return CATransform3DConcat(CATransform3DConcat(stretchMatrix, landingMatrix), baseMatrix)
+    }
+
+    /// 拎在半空：先以后颈（头顶中点）为轴往下拉长，再绕后颈按摆角甩出去。
+    /// 摆角为负 = 下半身往左（图层坐标 y 向上，逆时针转脚往右，所以角度直接用）
+    static func liftedTransform(drag: DragOutput, layerBounds: CGRect, anchorPoint: CGPoint) -> CATransform3D {
+        let anchor = CGPoint(x: layerBounds.width * anchorPoint.x, y: layerBounds.height * anchorPoint.y)
+        let scruff = CGPoint(x: layerBounds.width / 2 - anchor.x, y: layerBounds.height - anchor.y)
+        let stretchY = max(drag.stretchY, 0.01)
+        let stretch = LayerTransform(scaleX: 1 / stretchY.squareRoot(), scaleY: stretchY)
+        let swing = CATransform3DMakeRotation(drag.swingDegrees * .pi / 180, 0, 0, 1)
+        return CATransform3DConcat(pivoted(stretch.caTransform, around: scruff), pivoted(swing, around: scruff))
     }
 
     private static func pivoted(_ transform: CATransform3D, around pivot: CGPoint) -> CATransform3D {

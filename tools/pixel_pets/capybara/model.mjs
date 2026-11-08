@@ -11,6 +11,8 @@ export const PALETTE = {
   grass: '#6DAA45', sweat: '#8CC8F0', star: '#F4BC2C', dust: '#D8D0C2',
   // 头顶的橙子（2026-11-08 从柚子黄改成橙色）
   orange: '#F08A24',
+  // 草帽（衣柜里的头顶装扮）
+  straw: '#E9C46A', strawShade: '#C99A3E', band: '#C8503C',
   // 来访的小鸟（水豚身上常停着小鸟）
   bird: '#7FB2D9', birdWing: '#4F7FAE',
 };

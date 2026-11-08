@@ -60,3 +60,30 @@ func testAppSettingsStoreLoadsHealthProfileAndTimers() throws {
     )
     try expect(store.loadReminderTimerSettings().eyeInterval == 900, "eye interval should be read from settings.json")
 }
+
+func testEyeCareModesFollowPublishedRecommendations() throws {
+    let rule = ReminderTimerSettings.default
+    try expect(rule.eyeMode == .rule202020, "the recommended default is the 20-20-20 rule")
+    try expect(rule.eyeInterval == 20 * 60 && rule.eyeRestSeconds == 20, "20-20-20: every 20 minutes, look away for 20 seconds")
+
+    let hourly = ReminderTimerSettings(eyeMode: .hourlyBreak)
+    try expect(hourly.eyeInterval == 60 * 60 && hourly.eyeRestSeconds == 5 * 60, "NIOSH supplementary breaks: 5 minutes every hour")
+
+    let custom = ReminderTimerSettings(eyeMode: .custom, customEyeInterval: 30 * 60)
+    try expect(custom.eyeInterval == 30 * 60 && custom.eyeRestSeconds == 20, "custom keeps the user's interval and a 20 second look-away")
+}
+
+func testReminderTimerSettingsParseEyeModeAndKeepOldConfigsWorking() throws {
+    let hourly = ReminderTimerSettings(settingsObject: ["timers": ["eye_mode": "hourly_break", "eye_interval": 1500]])
+    try expect(hourly.eyeMode == .hourlyBreak && hourly.eyeInterval == 3600, "a preset mode ignores the stored custom interval")
+    try expect(hourly.customEyeInterval == 1500, "the custom interval is remembered for later")
+
+    let legacyCustom = ReminderTimerSettings(settingsObject: ["timers": ["eye_interval": 1500]])
+    try expect(legacyCustom.eyeMode == .custom, "an old config with a non-default interval becomes custom")
+
+    let legacyDefault = ReminderTimerSettings(settingsObject: ["timers": ["eye_interval": 1200]])
+    try expect(legacyDefault == .default, "an old config with 20 minutes is the recommended mode")
+
+    let unknown = ReminderTimerSettings(settingsObject: ["timers": ["eye_mode": "pomodoro"]])
+    try expect(unknown == .default, "an unknown mode falls back to the recommended one")
+}

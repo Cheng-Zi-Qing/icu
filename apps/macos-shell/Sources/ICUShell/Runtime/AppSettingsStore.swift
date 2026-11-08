@@ -32,6 +32,18 @@ final class AppSettingsStore {
         ReminderTimerSettings(settingsObject: loadRootObjectOrEmpty(section: "timers"))
     }
 
+    func saveHealthProfile(_ profile: HealthProfile) throws {
+        try saveSection("user", mergingInto: [
+            "body_weight": profile.bodyWeightKg,
+            "cup_volume": profile.cupVolumeMl,
+            "work_hours": profile.workHours,
+        ])
+    }
+
+    func saveReminderTimerSettings(_ timers: ReminderTimerSettings) throws {
+        try saveSection("timers", mergingInto: ["eye_mode": timers.eyeMode.rawValue, "eye_interval": timers.customEyeInterval])
+    }
+
     func loadRootObject() throws -> [String: Any] {
         guard let existingURL = resolvedExistingSettingsFileURL() else {
             return [:]
@@ -50,6 +62,12 @@ final class AppSettingsStore {
         )
         let data = try JSONSerialization.data(withJSONObject: merged, options: [.prettyPrinted, .sortedKeys])
         try data.write(to: primarySettingsFileURL, options: .atomic)
+    }
+
+    /// 只改这一段里的这几个 key，同一段里的其他 key 保留
+    private func saveSection(_ key: String, mergingInto values: [String: Any]) throws {
+        let existing = try loadRootObject()[key] as? [String: Any] ?? [:]
+        try saveSection(key, existing.merging(values) { _, new in new })
     }
 
     private func loadRootObjectOrEmpty(section: String) -> [String: Any] {

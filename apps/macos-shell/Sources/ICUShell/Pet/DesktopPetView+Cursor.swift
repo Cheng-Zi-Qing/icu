@@ -9,6 +9,10 @@ extension DesktopPetView {
             overBody: point.map(isOpaquePetPixel(at:)) ?? false,
             overHead: point.map(isOverHead) ?? false
         )
+        if kind != currentCursorKind {
+            // 排查「光标间歇变成白方块」：只在换手型时记一条，对时间用
+            NSLog("[Cursor] \(kind?.rawValue ?? "arrow") active=\(NSApp.isActive) dragging=\(isDraggingPet) lifted=\(liftWindow?.isVisible == true)")
+        }
         currentCursorKind = kind
         // 每次都重新设：前台 App 可能把光标改回去
         (kind.map(cursorSet.cursor(for:)) ?? NSCursor.arrow).set()

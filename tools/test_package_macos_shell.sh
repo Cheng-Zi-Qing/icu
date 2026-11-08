@@ -63,6 +63,8 @@ assert_exists "$macos_binary"
 assert_exists "$info_plist"
 assert_exists "$resource_root/assets/pets/capybara/base.png"
 assert_exists "$resource_root/config/copy/base.json"
+assert_exists "$resource_root/config/wardrobe.json"
+assert_exists "$resource_root/assets/pets/capybara/outfits/straw_hat/idle/main/0.png"
 
 check_output="$(bash "$CHECKER" "$app_path")"
 assert_contains "$check_output" "[check_macos_app_bundle] PASS"

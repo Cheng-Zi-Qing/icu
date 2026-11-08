@@ -1,51 +1,55 @@
 import AppKit
 
+private let sampleSections = [
+    ThemedMenuPanelSection(items: [
+        ThemedMenuPanelItem(id: "start", title: "开始工作", tone: .primary),
+    ]),
+    ThemedMenuPanelSection(items: [
+        ThemedMenuPanelItem(id: "settings", title: "设置…"),
+    ]),
+    ThemedMenuPanelSection(items: [
+        ThemedMenuPanelItem(id: "hide", title: "隐藏桌宠"),
+        ThemedMenuPanelItem(id: "quit", title: "退出", tone: .destructive),
+    ]),
+]
+
+private let sampleSummary = MenuTodaySummary(
+    day: HealthDaySummary(
+        date: Date(), eyeReminder: HealthReminderCounts(shown: 5, completed: 5, snoozed: 0, skipped: 0),
+        hydrationReminder: HealthReminderCounts(shown: 3, completed: 3, snoozed: 0, skipped: 0),
+        workDuration: 3 * 3600 + 20 * 60, focusCount: 0, focusDuration: 0, breakCount: 0
+    ),
+    cupsGoal: 6
+)
+
 func testThemedMenuPanelUsesCompactPreferredSize() throws {
-    let sections = [
-        ThemedMenuPanelSection(items: [
-            ThemedMenuPanelItem(id: "start", title: "开始工作"),
-        ]),
-        ThemedMenuPanelSection(items: [
-            ThemedMenuPanelItem(id: "avatar", title: "更换形象"),
-            ThemedMenuPanelItem(id: "generation", title: "生成配置"),
-        ]),
-        ThemedMenuPanelSection(items: [
-            ThemedMenuPanelItem(id: "hide", title: "隐藏桌宠"),
-            ThemedMenuPanelItem(id: "quit", title: "退出"),
-        ]),
-    ]
+    let plain = ThemedMenuPanel.preferredSize(for: sampleSections, hasSummary: false)
+    try expect(plain == NSSize(width: 200, height: 152), "4 rows × 28 + 2 separators × 10 + padding 16 + shadow 4 (got \(plain))")
 
-    let preferredSize = ThemedMenuPanel.preferredSize(for: sections)
-
-    try expect(
-        preferredSize == NSSize(width: 172, height: 174),
-        "themed menu panel should use a compact preferred size for desktop pet context menus"
-    )
+    let withSummary = ThemedMenuPanel.preferredSize(for: sampleSections, hasSummary: true)
+    try expect(withSummary.height == plain.height + 56 + 10, "the today header adds its height plus one separator (got \(withSummary))")
 }
 
 func testThemedMenuPanelRendersRowsAndSeparatorsFromSections() throws {
-    let panel = ThemedMenuPanel(
-        sections: [
-            ThemedMenuPanelSection(items: [
-                ThemedMenuPanelItem(id: "start", title: "开始工作"),
-            ]),
-            ThemedMenuPanelSection(items: [
-                ThemedMenuPanelItem(id: "avatar", title: "更换形象"),
-                ThemedMenuPanelItem(id: "generation", title: "生成配置"),
-            ]),
-            ThemedMenuPanelSection(items: [
-                ThemedMenuPanelItem(id: "hide", title: "隐藏桌宠"),
-                ThemedMenuPanelItem(id: "quit", title: "退出"),
-            ]),
-        ],
-        onSelect: { _ in }
-    )
-
-    let buttons = allSubviews(in: panel).compactMap { $0 as? NSButton }
+    let panel = ThemedMenuPanel(sections: sampleSections, onSelect: { _ in })
+    let rows = allSubviews(in: panel).compactMap { $0 as? PixelButton }
     let separators = allSubviews(in: panel).filter { $0.identifier?.rawValue == "menu-separator" }
+    try expect(rows.count == 4, "one pixel row per menu action (got \(rows.count))")
+    try expect(separators.count == 2, "a dotted separator between sections (got \(separators.count))")
+    try expect(rows.first?.isFlat == false, "the primary action is a raised yellow button")
+    try expect(rows.dropFirst().allSatisfy(\.isFlat), "other actions are flat rows")
+    try expect(rows.last?.textColor == PixelPalette.danger, "quit is shown in red")
+}
 
-    try expect(buttons.count == 5, "themed menu panel should render one button per menu action")
-    try expect(separators.count == 2, "themed menu panel should render a separator between menu sections")
+func testThemedMenuPanelShowsTodaySummaryHeader() throws {
+    let panel = ThemedMenuPanel(sections: sampleSections, summary: sampleSummary, onSelect: { _ in })
+    guard let header = allSubviews(in: panel).first(where: { $0.identifier?.rawValue == "menu-today" }) else {
+        throw TestFailure(message: "menu should show the today header when a summary is given")
+    }
+    let label = header.accessibilityLabel() ?? ""
+    try expect(label.contains("3/6 杯") && label.contains("5 次") && label.contains("3:20"), "header reads cups, eye breaks and work time (got \(label))")
+    let separators = allSubviews(in: panel).filter { $0.identifier?.rawValue == "menu-separator" }
+    try expect(separators.count == 3, "the header is separated from the actions (got \(separators.count))")
 }
 
 func testContextMenuPanelControllerDispatchesSelectedActionAndDismissesPanel() throws {
@@ -93,7 +97,7 @@ func testContextMenuPanelControllerDispatchesSelectedActionAndDismissesPanel() t
         throw TestFailure(message: "context menu controller should expose a panel after present")
     }
 
-    try requireButton(in: panel, title: "开始工作").performClick(nil)
+    try requirePixelButton(in: panel, title: "开始工作").performClick(nil)
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
 
     try expect(receivedActions == [.startWork], "context menu controller should dispatch the selected menu action")

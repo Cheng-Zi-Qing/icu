@@ -1,6 +1,7 @@
 import AppKit
 
 func testReminderCardRendersCompleteSnoozeAndSkipActions() throws {
+    _ = try makeInstalledThemeManager()
     let view = DesktopPetView(frame: NSRect(x: 0, y: 0, width: 128, height: 128))
     let payload = ReminderPresentationPayload(id: UUID(), type: .eyeCare, text: "看看远处，护护眼。")
     view.showReminderCard(payload)
@@ -9,18 +10,12 @@ func testReminderCardRendersCompleteSnoozeAndSkipActions() throws {
     let snoozeButton = try requireButton(in: view, identifier: "desktopPet.reminderCard.snooze")
     let skipButton = try requireButton(in: view, identifier: "desktopPet.reminderCard.skip")
 
-    try expect(
-        completeButton.title == DesktopPetCopy.reminderCompleteActionTitle(),
-        "reminder card should render the complete action title"
-    )
-    try expect(
-        snoozeButton.title == DesktopPetCopy.reminderSnoozeActionTitle(),
-        "reminder card should render the snooze action title"
-    )
-    try expect(
-        skipButton.title == DesktopPetCopy.reminderSkipActionTitle(),
-        "reminder card should render the skip action title"
-    )
+    let content = try requireReminderCard(in: view).content
+    try expect(content != nil, "the card should keep what it shows")
+    try expect(completeButton.title == content?.completeTitle, "complete button shows the picked quip")
+    try expect(snoozeButton.title == content?.snoozeTitle, "snooze button shows the picked quip")
+    try expect(skipButton.title == content?.skipTitle, "skip is a visible 我就不-style button")
+    try expect(ReminderQuips.lookAway.lines.contains(content?.title ?? ""), "a 20 second break picks a look-away line")
     try expect(!completeButton.isEnabled, "reminder complete action should stay disabled until callbacks are wired")
     try expect(!snoozeButton.isEnabled, "reminder snooze action should stay disabled until callbacks are wired")
     try expect(!skipButton.isEnabled, "reminder skip action should stay disabled until callbacks are wired")
@@ -43,6 +38,7 @@ func testReminderCardRelayoutsAfterBoundsChange() throws {
 }
 
 func testReminderCardEnablesAndDispatchesActionsWhenCallbackProvided() throws {
+    _ = try makeInstalledThemeManager()
     let view = DesktopPetView(frame: NSRect(x: 0, y: 0, width: 128, height: 128))
     let payload = ReminderPresentationPayload(id: UUID(), type: .eyeCare, text: "看看远处，护护眼。")
     var receivedOutcomes: [HealthReminderOutcome] = []
@@ -70,6 +66,7 @@ func testReminderCardEnablesAndDispatchesActionsWhenCallbackProvided() throws {
 }
 
 func testReminderCardButtonsWinHitTestingOverTransparentPetPixels() throws {
+    _ = try makeInstalledThemeManager()
     let appPaths = try makeTemporaryAppPaths()
     let view = DesktopPetView(
         frame: NSRect(x: 0, y: 0, width: 128, height: 128),
@@ -97,6 +94,7 @@ func testReminderCardButtonsWinHitTestingOverTransparentPetPixels() throws {
 }
 
 func testReminderCardBodyWinsHitTestingOverTransparentPetPixels() throws {
+    _ = try makeInstalledThemeManager()
     let appPaths = try makeTemporaryAppPaths()
     let view = DesktopPetView(
         frame: NSRect(x: 0, y: 0, width: 128, height: 128),
@@ -109,9 +107,9 @@ func testReminderCardBodyWinsHitTestingOverTransparentPetPixels() throws {
     view.layoutSubtreeIfNeeded()
 
     let reminderCard = try requireView(in: view, identifier: "desktopPet.reminderCard")
-    let messageLabel = try requireView(in: view, identifier: "desktopPet.reminderCard.message")
-    let pointInsideMessageLabel = NSPoint(x: messageLabel.frame.midX, y: messageLabel.frame.midY)
-    let hitPoint = view.convert(pointInsideMessageLabel, from: messageLabel.superview)
+    // 卡片里标题那一块（不是按钮）
+    let pointInsideTitle = NSPoint(x: 40, y: 14)
+    let hitPoint = view.convert(pointInsideTitle, from: reminderCard)
     let hitView = view.hitTest(hitPoint)
 
     try expect(
@@ -180,7 +178,7 @@ func testReminderPresentationExpandsWindowAndKeepsCardAbovePetCanvas() throws {
     )
     try expect(
         reminderCard.frame.minY >= DesktopPetView.compactContentSize.height,
-        "expanded reminder layout should place the card above the 128pt pet canvas instead of covering it"
+        "expanded reminder layout should place the card above the 128pt pet canvas instead of covering it (got card \(reminderCard.frame), window \(harness.window.frame), content \(contentView.bounds))"
     )
 }
 
@@ -243,9 +241,89 @@ func testReminderSnoozeSchedulesFreshFollowUpAndLogsOutcomes() throws {
     try expect(summary.eyeReminder.completed == 1, "follow-up completion should persist separately from the snooze")
 }
 
-private func requireButton(in root: NSView, identifier: String) throws -> NSButton {
+func testReminderCardFitsInsideThePetWindowWidth() throws {
+    _ = try makeInstalledThemeManager()
+    let view = DesktopPetView(frame: NSRect(origin: .zero, size: DesktopPetView.reminderExpandedContentSize))
+    view.showReminderCard(ReminderPresentationPayload(id: UUID(), type: .eyeCare, text: "x"))
+    view.layoutSubtreeIfNeeded()
+
+    let card = try requireView(in: view, identifier: "desktopPet.reminderCard")
+    try expect(card.frame.minX >= 0 && card.frame.maxX <= view.bounds.width, "the card should not be clipped by the 128pt window (got \(card.frame))")
+    try expect(card.frame.maxY <= view.bounds.height, "the card should fit under the window top (got \(card.frame))")
+    for identifier in ["complete", "snooze", "skip"] {
+        let button = try requireButton(in: view, identifier: "desktopPet.reminderCard.\(identifier)")
+        try expect(card.bounds.contains(button.frame), "\(identifier) button should sit inside the card (got \(button.frame))")
+    }
+}
+
+func testHydrationReminderCardShowsWhichCupThisIs() throws {
+    _ = try makeInstalledThemeManager()
+    let view = DesktopPetView(frame: NSRect(x: 0, y: 0, width: 128, height: 128))
+    let payload = ReminderPresentationPayload(id: UUID(), type: .hydration, text: "喝口水，慢慢来。")
+    view.showReminderCard(payload, cups: CupProgress(done: 3, goal: 6)) { _ in }
+
+    let card = try requireReminderCard(in: view)
+    try expect(ReminderQuips.hydration.lines.contains(card.content?.title ?? ""), "water card picks a water line (got \(String(describing: card.content?.title)))")
+    try expect(card.detailText == "第 4/6 杯", "water card should say which cup this is (got \(card.detailText))")
+    let complete = try requireButton(in: view, identifier: "desktopPet.reminderCard.complete")
+    try expect(ReminderQuips.hydration.done.contains(complete.title ?? ""), "water is confirmed with a drinking quip")
+    try expect(card.remainingSegments == 0, "water cards have no countdown bar")
+}
+
+func testEyeReminderCardCountsDownAndCompletesOnce() throws {
+    _ = try makeInstalledThemeManager()
+    let view = DesktopPetView(frame: NSRect(x: 0, y: 0, width: 128, height: 128))
+    var outcomes: [HealthReminderOutcome] = []
+    let payload = ReminderPresentationPayload(id: UUID(), type: .eyeCare, text: "x", restSeconds: 20)
+    view.showReminderCard(payload) { outcomes.append($0) }
+
+    let card = try requireReminderCard(in: view)
+    try expect(card.detailText == "还剩 20 秒" && card.remainingSegments == 10, "starts full (got \(card.detailText))")
+    card.advanceCountdown(by: 6)
+    try expect(card.detailText == "还剩 14 秒" && card.remainingSegments == 7, "ticks down (got \(card.detailText), \(card.remainingSegments))")
+    card.advanceCountdown(by: 14)
+    card.advanceCountdown(by: 1)
+    try expect(outcomes == [.completed], "finishing the countdown completes the reminder exactly once (got \(outcomes))")
+}
+
+/// 每句俏皮话放进卡片都不会被截掉：标题行、按钮、「我就不」、还有最长的说明
+func testReminderQuipsFitTheirSlotsOnTheCard() throws {
+    let repoRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    PixelFont.register(assetsDirectory: repoRoot.appendingPathComponent("assets"))
+    try expect(PixelFont.isAvailable, "measure with the real pixel font (repo root \(repoRoot.path))")
+    let font = PixelFont.font()
+    func width(_ text: String) -> CGFloat { PixelPaint.textSize(text, font: font).width }
+    let cardWidth: CGFloat = DesktopPetView.reminderExpandedContentSize.width - 4
+    let titleRoom = cardWidth - 8 * 2 - PixelPaint.iconSize(.eye).width - 4
+    let pools = [ReminderQuips.hydration, ReminderQuips.lookAway, ReminderQuips.standUp]
+    for line in pools.flatMap(\.lines) {
+        try expect(width(line) <= titleRoom, "'\(line)' is \(width(line))pt, title room is \(titleRoom)pt")
+    }
+    let buttonRoom = ((cardWidth - 16 - 4) / 2) - 8
+    for title in pools.flatMap(\.done) + ReminderQuips.later {
+        try expect(width(title) <= buttonRoom, "button '\(title)' is \(width(title))pt, room is \(buttonRoom)pt")
+    }
+    let skipRoom: CGFloat = 44
+    let detailRoom = cardWidth - 6 - skipRoom - 8
+    for title in ReminderQuips.nope {
+        try expect(width(title) <= skipRoom, "skip '\(title)' is \(width(title))pt")
+    }
+    for detail in ["还剩 20 秒", "还剩 4:59", "第 14/14 杯", "超额 3 杯", "小口慢慢喝"] {
+        try expect(width(detail) <= detailRoom, "detail '\(detail)' is \(width(detail))pt, room is \(detailRoom)pt")
+    }
+}
+
+private func requireReminderCard(in root: NSView) throws -> ReminderCardView {
+    guard let card = allSubviews(in: root).compactMap({ $0 as? ReminderCardView }).first else {
+        throw TestFailure(message: "expected a reminder card")
+    }
+    return card
+}
+
+private func requireButton(in root: NSView, identifier: String) throws -> PixelButton {
     if let button = allSubviews(in: root)
-        .compactMap({ $0 as? NSButton })
+        .compactMap({ $0 as? PixelButton })
         .first(where: { $0.identifier?.rawValue == identifier }) {
         return button
     }

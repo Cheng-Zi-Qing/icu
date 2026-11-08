@@ -9,9 +9,8 @@ enum UserVisibleCopyKey: String {
     case menuResumeWorking = "menu.resume_working"
     case menuStopWork = "menu.stop_work"
     case menuHidePet = "menu.hide_pet"
-    case petReminderCompleteAction = "pet.reminder_complete_action"
-    case petReminderSnoozeAction = "pet.reminder_snooze_action"
-    case petReminderSkipAction = "pet.reminder_skip_action"
+    case menuOpenSettings = "menu.open_settings"
+    case menuOpenWardrobe = "menu.open_wardrobe"
 }
 
 extension UserVisibleCopyKey {
@@ -33,12 +32,10 @@ extension UserVisibleCopyKey {
             return "下班"
         case .menuHidePet:
             return "隐藏桌宠"
-        case .petReminderCompleteAction:
-            return "已完成"
-        case .petReminderSnoozeAction:
-            return "稍后提醒"
-        case .petReminderSkipAction:
-            return "跳过"
+        case .menuOpenSettings:
+            return "设置…"
+        case .menuOpenWardrobe:
+            return "衣柜"
         }
     }
 }

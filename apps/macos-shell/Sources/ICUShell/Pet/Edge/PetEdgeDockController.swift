@@ -6,7 +6,7 @@ import AppKit
 /// 1. 松手时身体离左 / 右 / 下边不超过 `snapDistance` → 滑过去贴住
 /// 2. 贴在左右边、`autoHideDelay` 内没碰它 → 先整只躲到屏幕边外，
 ///    再换成「探头扒边」的专用形象把脑袋探出来（没有探头图的宠物退回只露 `peekWidth`）
-/// 3. 鼠标移到露出的部分，或者有提醒卡片 → 缩回去、换回正常形象再滑出来
+/// 3. 鼠标移到露出的部分，或者有提醒卡片 → 吓一跳缩回去、换回正常形象再滑出来
 /// 贴左边时形象镜像，让脸朝屏幕里。
 final class PetEdgeDockController {
     private enum Timing {
@@ -16,6 +16,8 @@ final class PetEdgeDockController {
         static let duck: TimeInterval = 0.22
         static let peekOut: TimeInterval = 0.28
         static let peekIn: TimeInterval = 0.14
+        /// 吓一跳后缩回去：比平时慢一点，让 > < 那一帧看得见
+        static let flinchIn: TimeInterval = 0.3
     }
 
     private weak var window: NSWindow?
@@ -35,6 +37,8 @@ final class PetEdgeDockController {
     var canPeek: () -> Bool = { false }
     /// 切换探头形象；切换后 `bodyRectProvider` 应返回探头形象的身体矩形
     var onPeekChanged: ((Bool) -> Void)?
+    /// 探着头被碰到：换成吓一跳的那一帧（随后缩回边后）
+    var onPeekFlinch: (() -> Void)?
 
     private(set) var dock: EdgeDock = .none
     private(set) var isHidden = false
@@ -217,9 +221,10 @@ final class PetEdgeDockController {
             return
         }
 
-        // 缩回屏幕外，换回正常形象，再滑出来
+        // 吓一跳，缩回屏幕外，换回正常形象，再滑出来
+        onPeekFlinch?()
         let peekBehind = EdgeDockLayout.behindOrigin(dockedOrigin: dockedOrigin, edge: edge, bodyRect: peekBody, visibleFrame: visibleFrame)
-        slide(window, to: peekBehind, duration: Timing.peekIn) { [weak self] in
+        slide(window, to: peekBehind, duration: Timing.flinchIn) { [weak self] in
             guard let self else { return }
             self.setPeeking(false)
             if let body = self.bodyRectProvider() {

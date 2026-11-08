@@ -99,6 +99,7 @@ copy_runtime_resources() {
   mkdir -p "$RESOURCE_REPO_DIR/config"
   cp -R "$ROOT_DIR/assets" "$RESOURCE_REPO_DIR/assets"
   cp -R "$ROOT_DIR/config/copy" "$RESOURCE_REPO_DIR/config/copy"
+  cp "$ROOT_DIR/config/wardrobe.json" "$RESOURCE_REPO_DIR/config/wardrobe.json"
 }
 
 sign_bundle_if_needed() {

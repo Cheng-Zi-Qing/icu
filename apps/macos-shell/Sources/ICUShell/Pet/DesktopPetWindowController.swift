@@ -7,6 +7,9 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
     private let reminderScheduler: ReminderScheduler
     private let healthTracker: HealthSessionTracker
     private let onQuitRequested: () -> Void
+    private let onOpenSettingsRequested: () -> Void
+    private let onOpenWardrobeRequested: () -> Void
+    private let todaySummaryProvider: () -> MenuTodaySummary?
     private let nowProvider: () -> Date
     private let petView: DesktopPetView
     private var edgeDock: PetEdgeDockController?
@@ -23,8 +26,14 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
         petID: String,
         onQuitRequested: @escaping () -> Void,
         edgeSnapSettings: EdgeSnapSettings = .default,
+        onOpenSettingsRequested: @escaping () -> Void = {},
+        onOpenWardrobeRequested: @escaping () -> Void = {},
+        todaySummaryProvider: @escaping () -> MenuTodaySummary? = { nil },
         nowProvider: @escaping () -> Date = { .now }
     ) {
+        self.onOpenSettingsRequested = onOpenSettingsRequested
+        self.onOpenWardrobeRequested = onOpenWardrobeRequested
+        self.todaySummaryProvider = todaySummaryProvider
         self.workSessionController = workSessionController
         self.reminderScheduler = reminderScheduler
         self.healthTracker = healthTracker
@@ -75,6 +84,7 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
         petView.onPetDragEnded = { [weak self] in
             self?.persistCurrentWindowPlacement()
             self?.edgeDock?.dragEnded()
+            self?.faceHome()
         }
         petView.onOverlayLayoutModeChanged = { [weak self] mode in
             self?.updateWindowSize(for: mode)
@@ -88,20 +98,33 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
             self?.handleMenuAction(action)
         }
         window.contextMenuController = contextMenuController
+        window.menuSummaryProvider = todaySummaryProvider
 
         applyCurrentStateToView(showBubble: true)
         persistCurrentWindowPlacement()
         window.makeKeyAndOrderFront(nil)
         edgeDock?.restoreAfterLaunch()
+        faceHome()
+    }
+
+    /// 放下来 / 刚启动：朝着屏幕中间蹲（右半边朝左，左半边朝右）；贴在左右边时朝向归贴边管
+    private func faceHome() {
+        guard edgeDock?.dock.horizontal == nil,
+              let body = petBodyFrameOnScreen(),
+              let home = gaze?.homeFacingRight(body: body)
+        else { return }
+        petView.setFacingRight(home)
+    }
+
+    private func petBodyFrameOnScreen() -> CGRect? {
+        guard let body = petView.petBodyRect, let origin = window?.frame.origin else { return nil }
+        return body.offsetBy(dx: origin.x, dy: origin.y)
     }
 
     /// 转头看鼠标；贴在左右屏幕边时朝向归贴边管（脸朝屏幕里）
     private func configureGaze(window: NSWindow) {
         let gaze = PetGazeController(
-            bodyFrameOnScreen: { [weak petView, weak window] in
-                guard let body = petView?.petBodyRect, let origin = window?.frame.origin else { return nil }
-                return body.offsetBy(dx: origin.x, dy: origin.y)
-            },
+            bodyFrameOnScreen: { [weak self] in self?.petBodyFrameOnScreen() },
             isFacingRight: { [weak petView] in petView?.isFacingRight ?? false },
             onTurn: { [weak petView] facingRight in petView?.setFacingRight(facingRight) }
         )
@@ -125,6 +148,9 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
         edgeDock.canPeek = { [weak petView] in petView?.hasPeekPose ?? false }
         edgeDock.onPeekChanged = { [weak petView] peeking in
             petView?.setEdgePeek(peeking)
+        }
+        edgeDock.onPeekFlinch = { [weak petView] in
+            petView?.flinchPeek()
         }
         edgeDock.onDockedOriginSettled = { [weak self] origin in
             self?.persistWindowPlacement(origin)
@@ -154,13 +180,19 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
             logHealthError("record reminder shown", error: error)
         }
 
-        petView.showReminderCard(payload) { [weak self] outcome in
+        let cups = payload.type == .hydration ? todaySummaryProvider().map(CupProgress.init(summary:)) : nil
+        petView.showReminderCard(payload, cups: cups) { [weak self] outcome in
             self?.handleReminderOutcome(outcome, for: payload)
         }
     }
 
     func setPetID(_ petID: String) {
         petView.setPetID(petID)
+    }
+
+    /// 衣柜换装后换整套帧（nil = 默认橙子）
+    func setOutfit(_ outfit: String?) {
+        petView.setOutfit(outfit)
     }
 
     func windowDidMove(_ notification: Notification) {
@@ -203,6 +235,12 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
                 recordHealthTransition(from: oldState, to: workSessionController.state, at: now)
                 reminderScheduler.stop()
                 transientMessage = DesktopPetCopy.stopWorkMessage()
+            case .openSettings:
+                onOpenSettingsRequested()
+                return
+            case .openWardrobe:
+                onOpenWardrobeRequested()
+                return
             case .closeWindow:
                 window?.orderOut(nil)
                 return
@@ -236,7 +274,8 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
             let followUpPayload = ReminderPresentationPayload(
                 id: UUID(),
                 type: payload.type,
-                text: payload.text
+                text: payload.text,
+                restSeconds: payload.restSeconds
             )
             reminderScheduler.scheduleSnooze(for: followUpPayload)
         }
@@ -320,6 +359,7 @@ class DesktopPetWindow: NSWindow {
     var menuModelProvider: (() -> DesktopPetMenuModel)?
     var actionHandler: ((DesktopPetMenuAction) -> Void)?
     var contextMenuController: ContextMenuPanelController?
+    var menuSummaryProvider: (() -> MenuTodaySummary?)?
 
     // 无边框窗口默认无法成为 key window，这里开放以接收键盘事件（Spike 阶段备用）
     override var canBecomeKey: Bool { true }
@@ -333,6 +373,7 @@ class DesktopPetWindow: NSWindow {
 
         contextMenuController?.present(
             from: menuModelProvider?() ?? DesktopPetMenuModel(state: .idle),
+            summary: menuSummaryProvider?() ?? nil,
             event: event,
             in: contentView
         )
