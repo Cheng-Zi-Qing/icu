@@ -12,6 +12,8 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
     private let onQuitRequested: () -> Void
     private let nowProvider: () -> Date
     private let petView: DesktopPetView
+    private var edgeDock: PetEdgeDockController?
+    private var gaze: PetGazeController?
     private lazy var contextMenuController = ContextMenuPanelController { [weak self] action in
         self?.handleMenuAction(action)
     }
@@ -26,6 +28,7 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
         onChangeAvatarRequested: @escaping () -> Void,
         onOpenGenerationConfigRequested: @escaping () -> Void,
         onQuitRequested: @escaping () -> Void,
+        edgeSnapSettings: EdgeSnapSettings = .default,
         nowProvider: @escaping () -> Date = { .now }
     ) {
         self.workSessionController = workSessionController
@@ -59,7 +62,8 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
 
         // 浮在所有普通窗口之上
         window.level = .floating
-        window.isMovableByWindowBackground = true
+        // 拖拽由 DesktopPetView 自己处理（带拎起 / 摆动 / 落地效果）
+        window.isMovableByWindowBackground = false
 
         // 不抢焦点
         window.ignoresMouseEvents = false
@@ -75,8 +79,15 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
 
         super.init(window: window)
         window.delegate = self
+        configureEdgeDock(window: window, settings: edgeSnapSettings)
+        configureGaze(window: window)
+        petView.onPetDragEnded = { [weak self] in
+            self?.persistCurrentWindowPlacement()
+            self?.edgeDock?.dragEnded()
+        }
         petView.onOverlayLayoutModeChanged = { [weak self] mode in
             self?.updateWindowSize(for: mode)
+            self?.edgeDock?.overlayVisibilityChanged(mode != .compact)
         }
 
         window.menuModelProvider = { [weak self] in
@@ -90,6 +101,47 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
         applyCurrentStateToView(showBubble: true)
         persistCurrentWindowPlacement()
         window.makeKeyAndOrderFront(nil)
+        edgeDock?.restoreAfterLaunch()
+    }
+
+    /// 转头看鼠标；贴在左右屏幕边时朝向归贴边管（脸朝屏幕里）
+    private func configureGaze(window: NSWindow) {
+        let gaze = PetGazeController(
+            bodyFrameOnScreen: { [weak petView, weak window] in
+                guard let body = petView?.petBodyRect, let origin = window?.frame.origin else { return nil }
+                return body.offsetBy(dx: origin.x, dy: origin.y)
+            },
+            isFacingRight: { [weak petView] in petView?.isFacingRight ?? false },
+            onTurn: { [weak petView] facingRight in petView?.setFacingRight(facingRight) }
+        )
+        gaze.canTurn = { [weak self] in
+            guard let self, self.petView.canTurnTowardCursor else { return false }
+            guard let edgeDock = self.edgeDock else { return true }
+            return edgeDock.dock.horizontal == nil && !edgeDock.isHidden
+        }
+        self.gaze = gaze
+    }
+
+    private func configureEdgeDock(window: NSWindow, settings: EdgeSnapSettings) {
+        let edgeDock = PetEdgeDockController(
+            window: window,
+            settings: settings,
+            bodyRectProvider: { [weak petView] in petView?.petBodyRect }
+        )
+        edgeDock.onFacingChanged = { [weak petView] facingRight in
+            petView?.setFacingRight(facingRight)
+        }
+        edgeDock.canPeek = { [weak petView] in petView?.hasPeekPose ?? false }
+        edgeDock.onPeekChanged = { [weak petView] peeking in
+            petView?.setEdgePeek(peeking)
+        }
+        edgeDock.onDockedOriginSettled = { [weak self] origin in
+            self?.persistWindowPlacement(origin)
+        }
+        petView.onPetDragStarted = { [weak edgeDock] in edgeDock?.dragStarted() }
+        petView.onPointerEntered = { [weak edgeDock] in edgeDock?.pointerEntered() }
+        petView.onPointerExited = { [weak edgeDock] in edgeDock?.pointerExited() }
+        self.edgeDock = edgeDock
     }
 
     @available(*, unavailable)
@@ -133,6 +185,9 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
     }
 
     func windowDidMove(_ notification: Notification) {
+        // 拖拽中每个事件都会移动窗口，等松手（onPetDragEnded）再落盘；
+        // 吸边 / 藏边动画的中间位置也不保存（贴好后由 onDockedOriginSettled 保存）
+        guard !petView.isDraggingPet, edgeDock?.isManagingWindowPosition != true else { return }
         persistCurrentWindowPlacement()
     }
 
@@ -283,7 +338,10 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
         guard let origin = window?.frame.origin else {
             return
         }
+        persistWindowPlacement(origin)
+    }
 
+    private func persistWindowPlacement(_ origin: CGPoint) {
         do {
             try workSessionController.persistWindowPlacement(SavedWindowPlacement(origin: origin))
         } catch {
@@ -310,11 +368,6 @@ class DesktopPetWindow: NSWindow {
     // 无边框窗口默认无法成为 key window，这里开放以接收键盘事件（Spike 阶段备用）
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
-
-    // 拖拽移动窗口
-    override func mouseDragged(with event: NSEvent) {
-        performDrag(with: event)
-    }
 
     // 右键菜单
     override func rightMouseDown(with event: NSEvent) {

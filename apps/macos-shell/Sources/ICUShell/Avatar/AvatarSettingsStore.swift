@@ -32,6 +32,16 @@ final class AvatarSettingsStore {
         return avatar["current_id"] as? String
     }
 
+    /// 贴边吸附配置；文件缺失或损坏时用默认值（不影响启动）
+    func loadEdgeSnapSettings() -> EdgeSnapSettings {
+        do {
+            return EdgeSnapSettings(settingsObject: try loadRootObject())
+        } catch {
+            NSLog("[AvatarSettingsStore] failed to read edge_snap settings, using defaults: \(error.localizedDescription)")
+            return .default
+        }
+    }
+
     func saveCurrentAvatarID(_ id: String) throws {
         var rootObject = try loadRootObject()
 

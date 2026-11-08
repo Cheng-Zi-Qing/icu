@@ -2577,7 +2577,7 @@ func testDesktopPetViewAcceptsFirstMouseForDesktopDragging() throws {
 }
 
 @MainActor
-func testDesktopPetWindowAllowsBackgroundDragging() throws {
+func testDesktopPetViewHandlesDraggingItself() throws {
     _ = try makeInstalledThemeManager()
     let appPaths = try makeTemporaryAppPaths()
     let stateStore = try StateStore(paths: appPaths)
@@ -2600,10 +2600,41 @@ func testDesktopPetWindowAllowsBackgroundDragging() throws {
     )
     defer { controller.close() }
 
+    // 拖拽由视图自己处理（带拎起 / 摆动 / 落地效果），不能再交给系统移动窗口，
+    // 否则视图收不到拖动和松手事件
     try expect(
-        controller.window?.isMovableByWindowBackground == true,
-        "desktop pet window should allow background dragging"
+        controller.window?.isMovableByWindowBackground == false,
+        "desktop pet window should not let the system take over dragging"
     )
+    let petView = controller.window?.contentView as? DesktopPetView
+    try expect(petView != nil, "desktop pet window content should be the pet view")
+    try expect(petView?.mouseDownCanMoveWindow == false, "pet view should move the window itself while dragging")
+}
+
+func testPetDragControllerMovesWindowWithPointerAfterThreshold() throws {
+    var now: TimeInterval = 0
+    let controller = PetDragController(timeProvider: { now })
+    let visibleFrame = CGRect(x: 0, y: 0, width: 1000, height: 800)
+    // 身体只占窗口左边 104pt，右侧透明留白可以出屏
+    let body = CGRect(x: 0, y: 4, width: 104, height: 116)
+
+    controller.mouseDown(mouseLocation: CGPoint(x: 500, y: 300), windowOrigin: CGPoint(x: 440, y: 240))
+    now = 0.02
+    let beforeThreshold = controller.mouseDragged(mouseLocation: CGPoint(x: 501, y: 301), keepVisible: body, visibleFrame: visibleFrame)
+    try expect(beforeThreshold == nil, "tiny movement should not move the window")
+
+    now = 0.05
+    let moved = controller.mouseDragged(mouseLocation: CGPoint(x: 540, y: 330), keepVisible: body, visibleFrame: visibleFrame)
+    try expect(moved == CGPoint(x: 480, y: 270), "window should follow the pointer offset (got \(String(describing: moved)))")
+
+    now = 0.1
+    let clamped = controller.mouseDragged(mouseLocation: CGPoint(x: 1500, y: 330), keepVisible: body, visibleFrame: visibleFrame)
+    try expect(clamped?.x == 896, "the body (not the window) should stop at the screen edge (got \(String(describing: clamped)))")
+
+    now = 0.15
+    try expect(controller.mouseUp(), "releasing after a drag should report a drag")
+    controller.mouseDown(mouseLocation: CGPoint(x: 10, y: 10), windowOrigin: .zero)
+    try expect(!controller.mouseUp(), "press and release without moving should report a click")
 }
 
 func testDesktopPetViewSetWorkStateImmediatelyReloadsMatchingAnimationFamily() throws {
@@ -3455,4 +3486,173 @@ func makeBridgeScript(body: String) throws -> URL {
     let url = try makeTemporaryDirectory().appendingPathComponent("bridge.py", isDirectory: false)
     try writeText(at: url, contents: body)
     return url
+}
+
+private final class ImmediateWindowMover: WindowMoving {
+    private(set) var moves: [CGPoint] = []
+    func move(_ window: NSWindow, to origin: CGPoint, duration: TimeInterval, completion: @escaping () -> Void) {
+        moves.append(origin)
+        window.setFrameOrigin(origin)
+        completion()
+    }
+    func cancel() {}
+}
+
+private final class ManualHideScheduler: HideScheduling {
+    private(set) var pending: (() -> Void)?
+    private(set) var scheduledDelay: TimeInterval?
+    func schedule(after delay: TimeInterval, _ action: @escaping () -> Void) {
+        scheduledDelay = delay
+        pending = action
+    }
+    func cancel() { pending = nil }
+    func fire() {
+        let action = pending
+        pending = nil
+        action?()
+    }
+}
+
+func testPetEdgeDockControllerSnapsHidesAndPeeksOut() throws {
+    let screen = CGRect(x: 0, y: 25, width: 1440, height: 875)
+    let window = NSWindow(contentRect: NSRect(x: 1321, y: 300, width: 128, height: 128), styleMask: [.borderless], backing: .buffered, defer: true)
+    let mover = ImmediateWindowMover()
+    let scheduler = ManualHideScheduler()
+    var facingRight = false
+    var persisted: [CGPoint] = []
+    let controller = PetEdgeDockController(
+        window: window,
+        settings: EdgeSnapSettings(isEnabled: true, snapDistance: 20, peekWidth: 40, autoHideDelay: 2),
+        bodyRectProvider: { facingRight ? CGRect(x: 24, y: 4, width: 104, height: 116) : CGRect(x: 0, y: 4, width: 104, height: 116) },
+        visibleFrameProvider: { _ in screen },
+        mover: mover,
+        hideScheduler: scheduler
+    )
+    controller.onFacingChanged = { facingRight = $0 }
+    controller.onDockedOriginSettled = { persisted.append($0) }
+
+    controller.dragEnded()
+    try expect(window.frame.origin == CGPoint(x: 1336, y: 300), "release near the right edge should snap the body flush (got \(window.frame.origin))")
+    try expect(controller.dock == EdgeDock(horizontal: .right, sitsOnBottom: false), "controller should remember the right dock")
+    try expect(persisted.last == CGPoint(x: 1336, y: 300), "docked position should be persisted")
+    try expect(scheduler.scheduledDelay == 2, "auto hide should be scheduled with the configured delay")
+
+    scheduler.fire()
+    try expect(controller.isHidden, "pet should hide into the edge after the delay")
+    try expect(window.frame.origin == CGPoint(x: 1400, y: 300), "only the peek width should stay on screen (got \(window.frame.origin))")
+    try expect(persisted.last == CGPoint(x: 1336, y: 300), "hidden position must not overwrite the saved docked position")
+
+    controller.pointerEntered()
+    try expect(!controller.isHidden && window.frame.origin == CGPoint(x: 1336, y: 300), "hovering should slide the pet back out")
+    try expect(scheduler.pending == nil, "no hide while the pointer is over the pet")
+    controller.pointerExited()
+    try expect(scheduler.pending != nil, "leaving the pet should re-arm auto hide")
+
+    controller.overlayVisibilityChanged(true)
+    try expect(scheduler.pending == nil && !controller.isHidden, "reminder overlays keep the pet out")
+
+    // 拖到左边：形象镜像，脸朝屏幕里
+    controller.overlayVisibilityChanged(false)
+    controller.dragStarted()
+    try expect(scheduler.pending == nil && controller.dock == .none, "dragging should cancel docking")
+    window.setFrameOrigin(CGPoint(x: 10, y: 500))
+    controller.dragEnded()
+    try expect(facingRight, "docking left should mirror the pet so it faces into the screen")
+    try expect(window.frame.origin == CGPoint(x: -24, y: 500), "mirrored body should be flush with the left edge (got \(window.frame.origin))")
+    scheduler.fire()
+    try expect(window.frame.origin == CGPoint(x: -88, y: 500), "left hide should leave 40pt of the body (got \(window.frame.origin))")
+
+    // 中间松手：不吸附也不藏
+    controller.dragStarted()
+    window.setFrameOrigin(CGPoint(x: 600, y: 400))
+    controller.dragEnded()
+    try expect(controller.dock == .none && scheduler.pending == nil, "drops away from edges should not dock")
+}
+
+/// 转头看鼠标会自己改朝向，贴边时必须重新把脸摆向屏幕里，不能以为「上次已经朝左了」就跳过
+func testPetEdgeDockControllerReassertsFacingOnEverySnap() throws {
+    let screen = CGRect(x: 0, y: 25, width: 1440, height: 875)
+    let window = NSWindow(contentRect: NSRect(x: 1321, y: 300, width: 128, height: 128), styleMask: [.borderless], backing: .buffered, defer: true)
+    var facingRight = false
+    var reported: [Bool] = []
+    let controller = PetEdgeDockController(
+        window: window,
+        settings: EdgeSnapSettings(isEnabled: true, snapDistance: 20, peekWidth: 40, autoHideDelay: 2),
+        bodyRectProvider: { facingRight ? CGRect(x: 24, y: 4, width: 104, height: 116) : CGRect(x: 0, y: 4, width: 104, height: 116) },
+        visibleFrameProvider: { _ in screen },
+        mover: ImmediateWindowMover(),
+        hideScheduler: ManualHideScheduler()
+    )
+    controller.onFacingChanged = { facingRight = $0; reported.append($0) }
+
+    controller.dragEnded()
+    try expect(controller.dock.horizontal == .right && !facingRight, "docked right, facing into the screen")
+
+    // 离开边缘后被鼠标吸引转向右边，又拖回右边贴住
+    controller.dragStarted()
+    window.setFrameOrigin(CGPoint(x: 700, y: 300))
+    controller.dragEnded()
+    facingRight = true
+    controller.dragStarted()
+    window.setFrameOrigin(CGPoint(x: 1321, y: 300))
+    controller.dragEnded()
+    try expect(!facingRight, "snapping right again should turn the face back into the screen (reported \(reported))")
+}
+
+func testPetEdgeDockControllerDucksBehindEdgeThenPeeksOut() throws {
+    let screen = CGRect(x: 0, y: 25, width: 1440, height: 875)
+    let window = NSWindow(contentRect: NSRect(x: 1321, y: 300, width: 128, height: 152), styleMask: [.borderless], backing: .buffered, defer: true)
+    let mover = ImmediateWindowMover()
+    let scheduler = ManualHideScheduler()
+    var peeking = false
+    var peekChanges: [Bool] = []
+    // 坐姿身体占左边 104pt；探头图贴着画布右边，占右边 72pt
+    let sittingBody = CGRect(x: 0, y: 4, width: 104, height: 116)
+    let peekBody = CGRect(x: 56, y: 8, width: 72, height: 112)
+    let controller = PetEdgeDockController(
+        window: window,
+        settings: EdgeSnapSettings(isEnabled: true, snapDistance: 20, peekWidth: 40, autoHideDelay: 2),
+        bodyRectProvider: { peeking ? peekBody : sittingBody },
+        visibleFrameProvider: { _ in screen },
+        mover: mover,
+        hideScheduler: scheduler
+    )
+    controller.canPeek = { true }
+    controller.onPeekChanged = { peeking = $0; peekChanges.append($0) }
+
+    controller.dragEnded()
+    try expect(window.frame.origin == CGPoint(x: 1336, y: 300), "release near the edge should snap flush first")
+
+    scheduler.fire()
+    try expect(peekChanges == [true], "hiding should switch to the peek pose once")
+    try expect(mover.moves.contains(CGPoint(x: 1440, y: 300)), "pet should first duck completely behind the edge (moves: \(mover.moves))")
+    try expect(window.frame.origin == CGPoint(x: 1312, y: 300), "peek pose should end flush with the screen edge (got \(window.frame.origin))")
+    try expect(controller.isHidden, "peeking counts as hidden")
+
+    controller.pointerEntered()
+    try expect(peekChanges == [true, false], "hovering should leave the peek pose")
+    try expect(window.frame.origin == CGPoint(x: 1336, y: 300), "pet should come back out to the docked spot (got \(window.frame.origin))")
+
+    // 探头时被抓起：立刻恢复正常形象
+    controller.pointerExited()
+    scheduler.fire()
+    try expect(peeking, "should be peeking again after the delay")
+    controller.dragStarted()
+    try expect(!peeking, "grabbing a peeking pet should restore the normal pose")
+}
+
+func testPetEdgeDockControllerDoesNothingWhenDisabled() throws {
+    let window = NSWindow(contentRect: NSRect(x: 1321, y: 300, width: 128, height: 128), styleMask: [.borderless], backing: .buffered, defer: true)
+    let scheduler = ManualHideScheduler()
+    let controller = PetEdgeDockController(
+        window: window,
+        settings: EdgeSnapSettings(isEnabled: false, snapDistance: 20, peekWidth: 40, autoHideDelay: 2),
+        bodyRectProvider: { CGRect(x: 0, y: 4, width: 104, height: 116) },
+        visibleFrameProvider: { _ in CGRect(x: 0, y: 25, width: 1440, height: 875) },
+        mover: ImmediateWindowMover(),
+        hideScheduler: scheduler
+    )
+    controller.dragEnded()
+    try expect(window.frame.origin == CGPoint(x: 1321, y: 300), "disabled edge snap should leave the window where it was dropped")
+    try expect(scheduler.pending == nil, "disabled edge snap should never auto hide")
 }

@@ -33,6 +33,14 @@ struct PetAssetLocator {
         return nil
     }
 
+    /// 姿势帧目录 `<pet>/<subdirectory>`（drag 拖拽、edge 贴边探头、react / sleep / idle_act 动作片段），
+    /// 按与待机动画相同的优先级查找
+    func resolvePoseSpriteDirectory(for petID: String, subdirectory: String = "drag") -> URL? {
+        candidatePetDirectories(for: petID)
+            .map { $0.appendingPathComponent(subdirectory, isDirectory: true) }
+            .first(where: isDirectory(at:))
+    }
+
     private func candidatePetDirectories(for petID: String) -> [URL] {
         var directories: [URL] = []
 

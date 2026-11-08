@@ -113,7 +113,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 },
                 onQuitRequested: { [weak self] in
                     self?.quit()
-                }
+                },
+                edgeSnapSettings: avatarSettingsStore.loadEdgeSnapSettings()
             )
             avatarCoordinator.onCurrentAvatarChanged = { [weak self] avatarID in
                 self?.petWindowController?.setPetID(avatarID)

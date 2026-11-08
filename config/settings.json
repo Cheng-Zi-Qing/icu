@@ -22,7 +22,7 @@
   "edge_snap" : {
     "auto_hide_delay" : 2000,
     "enabled" : true,
-    "peek_width" : 10,
+    "peek_width" : 40,
     "snap_distance" : 20
   },
   "timers" : {
