@@ -67,6 +67,16 @@ swiftc \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/PetAssetLocatorManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/WindowPlacementManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/TestSupport.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUHook/AgentHookEvent.swift" \
+  "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/AgentHookManualTests.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Agent/AgentBoard.swift" \
+  "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/AgentBoardManualTests.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Agent/AgentActivity.swift" \
+  "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/AgentActivityManualTests.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Agent/AgentDirectoryReader.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Agent/ClaudeHookInstaller.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Agent/AgentStatusMonitor.swift" \
+  "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/AgentSetupManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/StateStoreManualMain.swift" \
   -o "$TMP_DIR/runtime-tests"
 
@@ -104,6 +114,8 @@ swiftc -framework AppKit \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Drag/PetDragController.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Drag/PetPoseSprites.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Drag/PetLiftWindow.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Agent/AgentBoard.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Agent/AgentActivity.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/SettingsValue.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/EdgeSnapSettings.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/ReminderTimerSettings.swift" \
@@ -119,6 +131,9 @@ swiftc -framework AppKit \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/AppSettingsStore.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Edge/EdgeDockLayout.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Edge/PetPeekScript.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Work/PetWorkScenes.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Work/PetChase.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/DesktopPetView+Work.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Edge/WindowSlideAnimator.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Edge/PetEdgeDockController.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Edge/PetPeekFrames.swift" \
@@ -170,6 +185,8 @@ swiftc -framework AppKit \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/ReminderAppKitManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/WardrobeAppKitManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/PetLiftAppKitManualTests.swift" \
+  "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/AgentAppKitManualTests.swift" \
+  "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/PetWorkSceneAppKitManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/AppKitTestSupport.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/MenuPanelAppKitManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/PixelArtScalerAppKitManualTests.swift" \

@@ -9,7 +9,9 @@
     "stop_work": "下班",
     "hide_pet": "隐藏桌宠",
     "open_wardrobe": "衣柜",
-    "open_settings": "设置…"
+    "open_settings": "设置…",
+    "connect_claude": "接入 Claude Code",
+    "disconnect_claude": "断开 Claude Code"
   },
   "pet": {
     "status_idle": "待机中",

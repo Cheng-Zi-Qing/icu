@@ -1,12 +1,12 @@
 import AppKit
 
-/// 贴边吸附 + 自动藏边 + 鼠标靠近探出来
+/// 贴边吸附 + 自动藏边 + 探头
 ///
 /// 流程：
 /// 1. 松手时身体离左 / 右 / 下边不超过 `snapDistance` → 滑过去贴住
 /// 2. 贴在左右边、`autoHideDelay` 内没碰它 → 先整只躲到屏幕边外，
 ///    再换成「探头扒边」的专用形象把脑袋探出来（没有探头图的宠物退回只露 `peekWidth`）
-/// 3. 鼠标移到露出的部分，或者有提醒卡片 → 吓一跳缩回去、换回正常形象再滑出来
+/// 3. 只有拖它或者来了提醒卡片才出来；鼠标路过不出来。有提醒时探着头的会吓一跳缩回去、换回正常形象再滑出来
 /// 贴左边时形象镜像，让脸朝屏幕里。
 final class PetEdgeDockController {
     private enum Timing {
@@ -91,10 +91,10 @@ final class PetEdgeDockController {
         settle(animated: false)
     }
 
+    /// 鼠标在身上时不藏；但已经藏起来的不会因为鼠标路过就出来，要拖才出来
     func pointerEntered() {
         isPointerInside = true
         hideScheduler.cancel()
-        reveal()
     }
 
     func pointerExited() {

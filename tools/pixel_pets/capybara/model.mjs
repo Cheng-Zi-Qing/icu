@@ -15,6 +15,8 @@ export const PALETTE = {
   straw: '#E9C46A', strawShade: '#C99A3E', band: '#C8503C',
   // 来访的小鸟（水豚身上常停着小鸟）
   bird: '#7FB2D9', birdWing: '#4F7FAE',
+  // 干活场景里青菜的暗面
+  leaf: '#3F7F34',
 };
 
 export const POSE_LABELS = {

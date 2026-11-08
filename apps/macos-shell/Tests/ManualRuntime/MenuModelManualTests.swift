@@ -69,3 +69,22 @@ func testMenuActionTitlesCanBeOverriddenByTextCatalog() throws {
         "desktop pet menu title should come from the installed text catalog"
     )
 }
+
+func testClaudeMenuEntryFollowsTheConnection() throws {
+    try expect(
+        DesktopPetMenuModel(state: .idle, claudeConnection: false).sections
+            == [[.startWork], [.openWardrobe, .openSettings, .connectClaude], [.closeWindow, .quitApp]],
+        "not connected: offer to connect Claude Code next to wardrobe and settings"
+    )
+    try expect(
+        DesktopPetMenuModel(state: .working, claudeConnection: true).sections[1] == [.openWardrobe, .openSettings, .disconnectClaude],
+        "connected: offer to disconnect"
+    )
+    try expect(
+        StatusItemMenuModel(claudeConnection: false).sections == [[.showPet], [.openWardrobe, .openSettings, .connectClaude], [.quitApp]],
+        "the menu bar menu offers it too"
+    )
+    try expect(StatusItemMenuModel(claudeConnection: true).sections[1].last == .disconnectClaude, "menu bar: disconnect when connected")
+    try expect(DesktopPetMenuAction.connectClaude.title == "接入 Claude Code", "connect title")
+    try expect(StatusItemMenuAction.disconnectClaude.title == "断开 Claude Code", "disconnect title")
+}

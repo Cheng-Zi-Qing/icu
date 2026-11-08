@@ -135,6 +135,12 @@ main() {
 
   cp "$binary_path" "$MACOS_DIR/ICUShell"
   chmod +x "$MACOS_DIR/ICUShell"
+  # Claude Code 钩子：和 ICUShell 一起构建，放在同一个目录
+  local hook_path
+  hook_path="$(dirname "$binary_path")/icu-hook"
+  [[ -f "$hook_path" ]] || fail "unable to locate icu-hook next to $binary_path"
+  cp "$hook_path" "$MACOS_DIR/icu-hook"
+  chmod +x "$MACOS_DIR/icu-hook"
   write_info_plist
   copy_runtime_resources
   sign_bundle_if_needed

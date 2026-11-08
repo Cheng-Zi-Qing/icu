@@ -13,6 +13,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsStore: AppSettingsStore?
     private var settingsWindowController: SettingsWindowController?
     private var wardrobe: WardrobeCoordinator?
+    private var agentMonitor: AgentStatusMonitor?
+    private var claudeInstaller: ClaudeHookInstaller?
     private var healthTracker: HealthSessionTracker?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -89,6 +91,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             )
             petWindowController?.setOutfit(wardrobe.outfitID)
+            configureClaudeCode(paths: paths)
             petWindowController?.showWindow(nil)
         } catch {
             NSLog("[ICUShell] failed to bootstrap runtime: \(error.localizedDescription)")
@@ -119,7 +122,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        statusMenuController?.toggle(from: button, model: StatusItemMenuModel(), summary: todaySummary())
+        statusMenuController?.toggle(from: button, model: StatusItemMenuModel(claudeConnection: claudeConnection()), summary: todaySummary())
     }
 
     @objc private func quit() {
@@ -134,8 +137,69 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             wardrobe?.open()
         case .openSettings:
             openSettings()
+        case .connectClaude:
+            setClaudeConnected(true)
+        case .disconnectClaude:
+            setClaudeConnected(false)
         case .quitApp:
             quit()
+        }
+    }
+
+    // MARK: - Claude Code
+
+    /// 读 icu-hook 写下的会话状态，交给桌宠表现；菜单里能接入 / 断开
+    private func configureClaudeCode(paths: AppPaths) {
+        let installer = ClaudeHookInstaller.live(appPaths: paths)
+        claudeInstaller = installer
+        refreshInstalledHook(installer)
+        let monitor = AgentStatusMonitor(reader: AgentDirectoryReader(appPaths: paths))
+        monitor.onChange = { [weak self] summary in
+            self?.petWindowController?.setAgentSummary(summary)
+        }
+        agentMonitor = monitor
+        petWindowController?.setAgentSummary(monitor.summary)
+        petWindowController?.claudeConnection = { [weak self] in self?.claudeConnection() }
+        petWindowController?.onClaudeConnectionChange = { [weak self] connect in self?.setClaudeConnected(connect) }
+    }
+
+    /// 已经接上的话，换成这个版本 app 自带的 icu-hook（比如新版开始记工具名）
+    private func refreshInstalledHook(_ installer: ClaudeHookInstaller) {
+        guard let binary = ClaudeHookInstaller.bundledHookBinary else { return }
+        do {
+            if try installer.refreshHookBinary(from: binary) {
+                NSLog("[ICUShell] Updated the installed icu-hook to the bundled version")
+            }
+        } catch {
+            NSLog("[ICUShell] Could not update the installed icu-hook: \(error.localizedDescription)")
+        }
+    }
+
+    /// nil：没法接（找不到 icu-hook，也没装过），菜单里不显示
+    private func claudeConnection() -> Bool? {
+        guard let claudeInstaller else { return nil }
+        if claudeInstaller.isInstalled { return true }
+        let binary = ClaudeHookInstaller.bundledHookBinary
+        return binary.map { FileManager.default.isExecutableFile(atPath: $0.path) } == true ? false : nil
+    }
+
+    private func setClaudeConnected(_ connect: Bool) {
+        guard let claudeInstaller else { return }
+        do {
+            if connect {
+                guard let binary = ClaudeHookInstaller.bundledHookBinary else { throw ClaudeHookInstallerError.missingHookBinary }
+                try claudeInstaller.install(hookBinary: binary, now: .now)
+                petWindowController?.showMessage("接上 Claude Code 了，新开的会话就能看到")
+            } else {
+                try claudeInstaller.uninstall(now: .now)
+                petWindowController?.showMessage("和 Claude Code 断开了")
+            }
+            agentMonitor?.reload()
+        } catch let error as ClaudeHookInstallerError {
+            petWindowController?.showMessage(error.userMessage, duration: 4)
+        } catch {
+            NSLog("[ICUShell] Claude Code hook \(connect ? "install" : "uninstall") failed: \(error.localizedDescription)")
+            petWindowController?.showMessage("没弄成，稍后再试试", duration: 4)
         }
     }
 

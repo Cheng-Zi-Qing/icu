@@ -11,6 +11,7 @@ import { allFrames, GENERATED_DIRECTORIES, renderPose } from './render.mjs';
 import { OUTFIT_HEADWEAR } from './headwear.mjs';
 import { CURSOR_SCALE, cursorDefinitions, cursorManifest } from './cursors.mjs';
 import { validateModel } from './validate.mjs';
+import { workSceneManifest } from './front-work.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const MODEL_PATH = join(HERE, 'pose.json');
@@ -33,6 +34,11 @@ function writeCursors(assetsDir) {
   writeFileSync(join(dir, 'cursors.json'), `${JSON.stringify(cursorManifest(), null, 2)}\n`);
 }
 
+/** 干活场景的播放顺序：每套装扮的 work/ 里各放一份，App 按装扮目录读 */
+function writeWorkManifest(dir) {
+  writeFileSync(join(dir, 'work', 'scenes.json'), `${JSON.stringify(workSceneManifest(), null, 2)}\n`);
+}
+
 function writeFrames(frames, dir) {
   for (const [path, grid] of frames) {
     const target = join(dir, path);
@@ -51,10 +57,13 @@ export function writeAssets(model, assetsDir = DEFAULT_ASSETS) {
   rmSync(join(assetsDir, 'outfits'), { recursive: true, force: true });
   writeCursors(assetsDir);
   const base = writeFrames(allFrames(model), assetsDir);
-  return OUTFIT_HEADWEAR.reduce(
-    (count, headwear) => count + writeFrames(allFrames(model, { headwear }), join(assetsDir, 'outfits', headwear)),
-    base,
-  );
+  writeWorkManifest(assetsDir);
+  return OUTFIT_HEADWEAR.reduce((count, headwear) => {
+    const dir = join(assetsDir, 'outfits', headwear);
+    const written = writeFrames(allFrames(model, { headwear }), dir);
+    writeWorkManifest(dir);
+    return count + written;
+  }, base);
 }
 
 /** 8 倍预览，含完整的趴姿（不截断） */

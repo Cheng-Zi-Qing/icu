@@ -2,6 +2,7 @@
 import { Grid, SIDES, canvasPixel, partMask } from './raster.mjs';
 import { renderFrontPeek, renderFrontUpright } from './front-peek.mjs';
 import { HEADWEAR, itemIcon, sideHeadwear } from './headwear.mjs';
+import { workFrames } from './front-work.mjs';
 
 export const CANVAS_HEIGHT = 32;
 
@@ -350,8 +351,10 @@ export function allFrames(model, { headwear = HEADWEAR[0] } = {}) {
   // 设置 / 衣柜窗口标题栏上趴着的那只（正面，爪子压在画布底边）
   frames.push(['ui/bar_peek.png', renderFrontUpright({ headwear })]);
   for (const kind of HEADWEAR) frames.push([`ui/item_${kind}.png`, itemIcon(kind)]);
+  // Agent 干活时的正面小场景（读文件、搜索、改代码、跑命令、子 Agent、在想）
+  frames.push(...workFrames(headwear, model));
   return frames;
 }
 
 /** 素材里按帧重新生成的目录（写之前清空，避免旧帧残留） */
-export const GENERATED_DIRECTORIES = ['idle/main', 'idle/chew', 'drag', 'edge', 'react', 'sleep', 'idle_act', 'ui'];
+export const GENERATED_DIRECTORIES = ['idle/main', 'idle/chew', 'drag', 'edge', 'react', 'sleep', 'idle_act', 'ui', 'work'];

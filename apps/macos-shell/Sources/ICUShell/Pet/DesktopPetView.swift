@@ -98,9 +98,16 @@ class DesktopPetView: NSView {
     /// 摸头 / 打盹 / 待机小动作的逐帧片段（盖在待机动画上，让位给拖拽和探头）
     var actionSprites: [String: PetPoseSprites] = [:]
     var actionImage: NSImage?
+    /// Agent 干活小场景当前那一帧（见 DesktopPetView+Work）
+    var workImage: NSImage?
+    lazy var workPlayer = makeWorkPlayer()
     /// 像素手型光标（见 DesktopPetView+Cursor）
     var cursorSet = PetCursorSet(directory: nil)
     var currentCursorKind: PetCursorKind?
+    /// 「后台改光标」开关：只在鼠标在豚鼠身上时打开（见 BackgroundCursorGate）
+    let cursorGate: BackgroundCursorGate
+    /// 鼠标真正在屏幕上的位置（测试里换掉）；用来识别 AppKit 补发的过期鼠标事件
+    var pointerLocation: () -> CGPoint = { NSEvent.mouseLocation }
     var isPressingPet = false
     lazy var behavior = makeBehaviorCoordinator()
 
@@ -137,11 +144,13 @@ class DesktopPetView: NSView {
                 return 0
             }
             return Int.random(in: 0..<upperBound)
-        }
+        },
+        cursorGate: BackgroundCursorGate = .shared
     ) {
         self.assetLocator = assetLocator
         self.petID = petID
         self.variantIndexProvider = variantIndexProvider
+        self.cursorGate = cursorGate
         super.init(frame: frameRect)
         setup()
     }
@@ -155,6 +164,7 @@ class DesktopPetView: NSView {
             }
             return Int.random(in: 0..<upperBound)
         }
+        self.cursorGate = .shared
         super.init(coder: coder)
         setup()
     }
@@ -169,8 +179,6 @@ class DesktopPetView: NSView {
         configureDragEffects()
         // 打盹要一直留意用户在不在，不能等到第一次鼠标经过才开始
         _ = behavior
-        // 桌宠的 App 平时不在前台，要先放开「后台改光标」，手型光标才看得到
-        BackgroundCursor.enable()
         loadAnimation(for: .idle)
         setupTransientBubble()
         setupReminderCard()
@@ -244,6 +252,7 @@ class DesktopPetView: NSView {
     }
 
     func setStatusText(_ text: String, showBubble: Bool = false) {
+        guard text != persistentStatusText || text != statusLabel.stringValue || showBubble else { return }
         persistentStatusText = text
         statusLabel.stringValue = text
         layoutStatusChip()
@@ -336,12 +345,12 @@ class DesktopPetView: NSView {
 
     /// 能不能转头看鼠标：探头、被拎着、正在打盹 / 被摸头时都不转
     var canTurnTowardCursor: Bool {
-        !isPeeking && !isDraggingPet && behavior.activeClip == nil
+        !isPeeking && !isDraggingPet && behavior.activeClip == nil && workPlayer.activity == nil
     }
 
-    /// 没有拖拽 / 探头时该显示的画面：摸头打盹片段优先，否则是待机动画帧
+    /// 没有拖拽 / 探头时该显示的画面：Agent 干活小场景 > 摸头打盹片段 > 待机动画帧
     var restingImage: NSImage? {
-        actionImage ?? currentImage
+        workImage ?? actionImage ?? currentImage
     }
 
     func makeBehaviorCoordinator() -> PetBehaviorCoordinator {
@@ -351,6 +360,7 @@ class DesktopPetView: NSView {
         coordinator.isAvailable = { [weak self] in
             guard let self else { return false }
             return !self.isPeeking && !self.dragController.isDragging && self.currentOverlayLayoutMode == .compact
+                && self.workPlayer.activity == nil
         }
         coordinator.onImageChanged = { [weak self] image in
             self?.applyActionImage(image)
@@ -461,6 +471,10 @@ class DesktopPetView: NSView {
         }
         let actionDirectories = Set(PetActionClip.allCases.map(\.directory))
         cursorSet = PetCursorSet(directory: assetLocator.resolvePoseSpriteDirectory(for: petID, subdirectory: "cursor", outfit: outfitID))
+        workPlayer.reload(scenes: PetWorkScenes(
+            directory: assetLocator.resolvePoseSpriteDirectory(for: petID, subdirectory: "work", outfit: outfitID),
+            canvasPointSize: Self.compactContentSize
+        ))
         actionSprites = Dictionary(uniqueKeysWithValues: actionDirectories.compactMap { name in
             assetLocator.resolvePoseSpriteDirectory(for: petID, subdirectory: name, outfit: outfitID).map {
                 (name, PetPoseSprites(directory: $0, canvasPointSize: Self.compactContentSize))

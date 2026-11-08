@@ -20,6 +20,22 @@ enum PetCursorKind: String, CaseIterable {
         return overHead ? .pat : .grab
     }
 
+    /// 这次鼠标移动该怎么动光标
+    enum Update: Equatable {
+        /// 在桌宠身上：设成这种手型（每次都设，前台 App 可能改回去）
+        case show(PetCursorKind)
+        /// 刚离开桌宠身体：把箭头还回去，只做一次
+        case restoreArrow
+        /// 在透明区域上：下面是别的 App（比如终端的文字），光标归它管
+        case leaveAlone
+    }
+
+    /// 透明区域每动一下都设箭头，会和下面 App 的光标来回抢，光标可能间歇变成白方块
+    static func update(from previous: PetCursorKind?, to next: PetCursorKind?) -> Update {
+        if let next { return .show(next) }
+        return previous == nil ? .leaveAlone : .restoreArrow
+    }
+
     /// 宠物没有像素光标素材时用系统自带的手型
     var systemCursor: NSCursor {
         switch self {
@@ -72,10 +88,11 @@ final class PetCursorSet {
                 print("[PetCursorSet] Missing cursor image \(url.path); using the system cursor")
                 continue
             }
-            // 位图是 3 倍导出的，按点尺寸显示：Retina 下像素边缘仍然清楚
-            image.size = NSSize(width: manifest.pointSize, height: manifest.pointSize)
+            // 小位图按点尺寸放大，1 倍 / 2 倍屏的位图都提前备好：系统不用自己缩放
+            // （后台换光标时它缩坏了会显示成白方块），像素边缘也清楚
+            let pointSize = NSSize(width: manifest.pointSize, height: manifest.pointSize)
             let hotSpot = NSPoint(x: entry.hotSpot[0] * scale, y: entry.hotSpot[1] * scale)
-            loaded[kind] = NSCursor(image: image, hotSpot: hotSpot)
+            loaded[kind] = NSCursor(image: PixelArtScaler.pixelImage(image, pointSize: pointSize), hotSpot: hotSpot)
         }
         return loaded
     }

@@ -48,8 +48,8 @@ extension DesktopPetView {
         if normalizedBodyBounds == nil {
             normalizedBodyBounds = PixelArtScaler.opaqueBounds(of: image)
         }
-        // 拖拽姿势 / 贴边探头 / 摸头打盹片段显示期间，动画帧照常推进，但先不上屏
-        if !isShowingDragPose && !isPeeking && actionImage == nil {
+        // 拖拽姿势 / 贴边探头 / 干活小场景 / 摸头打盹片段显示期间，动画帧照常推进，但先不上屏
+        if !isShowingDragPose && !isPeeking && workImage == nil && actionImage == nil {
             present(image)
         }
     }

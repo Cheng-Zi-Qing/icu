@@ -50,9 +50,25 @@ enum PixelArtScaler {
         return scaled
     }
 
+    /// 像素图按指定点尺寸，备好每种屏幕倍率的位图（最近邻，不插值），系统用时不用再缩放
+    static func pixelImage(_ image: NSImage, pointSize: NSSize, backingScales: [Int] = [1, 2]) -> NSImage {
+        guard let source = image.representations.compactMap({ $0 as? NSBitmapImageRep }).first else { return image }
+        let result = NSImage(size: pointSize)
+        for scale in backingScales {
+            let width = Int(pointSize.width.rounded()) * scale
+            let height = Int(pointSize.height.rounded()) * scale
+            guard let rep = nearestNeighborRep(from: source, width: width, height: height) else { return image }
+            rep.size = pointSize
+            result.addRepresentation(rep)
+        }
+        return result
+    }
+
     private static func nearestNeighborRep(from source: NSBitmapImageRep, factor: Int) -> NSBitmapImageRep? {
-        let width = source.pixelsWide * factor
-        let height = source.pixelsHigh * factor
+        nearestNeighborRep(from: source, width: source.pixelsWide * factor, height: source.pixelsHigh * factor)
+    }
+
+    private static func nearestNeighborRep(from source: NSBitmapImageRep, width: Int, height: Int) -> NSBitmapImageRep? {
         guard
             let cgSource = source.cgImage,
             let target = NSBitmapImageRep(

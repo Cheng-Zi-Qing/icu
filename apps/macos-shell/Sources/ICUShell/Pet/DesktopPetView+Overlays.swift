@@ -208,16 +208,17 @@ extension DesktopPetView {
     }
 
     func updateToolTipForVisibleContent() {
+        let next: String?
         if !reminderCardView.isHidden, let activeReminderTooltip {
-            toolTip = activeReminderTooltip
-            return
+            next = activeReminderTooltip
+        } else if !transientBubbleContainer.isHidden {
+            next = transientBubbleLabel.stringValue
+        } else {
+            next = persistentStatusText
         }
-
-        if !transientBubbleContainer.isHidden {
-            toolTip = transientBubbleLabel.stringValue
-            return
+        // 每次赋值 AppKit 都会重建提示区域、重新算光标，没变就不动
+        if toolTip != next {
+            toolTip = next
         }
-
-        toolTip = persistentStatusText
     }
 }

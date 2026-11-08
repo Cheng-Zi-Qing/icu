@@ -85,3 +85,6 @@ const turnedTowardRightEdge = (grid) =>
 export function renderFrontPeek(options = {}) {
   return turnedTowardRightEdge(renderFrontUpright(options));
 }
+
+// 干活场景（front-work.mjs）复用同一颗正面的头，保证三视图比例一致
+export { head as frontHead, headwear as frontHeadwearAt, row as frontRow, rect, both, N as FRONT_SIZE };

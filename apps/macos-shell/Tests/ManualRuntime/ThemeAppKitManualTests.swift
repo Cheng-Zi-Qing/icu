@@ -1080,14 +1080,19 @@ func testPetEdgeDockControllerSnapsHidesAndPeeksOut() throws {
     try expect(window.frame.origin == CGPoint(x: 1400, y: 300), "only the peek width should stay on screen (got \(window.frame.origin))")
     try expect(persisted.last == CGPoint(x: 1336, y: 300), "hidden position must not overwrite the saved docked position")
 
+    // 只是鼠标路过：不出来，要拖它才出来
     controller.pointerEntered()
-    try expect(!controller.isHidden && window.frame.origin == CGPoint(x: 1336, y: 300), "hovering should slide the pet back out")
+    try expect(controller.isHidden && window.frame.origin == CGPoint(x: 1400, y: 300), "hovering alone must not pull the pet out (got \(window.frame.origin))")
+    controller.pointerExited()
+
+    controller.overlayVisibilityChanged(true)
+    try expect(scheduler.pending == nil && !controller.isHidden, "reminder overlays bring the pet out")
+    try expect(window.frame.origin == CGPoint(x: 1336, y: 300), "…to the docked spot")
+    controller.pointerEntered()
+    controller.overlayVisibilityChanged(false)
     try expect(scheduler.pending == nil, "no hide while the pointer is over the pet")
     controller.pointerExited()
     try expect(scheduler.pending != nil, "leaving the pet should re-arm auto hide")
-
-    controller.overlayVisibilityChanged(true)
-    try expect(scheduler.pending == nil && !controller.isHidden, "reminder overlays keep the pet out")
 
     // 拖到左边：形象镜像，脸朝屏幕里
     controller.overlayVisibilityChanged(false)
@@ -1168,18 +1173,15 @@ func testPetEdgeDockControllerDucksBehindEdgeThenPeeksOut() throws {
     try expect(controller.isHidden, "peeking counts as hidden")
 
     controller.pointerEntered()
-    try expect(peekChanges == [true, false], "hovering should leave the peek pose")
-    try expect(window.frame.origin == CGPoint(x: 1336, y: 300), "pet should come back out to the docked spot (got \(window.frame.origin))")
+    try expect(peekChanges == [true], "hovering keeps peeking (got \(peekChanges))")
+    try expect(window.frame.origin == CGPoint(x: 1312, y: 300), "and stays behind the edge (got \(window.frame.origin))")
 
     // 探头时被抓起：立刻恢复正常形象
-    controller.pointerExited()
-    scheduler.fire()
-    try expect(peeking, "should be peeking again after the delay")
     controller.dragStarted()
     try expect(!peeking, "grabbing a peeking pet should restore the normal pose")
 }
 
-/// 鼠标碰到探出来的头：先吓一跳（> < 眼、往后缩），再缩回边后，换正常形象滑出来
+/// 探着头时来了提醒：先吓一跳（> < 眼、往后缩），再缩回边后，换正常形象滑出来
 func testPetEdgeDockControllerFlinchesBeforeDuckingBackIn() throws {
     let screen = CGRect(x: 0, y: 25, width: 1440, height: 875)
     let window = NSWindow(contentRect: NSRect(x: 1321, y: 300, width: 128, height: 152), styleMask: [.borderless], backing: .buffered, defer: true)
@@ -1204,12 +1206,14 @@ func testPetEdgeDockControllerFlinchesBeforeDuckingBackIn() throws {
     try expect(events == ["peek"], "no flinch while hiding (got \(events))")
 
     controller.pointerEntered()
-    try expect(events == ["peek", "flinch", "normal"], "touching the head flinches first, then swaps back (got \(events))")
+    try expect(events == ["peek"], "a passing pointer does not startle it out (got \(events))")
+    controller.overlayVisibilityChanged(true)
+    try expect(events == ["peek", "flinch", "normal"], "a reminder pops it out: flinch first, then swap back (got \(events))")
     try expect(window.frame.origin == CGPoint(x: 1336, y: 300), "and still comes back out to the docked spot (got \(window.frame.origin))")
 
     // 一直是正常形象时（没探头）碰它不会吓一跳
     events.removeAll()
-    controller.pointerExited()
+    controller.overlayVisibilityChanged(false)
     controller.overlayVisibilityChanged(true)
     try expect(!events.contains("flinch"), "only a peeking head flinches (got \(events))")
 }

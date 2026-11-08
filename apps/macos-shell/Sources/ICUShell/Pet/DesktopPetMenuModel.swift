@@ -8,6 +8,8 @@ enum DesktopPetMenuAction: String, Equatable {
     case stopWork
     case openWardrobe
     case openSettings
+    case connectClaude
+    case disconnectClaude
     case closeWindow
     case quitApp
 
@@ -27,6 +29,10 @@ enum DesktopPetMenuAction: String, Equatable {
             return TextCatalog.shared.text(.menuOpenWardrobe)
         case .openSettings:
             return TextCatalog.shared.text(.menuOpenSettings)
+        case .connectClaude:
+            return TextCatalog.shared.text(.menuConnectClaude)
+        case .disconnectClaude:
+            return TextCatalog.shared.text(.menuDisconnectClaude)
         case .closeWindow:
             return TextCatalog.shared.text(.menuHidePet)
         case .quitApp:
@@ -37,28 +43,28 @@ enum DesktopPetMenuAction: String, Equatable {
 
 struct DesktopPetMenuModel: Equatable {
     let state: ShellWorkState
+    /// Claude Code 接上了没有；nil = 没法接（找不到 icu-hook），菜单里不出现
+    let claudeConnection: Bool?
+
+    init(state: ShellWorkState, claudeConnection: Bool? = nil) {
+        self.state = state
+        self.claudeConnection = claudeConnection
+    }
 
     var sections: [[DesktopPetMenuAction]] {
+        let tools: [DesktopPetMenuAction] = [.openWardrobe, .openSettings] + claudeToggle
         switch state {
         case .idle:
-            return [
-                [.startWork],
-                [.openWardrobe, .openSettings],
-                [.closeWindow, .quitApp],
-            ]
+            return [[.startWork], tools, [.closeWindow, .quitApp]]
         case .working:
-            return [
-                [.enterFocus, .takeBreak, .stopWork],
-                [.openWardrobe, .openSettings],
-                [.closeWindow, .quitApp],
-            ]
+            return [[.enterFocus, .takeBreak, .stopWork], tools, [.closeWindow, .quitApp]]
         case .focus, .breakState:
-            return [
-                [.resumeWorking, .stopWork],
-                [.openWardrobe, .openSettings],
-                [.closeWindow, .quitApp],
-            ]
+            return [[.resumeWorking, .stopWork], tools, [.closeWindow, .quitApp]]
         }
+    }
+
+    private var claudeToggle: [DesktopPetMenuAction] {
+        claudeConnection.map { [$0 ? .disconnectClaude : .connectClaude] } ?? []
     }
 
     var items: [DesktopPetMenuAction] {

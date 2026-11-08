@@ -11,6 +11,8 @@ enum UserVisibleCopyKey: String {
     case menuHidePet = "menu.hide_pet"
     case menuOpenSettings = "menu.open_settings"
     case menuOpenWardrobe = "menu.open_wardrobe"
+    case menuConnectClaude = "menu.connect_claude"
+    case menuDisconnectClaude = "menu.disconnect_claude"
 }
 
 extension UserVisibleCopyKey {
@@ -36,6 +38,10 @@ extension UserVisibleCopyKey {
             return "设置…"
         case .menuOpenWardrobe:
             return "衣柜"
+        case .menuConnectClaude:
+            return "接入 Claude Code"
+        case .menuDisconnectClaude:
+            return "断开 Claude Code"
         }
     }
 }
