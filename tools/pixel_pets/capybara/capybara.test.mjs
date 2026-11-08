@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, existsSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { DEFAULT_MODEL } from './model.mjs';
+import { DEFAULT_MODEL, PALETTE } from './model.mjs';
 import { allFrames, birdVisitOptions, napOptions, pettedOptions, renderPose, resolvePose, yuzuWobbleOptions } from './render.mjs';
 import { Grid } from './raster.mjs';
 import { CURSOR_POINT_SIZE, CURSOR_SIZE, cursorDefinitions, cursorManifest } from './cursors.mjs';
@@ -165,15 +165,22 @@ test('peek keeps the counter-clockwise, head-up turn of the lying pose', () => {
   assert.equal(DEFAULT_MODEL.poses.peek.flipY, true);
 });
 
-test('peek only shows the yuzu and part of the head', () => {
+test('peek only shows the orange and part of the head', () => {
   const inks = (grid) => new Set(grid.cells);
   for (const opts of [{}, { blink: true }, { reach: true }]) {
     const peek = renderPose(DEFAULT_MODEL, 'peek', opts);
     const columns = opaqueColumns(peek);
     const shown = Math.max(...columns) - Math.min(...columns) + 1;
     assert.ok(shown <= 16, `only a small part sticks out (${shown}px, ${JSON.stringify(opts)})`);
-    assert.ok(inks(peek).has('star'), 'yuzu visible');
+    assert.ok(inks(peek).has('orange'), 'orange visible');
   }
+});
+
+test('the fruit on the head is an orange, not a yellow yuzu', () => {
+  const sit = new Set(renderPose(DEFAULT_MODEL, 'sit', {}).cells);
+  assert.ok(sit.has('orange'), 'head fruit should use the orange ink');
+  assert.ok(!sit.has('star'), 'yellow star ink is only for stars and sparkles now');
+  assert.equal(PALETTE.orange, '#F08A24');
 });
 
 test('peek reach frame pokes out a little further', () => {

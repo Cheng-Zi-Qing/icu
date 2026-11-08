@@ -181,11 +181,11 @@ function birdLayer(width, { pose, at, faceRight = false }) {
   return Object.entries(shape).reduce((g, [ink, points]) => g.dots(ink, offsetPoints(at, points)), outlined);
 }
 
-/** 柚子单独一层：自己描边后叠到头顶，底边描边和头顶描边重合 */
+/** 头顶的橙子单独一层：自己描边后叠到头顶，底边描边和头顶描边重合 */
 function yuzuLayer(width, transform, anchorMark) {
   const anchor = canvasPixel(transform, anchorMark.x, anchorMark.y);
   return Grid.empty(width, CANVAS_HEIGHT)
-    .dots('star', offsetPoints(anchor, PATTERNS.yuzuFruit))
+    .dots('orange', offsetPoints(anchor, PATTERNS.yuzuFruit))
     .dots('white', [anchor])
     .outlined()
     .dots('grass', offsetPoints(anchor, PATTERNS.yuzuLeaf));

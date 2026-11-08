@@ -9,6 +9,8 @@ export const PALETTE = {
   outline: '#2F1C12', body: '#B0714A', shade: '#8A5236', light: '#CB8F62',
   dark: '#4A2E22', muzzle: '#99603F', white: '#FFFFFF', blush: '#E58D86',
   grass: '#6DAA45', sweat: '#8CC8F0', star: '#F4BC2C', dust: '#D8D0C2',
+  // 头顶的橙子（2026-11-08 从柚子黄改成橙色）
+  orange: '#F08A24',
   // 来访的小鸟（水豚身上常停着小鸟）
   bird: '#7FB2D9', birdWing: '#4F7FAE',
 };
