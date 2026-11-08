@@ -13,8 +13,8 @@ struct EdgeSnapSettings: Equatable {
 
     static let `default` = EdgeSnapSettings(isEnabled: true, snapDistance: 20, peekWidth: 40, autoHideDelay: 2)
 
-    private static let snapDistanceRange: ClosedRange<CGFloat> = 0...200
-    private static let peekWidthRange: ClosedRange<CGFloat> = 4...128
+    private static let snapDistanceRange: ClosedRange<Double> = 0...200
+    private static let peekWidthRange: ClosedRange<Double> = 4...128
     private static let autoHideDelayRangeMs: ClosedRange<Double> = 0...600_000
 
     init(isEnabled: Bool, snapDistance: CGFloat, peekWidth: CGFloat, autoHideDelay: TimeInterval) {
@@ -30,17 +30,11 @@ struct EdgeSnapSettings: Equatable {
         let object = settingsObject?["edge_snap"] as? [String: Any] ?? [:]
 
         isEnabled = object["enabled"] as? Bool ?? fallback.isEnabled
-        snapDistance = Self.number(object["snap_distance"], in: Self.snapDistanceRange).map { CGFloat($0) }
+        snapDistance = SettingsValue.number(object["snap_distance"], in: Self.snapDistanceRange).map { CGFloat($0) }
             ?? fallback.snapDistance
-        peekWidth = Self.number(object["peek_width"], in: Self.peekWidthRange).map { CGFloat($0) }
+        peekWidth = SettingsValue.number(object["peek_width"], in: Self.peekWidthRange).map { CGFloat($0) }
             ?? fallback.peekWidth
-        autoHideDelay = Self.number(object["auto_hide_delay"], in: Self.autoHideDelayRangeMs).map { $0 / 1000 }
+        autoHideDelay = SettingsValue.number(object["auto_hide_delay"], in: Self.autoHideDelayRangeMs).map { $0 / 1000 }
             ?? fallback.autoHideDelay
-    }
-
-    private static func number<T: BinaryFloatingPoint>(_ raw: Any?, in range: ClosedRange<T>) -> Double? {
-        guard let value = (raw as? NSNumber)?.doubleValue, !(raw is Bool) else { return nil }
-        let typed = T(value)
-        return range.contains(typed) ? value : nil
     }
 }

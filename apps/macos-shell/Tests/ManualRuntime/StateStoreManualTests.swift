@@ -146,8 +146,8 @@ func testTextCatalogReturnsBaseValueWhenNoOverrideExists() throws {
     try writeTextFile(
         """
         {
-          "common": {
-            "apply_button": "应用"
+          "menu": {
+            "start_work": "开始工作"
           }
         }
         """,
@@ -157,7 +157,7 @@ func testTextCatalogReturnsBaseValueWhenNoOverrideExists() throws {
     let catalog = try TextCatalog(baseURL: baseURL, overrideURL: nil)
 
     try expect(
-        catalog.text(.commonApplyButton, fallback: "fallback") == "应用",
+        catalog.text(.menuStartWork, fallback: "fallback") == "开始工作",
         "text catalog should read the base value when no override exists"
     )
 }
@@ -171,11 +171,9 @@ func testTextCatalogUsesOverrideWithoutDroppingBaseFallback() throws {
     try writeTextFile(
         """
         {
-          "common": {
-            "close_button": "关闭"
-          },
-          "theme_studio": {
-            "tab_title": "主题风格"
+          "menu": {
+            "show_pet": "显示桌宠",
+            "quit_app": "退出"
           }
         }
         """,
@@ -184,8 +182,8 @@ func testTextCatalogUsesOverrideWithoutDroppingBaseFallback() throws {
     try writeTextFile(
         """
         {
-          "theme_studio": {
-            "tab_title": "像素主题"
+          "menu": {
+            "show_pet": "召唤桌宠"
           }
         }
         """,
@@ -195,11 +193,11 @@ func testTextCatalogUsesOverrideWithoutDroppingBaseFallback() throws {
     let catalog = try TextCatalog(baseURL: baseURL, overrideURL: overrideURL)
 
     try expect(
-        catalog.text(.themeStudioTabTitle, fallback: "fallback") == "像素主题",
+        catalog.text(.menuShowPet, fallback: "fallback") == "召唤桌宠",
         "text catalog should prefer the override when a matching key exists"
     )
     try expect(
-        catalog.text(.commonCloseButton, fallback: "fallback") == "关闭",
+        catalog.text(.menuQuitApp, fallback: "fallback") == "退出",
         "text catalog should keep base values for keys missing in the override"
     )
 }
@@ -214,7 +212,7 @@ func testTextCatalogFallsBackToCallerDefaultForUnknownKey() throws {
     let catalog = try TextCatalog(baseURL: baseURL, overrideURL: nil)
 
     try expect(
-        catalog.text(.speechStudioBubblePreviewTitle, fallback: "桌宠对话气泡预览") == "桌宠对话气泡预览",
+        catalog.text(.menuHidePet, fallback: "藏起来") == "藏起来",
         "text catalog should return the caller fallback when the key is missing everywhere"
     )
 }
@@ -330,37 +328,6 @@ func testUserFacingErrorCopyUsesInstalledCatalogForWorkSessionErrors() throws {
     try expect(
         message == "现在还不能进入专注，先开始工作。",
         "user-facing error copy should use the override for work session transition errors"
-    )
-}
-
-func testUserFacingErrorCopyUsesInstalledCatalogForAvatarBridgeErrors() throws {
-    let original = TextCatalog.shared
-    defer { TextCatalog.installShared(original) }
-
-    _ = try makeInstalledTextCatalog(
-        baseJSON: """
-        {
-          "errors": {
-            "avatar_generate_image_failed": "暂时无法生成形象动作，请检查图像模型配置或鉴权信息。"
-          }
-        }
-        """,
-        overrideJSON: """
-        {
-          "errors": {
-            "avatar_generate_image_failed": "图像动作生成失败，请先检查模型和令牌。"
-          }
-        }
-        """
-    )
-
-    let message = UserFacingErrorCopy.avatarMessage(
-        for: AvatarBuilderBridgeError.executionFailed(command: "generate-image", details: "token missing")
-    )
-
-    try expect(
-        message == "图像动作生成失败，请先检查模型和令牌。",
-        "user-facing error copy should use the override for avatar bridge errors"
     )
 }
 

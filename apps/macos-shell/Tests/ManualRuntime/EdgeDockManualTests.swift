@@ -121,13 +121,13 @@ func testEdgeDockMapsNormalizedBodyIntoViewAndMirrors() throws {
     try expect(facingRight == CGRect(x: 24, y: 0, width: 104, height: 116), "mirrored body should sit on the other side (got \(facingRight))")
 }
 
-func testAvatarSettingsStoreLoadsEdgeSnapSettings() throws {
+func testAppSettingsStoreLoadsEdgeSnapSettings() throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
     let configDir = root.appendingPathComponent("config", isDirectory: true)
     try FileManager.default.createDirectory(at: configDir, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: root) }
 
-    let store = AvatarSettingsStore(repoRootURL: root)
+    let store = AppSettingsStore(repoRootURL: root)
     try expect(store.loadEdgeSnapSettings() == .default, "missing settings file should give default edge snap settings")
 
     let json = #"{"edge_snap": {"enabled": true, "snap_distance": 24, "peek_width": 36, "auto_hide_delay": 3000}}"#

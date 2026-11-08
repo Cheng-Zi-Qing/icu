@@ -42,23 +42,6 @@ func testReminderCardRelayoutsAfterBoundsChange() throws {
     try expect(initialFrame != resizedCard.frame, "reminder card frame should update when desktop pet bounds change")
 }
 
-func testReminderCardTooltipPersistsAcrossThemeChanges() throws {
-    let manager = try makeInstalledThemeManager()
-    let appPaths = try makeTemporaryAppPaths()
-    _ = manager
-    let view = DesktopPetView(
-        frame: NSRect(x: 0, y: 0, width: 128, height: 128),
-        assetLocator: PetAssetLocator(appPaths: appPaths),
-        petID: "missing_pet"
-    )
-    let payload = ReminderPresentationPayload(id: UUID(), type: .eyeCare, text: "看看远处，护护眼。")
-    view.showReminderCard(payload)
-
-    try expect(view.toolTip == payload.text, "test setup should set tooltip to reminder text")
-    try ThemeManager.shared.apply(makeAppKitTestThemePack(id: "reminder_tooltip_refresh"))
-    try expect(view.toolTip == payload.text, "theme changes should not reset reminder tooltip back to status text")
-}
-
 func testReminderCardEnablesAndDispatchesActionsWhenCallbackProvided() throws {
     let view = DesktopPetView(frame: NSRect(x: 0, y: 0, width: 128, height: 128))
     let payload = ReminderPresentationPayload(id: UUID(), type: .eyeCare, text: "看看远处，护护眼。")
@@ -144,75 +127,6 @@ func testReminderCardAcceptsFirstMouseWhenWindowIsInactive() throws {
         reminderCard.acceptsFirstMouse(for: nil),
         "reminder card should accept the first click so the desktop prompt works while the app is inactive"
     )
-}
-
-func testHealthReportWindowSwitchesBetweenTodayAndWeekModes() throws {
-    _ = try makeInstalledThemeManager()
-    let controller = HealthReportWindowController(
-        todaySummary: makeFixtureTodaySummary(),
-        weekSummary: makeFixtureWeekSummary()
-    )
-
-    controller.showWindow(nil)
-
-    let contentView = try requireWindowContentView(of: controller)
-    _ = try requireLabel(in: contentView, stringValue: "今日")
-    let segmentedControl = try requireSegmentedControl(in: contentView, identifier: "healthReport.modeControl")
-    segmentedControl.setSelected(true, forSegment: 1)
-    controller.handleModeChange(segmentedControl)
-
-    _ = try requireLabel(in: contentView, stringValue: "本周")
-    _ = try requireLabelContaining(in: contentView, text: "趋势")
-}
-
-func testHealthReportWindowUsesCompactFrame() throws {
-    _ = try makeInstalledThemeManager()
-    let controller = HealthReportWindowController(
-        todaySummary: makeFixtureTodaySummary(),
-        weekSummary: makeFixtureWeekSummary()
-    )
-
-    controller.showWindow(nil)
-
-    guard let window = controller.window else {
-        throw TestFailure(message: "expected health report window to exist")
-    }
-
-    try expect(window.frame.width <= 360, "health report window should stay compact enough for laptop screens")
-    try expect(window.frame.height <= 320, "health report window should stay short enough for laptop screens")
-}
-
-func testHealthReportWindowUsesTodayAccumulationTitle() throws {
-    _ = try makeInstalledThemeManager()
-    let controller = HealthReportWindowController(
-        todaySummary: makeFixtureTodaySummary(),
-        weekSummary: makeFixtureWeekSummary()
-    )
-
-    controller.showWindow(nil)
-
-    let contentView = try requireWindowContentView(of: controller)
-    _ = try requireLabel(in: contentView, stringValue: "今日累计")
-}
-
-func testHealthReportWindowRendersHydrationReminderMetrics() throws {
-    _ = try makeInstalledThemeManager()
-    let controller = HealthReportWindowController(
-        todaySummary: makeFixtureTodaySummary(),
-        weekSummary: makeFixtureWeekSummary()
-    )
-
-    controller.showWindow(nil)
-
-    let contentView = try requireWindowContentView(of: controller)
-    _ = try requireLabelContaining(in: contentView, text: "喝水提醒")
-    _ = try requireLabelContaining(in: contentView, text: "喝水完成率")
-
-    let segmentedControl = try requireSegmentedControl(in: contentView, identifier: "healthReport.modeControl")
-    segmentedControl.setSelected(true, forSegment: 1)
-    controller.handleModeChange(segmentedControl)
-
-    _ = try requireLabelContaining(in: contentView, text: "本周喝水完成率")
 }
 
 @MainActor
@@ -329,75 +243,6 @@ func testReminderSnoozeSchedulesFreshFollowUpAndLogsOutcomes() throws {
     try expect(summary.eyeReminder.completed == 1, "follow-up completion should persist separately from the snooze")
 }
 
-@MainActor
-func testStopWorkPresentsHealthReportWhenMeaningfulDataExists() throws {
-    let harness = try makeHealthFlowHarness()
-    defer { harness.controller.close() }
-
-    harness.window.actionHandler?(.startWork)
-    harness.probe.now = harness.probe.now.addingTimeInterval(600)
-    harness.window.actionHandler?(.stopWork)
-
-    try expect(harness.probe.presentedReports.count == 1, "stop work should auto-present the health report when activity exists")
-
-    guard let report = harness.probe.presentedReports.first else {
-        throw TestFailure(message: "expected an auto-presented report payload")
-    }
-
-    try expect(report.today.workDuration == 600, "auto-presented report should include the settled daily work duration")
-    try expect(report.week.workDuration == 600, "auto-presented week report should include the same session in weekly totals")
-}
-
-private func makeFixtureTodaySummary() -> HealthDaySummary {
-    HealthDaySummary(
-        date: Date(timeIntervalSince1970: 1_744_000_000),
-        eyeReminder: HealthReminderCounts(shown: 3, completed: 2, snoozed: 1, skipped: 0),
-        hydrationReminder: HealthReminderCounts(shown: 2, completed: 1, snoozed: 0, skipped: 1),
-        workDuration: 5_400,
-        focusCount: 2,
-        focusDuration: 2_700,
-        breakCount: 1
-    )
-}
-
-private func makeFixtureWeekSummary() -> HealthWeekSummary {
-    let firstDay = makeFixtureTodaySummary()
-    let secondDay = HealthDaySummary(
-        date: firstDay.date.addingTimeInterval(86_400),
-        eyeReminder: HealthReminderCounts(shown: 2, completed: 1, snoozed: 0, skipped: 1),
-        hydrationReminder: HealthReminderCounts(shown: 1, completed: 1, snoozed: 0, skipped: 0),
-        workDuration: 1_800,
-        focusCount: 1,
-        focusDuration: 900,
-        breakCount: 1
-    )
-    let emptyDays = (2..<7).map { offset in
-        HealthDaySummary(
-            date: firstDay.date.addingTimeInterval(TimeInterval(offset * 86_400)),
-            eyeReminder: .empty,
-            hydrationReminder: .empty,
-            workDuration: 0,
-            focusCount: 0,
-            focusDuration: 0,
-            breakCount: 0
-        )
-    }
-
-    return HealthWeekSummary(
-        weekStartDate: firstDay.date,
-        weekEndExclusiveDate: firstDay.date.addingTimeInterval(7 * 86_400),
-        eyeReminder: HealthReminderCounts(shown: 5, completed: 3, snoozed: 1, skipped: 1),
-        eyeReminderCompletionRate: 0.6,
-        hydrationReminder: HealthReminderCounts(shown: 3, completed: 2, snoozed: 0, skipped: 1),
-        hydrationReminderCompletionRate: 2.0 / 3.0,
-        workDuration: 7_200,
-        focusCount: 3,
-        focusDuration: 3_600,
-        breakCount: 2,
-        days: [firstDay, secondDay] + emptyDays
-    )
-}
-
 private func requireButton(in root: NSView, identifier: String) throws -> NSButton {
     if let button = allSubviews(in: root)
         .compactMap({ $0 as? NSButton })
@@ -424,16 +269,6 @@ private func requireWindowContentView(of controller: NSWindowController) throws 
     throw TestFailure(message: "expected window content view to exist")
 }
 
-private func requireSegmentedControl(in root: NSView, identifier: String) throws -> NSSegmentedControl {
-    if let control = allSubviews(in: root)
-        .compactMap({ $0 as? NSSegmentedControl })
-        .first(where: { $0.identifier?.rawValue == identifier }) {
-        return control
-    }
-
-    throw TestFailure(message: "expected segmented control '\(identifier)' to exist")
-}
-
 private func requireLabelContaining(in root: NSView, text: String) throws -> NSTextField {
     if let label = allSubviews(in: root)
         .compactMap({ $0 as? NSTextField })
@@ -444,15 +279,9 @@ private func requireLabelContaining(in root: NSView, text: String) throws -> NST
     throw TestFailure(message: "expected label containing '\(text)' to exist")
 }
 
-private struct PresentedHealthReport {
-    let today: HealthDaySummary
-    let week: HealthWeekSummary
-}
-
 private final class HealthFlowTestProbe {
     var now = Date(timeIntervalSince1970: 1_744_100_000)
     var deliveredReminderPayloads: [ReminderPresentationPayload] = []
-    var presentedReports: [PresentedHealthReport] = []
 }
 
 private struct HealthFlowHarness {
@@ -487,13 +316,8 @@ private func makeHealthFlowHarness() throws -> HealthFlowHarness {
         workSessionController: workSessionController,
         reminderScheduler: scheduler,
         healthTracker: healthTracker,
-        healthReportPresenter: { today, week in
-            probe.presentedReports.append(PresentedHealthReport(today: today, week: week))
-        },
         assetLocator: assetLocator,
         petID: "missing_pet",
-        onChangeAvatarRequested: {},
-        onOpenGenerationConfigRequested: {},
         onQuitRequested: {},
         nowProvider: { probe.now }
     )

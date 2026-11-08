@@ -53,11 +53,4 @@ enum DesktopPetCopy {
         TextCatalog.shared.text(.petReminderSkipAction)
     }
 
-    static func healthReportComingSoonMessage() -> String {
-        TextCatalog.shared.text(.petHealthReportComingSoon)
-    }
-
-    static func healthReportUnavailableMessage() -> String {
-        TextCatalog.shared.text(.petHealthReportUnavailable)
-    }
 }

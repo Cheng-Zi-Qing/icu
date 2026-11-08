@@ -2,16 +2,12 @@ import AppKit
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     private var petWindowController: DesktopPetWindowController?
-    private var healthReportWindowController: HealthReportWindowController?
     private var statusItem: NSStatusItem?
     private var appPaths: AppPaths?
     private var stateStore: StateStore?
     private var workSessionController: WorkSessionController?
     private var reminderScheduler: ReminderScheduler?
-    private var avatarCoordinator: AvatarCoordinator?
-    private var generationSettingsStore: GenerationSettingsStore?
     private var themeManager: ThemeManager?
-    private var generationCoordinator: GenerationCoordinator?
     private var statusMenuController: StatusMenuPanelController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -32,55 +28,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let healthTracker = HealthSessionTracker(store: healthMetricsStore)
             setenv("ICU_APP_SUPPORT_ROOT", paths.rootURL.path, 1)
             TextCatalog.installShared(try TextCatalog.live(appPaths: paths, repoRootURL: assetLocator.repoRootURL))
-            let generationSettingsStore = GenerationSettingsStore(
-                appPaths: paths,
-                repoRootURL: assetLocator.repoRootURL
-            )
-            let themeManager = try ThemeManager(appPaths: paths, settingsStore: generationSettingsStore)
+            let themeManager = ThemeManager()
             ThemeManager.installShared(themeManager)
-            let generationService = ThemeGenerationService(
-                settingsStore: generationSettingsStore,
-                themeManager: themeManager
-            )
-            let speechGenerationService = SpeechGenerationService(
-                settingsStore: generationSettingsStore
-            )
-            let copyOverrideStore = CopyOverrideStore(
-                appPaths: paths,
-                repoRootURL: assetLocator.repoRootURL
-            )
-            let generationCoordinator = GenerationCoordinator(
-                settingsStore: generationSettingsStore,
-                themeManager: themeManager,
-                generationService: generationService,
-                speechGenerationService: speechGenerationService,
-                copyOverrideStore: copyOverrideStore
-            )
-            let avatarSettingsStore = AvatarSettingsStore(
-                appPaths: paths,
-                repoRootURL: assetLocator.repoRootURL
-            )
-            let avatarCatalog = AvatarCatalog(
-                repoRootURL: assetLocator.repoRootURL,
-                appAssetsRootURL: paths.assetsDirectory
-            )
-            let avatarAssetStore = AvatarAssetStore(repoRootURL: assetLocator.repoRootURL)
-            let bridgeScriptURL = (assetLocator.repoRootURL
-                ?? URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true))
-                .appendingPathComponent("tools", isDirectory: true)
-                .appendingPathComponent("avatar_builder_bridge.py", isDirectory: false)
-            let avatarBridge = AvatarBuilderBridge(scriptURL: bridgeScriptURL)
-            let avatarCoordinator = AvatarCoordinator(
-                settingsStore: avatarSettingsStore,
-                catalog: avatarCatalog,
-                assetStore: avatarAssetStore,
-                bridge: avatarBridge,
-                generationCoordinator: generationCoordinator
-            )
-            let petID = avatarCoordinator.currentAvatarID(
-                fallback: ProcessInfo.processInfo.environment["ICU_PET_ID"] ?? "capybara"
-            )
-            let scheduler = ReminderScheduler { [weak self] payload in
+            let settingsStore = AppSettingsStore(appPaths: paths, repoRootURL: assetLocator.repoRootURL)
+            let petID = ProcessInfo.processInfo.environment["ICU_PET_ID"] ?? "capybara"
+            let hydrationPlan = HydrationPlan(profile: settingsStore.loadHealthProfile())
+            let scheduler = ReminderScheduler(
+                eyeInterval: settingsStore.loadReminderTimerSettings().eyeInterval,
+                hydrationInterval: hydrationPlan.interval
+            ) { [weak self] payload in
                 self?.petWindowController?.presentReminder(payload: payload)
             }
 
@@ -88,10 +44,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self.stateStore = store
             self.workSessionController = sessionController
             self.reminderScheduler = scheduler
-            self.avatarCoordinator = avatarCoordinator
-            self.generationSettingsStore = generationSettingsStore
             self.themeManager = themeManager
-            self.generationCoordinator = generationCoordinator
             self.statusMenuController = StatusMenuPanelController { [weak self] action in
                 self?.handleStatusMenuAction(action)
             }
@@ -100,25 +53,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 workSessionController: sessionController,
                 reminderScheduler: scheduler,
                 healthTracker: healthTracker,
-                healthReportPresenter: { [weak self] todaySummary, weekSummary in
-                    self?.presentHealthReportWindow(todaySummary: todaySummary, weekSummary: weekSummary)
-                },
                 assetLocator: assetLocator,
                 petID: petID,
-                onChangeAvatarRequested: { [weak self] in
-                    self?.avatarCoordinator?.presentAvatarPicker()
-                },
-                onOpenGenerationConfigRequested: { [weak self] in
-                    _ = self?.generationCoordinator?.openGenerationConfig()
-                },
                 onQuitRequested: { [weak self] in
                     self?.quit()
                 },
-                edgeSnapSettings: avatarSettingsStore.loadEdgeSnapSettings()
+                edgeSnapSettings: settingsStore.loadEdgeSnapSettings()
             )
-            avatarCoordinator.onCurrentAvatarChanged = { [weak self] avatarID in
-                self?.petWindowController?.setPetID(avatarID)
-            }
             petWindowController?.showWindow(nil)
         } catch {
             NSLog("[ICUShell] failed to bootstrap runtime: \(error.localizedDescription)")
@@ -128,7 +69,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         reminderScheduler?.stop()
-        healthReportWindowController?.close()
         petWindowController?.close()
     }
 
@@ -143,10 +83,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func showPet() {
         petWindowController?.showWindow(nil)
-    }
-
-    @objc private func changeAvatar() {
-        avatarCoordinator?.presentAvatarPicker()
     }
 
     @objc private func toggleStatusPanel() {
@@ -165,22 +101,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         switch action {
         case .showPet:
             showPet()
-        case .changeAvatar:
-            changeAvatar()
-        case .openGenerationConfig:
-            _ = generationCoordinator?.openGenerationConfig()
-        case .openHealthReport:
-            showPet()
-            petWindowController?.presentHealthReport()
         case .quitApp:
             quit()
         }
-    }
-
-    private func presentHealthReportWindow(todaySummary: HealthDaySummary, weekSummary: HealthWeekSummary) {
-        healthReportWindowController?.close()
-        let controller = HealthReportWindowController(todaySummary: todaySummary, weekSummary: weekSummary)
-        healthReportWindowController = controller
-        controller.showWindow(nil)
     }
 }

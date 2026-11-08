@@ -320,22 +320,14 @@ struct PetAssetLocator {
             .appendingPathComponent("config", isDirectory: true)
             .appendingPathComponent("copy", isDirectory: true)
             .appendingPathComponent("base.json", isDirectory: false)
-        let bridgeScript = url
-            .appendingPathComponent("tools", isDirectory: true)
-            .appendingPathComponent("avatar_builder_bridge.py", isDirectory: false)
         let shellPackage = url
             .appendingPathComponent("apps", isDirectory: true)
             .appendingPathComponent("macos-shell", isDirectory: true)
             .appendingPathComponent("Package.swift", isDirectory: false)
 
+        // 开发时是仓库根（有 Package.swift）；打包后是 .app 里的 Resources/repo（有文案表）
         return fileManager.fileExists(atPath: assetsDirectory.path)
-            && (
-                fileManager.fileExists(atPath: shellPackage.path)
-                    || (
-                        fileManager.fileExists(atPath: baseCopy.path)
-                            && fileManager.fileExists(atPath: bridgeScript.path)
-                    )
-            )
+            && (fileManager.fileExists(atPath: shellPackage.path) || fileManager.fileExists(atPath: baseCopy.path))
     }
 }
 

@@ -6,9 +6,6 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
     private let workSessionController: WorkSessionController
     private let reminderScheduler: ReminderScheduler
     private let healthTracker: HealthSessionTracker
-    private let healthReportPresenter: (HealthDaySummary, HealthWeekSummary) -> Void
-    private let onChangeAvatarRequested: () -> Void
-    private let onOpenGenerationConfigRequested: () -> Void
     private let onQuitRequested: () -> Void
     private let nowProvider: () -> Date
     private let petView: DesktopPetView
@@ -22,11 +19,8 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
         workSessionController: WorkSessionController,
         reminderScheduler: ReminderScheduler,
         healthTracker: HealthSessionTracker,
-        healthReportPresenter: @escaping (HealthDaySummary, HealthWeekSummary) -> Void,
         assetLocator: PetAssetLocator,
         petID: String,
-        onChangeAvatarRequested: @escaping () -> Void,
-        onOpenGenerationConfigRequested: @escaping () -> Void,
         onQuitRequested: @escaping () -> Void,
         edgeSnapSettings: EdgeSnapSettings = .default,
         nowProvider: @escaping () -> Date = { .now }
@@ -34,9 +28,6 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
         self.workSessionController = workSessionController
         self.reminderScheduler = reminderScheduler
         self.healthTracker = healthTracker
-        self.healthReportPresenter = healthReportPresenter
-        self.onChangeAvatarRequested = onChangeAvatarRequested
-        self.onOpenGenerationConfigRequested = onOpenGenerationConfigRequested
         self.onQuitRequested = onQuitRequested
         self.nowProvider = nowProvider
 
@@ -168,18 +159,6 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
         }
     }
 
-    func presentHealthReport() {
-        let now = nowProvider()
-        do {
-            let todaySummary = try healthTracker.todayReport(at: now)
-            let weekSummary = try healthTracker.weekReport(containing: now)
-            healthReportPresenter(todaySummary, weekSummary)
-        } catch {
-            logHealthError("load health report", error: error)
-            petView.showTransientMessage(DesktopPetCopy.healthReportUnavailableMessage(), duration: 1.8)
-        }
-    }
-
     func setPetID(_ petID: String) {
         petView.setPetID(petID)
     }
@@ -200,7 +179,6 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
             let oldState = workSessionController.state
             let now = nowProvider()
             var transientMessage: String?
-            var shouldPresentReport = false
 
             switch action {
             case .startWork:
@@ -224,17 +202,7 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
                 try workSessionController.stopWork(now: now)
                 recordHealthTransition(from: oldState, to: workSessionController.state, at: now)
                 reminderScheduler.stop()
-                shouldPresentReport = shouldAutoPresentStopWorkReport(at: now)
-                transientMessage = shouldPresentReport ? nil : DesktopPetCopy.stopWorkMessage()
-            case .changeAvatar:
-                onChangeAvatarRequested()
-                return
-            case .openGenerationConfig:
-                onOpenGenerationConfigRequested()
-                return
-            case .openHealthReport:
-                presentHealthReport()
-                return
+                transientMessage = DesktopPetCopy.stopWorkMessage()
             case .closeWindow:
                 window?.orderOut(nil)
                 return
@@ -243,12 +211,9 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
                 return
             }
 
-            applyCurrentStateToView(showBubble: transientMessage == nil && !shouldPresentReport)
+            applyCurrentStateToView(showBubble: transientMessage == nil)
             if let transientMessage {
                 petView.showTransientMessage(transientMessage)
-            }
-            if shouldPresentReport {
-                presentHealthReport()
             }
         } catch {
             NSSound.beep()
@@ -282,15 +247,6 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
             try healthTracker.recordStateTransition(from: oldState, to: newState, at: date)
         } catch {
             logHealthError("record state transition", error: error)
-        }
-    }
-
-    private func shouldAutoPresentStopWorkReport(at date: Date) -> Bool {
-        do {
-            return try healthTracker.shouldPresentStopWorkReport(at: date)
-        } catch {
-            logHealthError("check stop-work report eligibility", error: error)
-            return false
         }
     }
 

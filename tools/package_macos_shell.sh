@@ -96,11 +96,9 @@ EOF
 }
 
 copy_runtime_resources() {
-  mkdir -p "$RESOURCE_REPO_DIR/config" "$RESOURCE_REPO_DIR/tools"
+  mkdir -p "$RESOURCE_REPO_DIR/config"
   cp -R "$ROOT_DIR/assets" "$RESOURCE_REPO_DIR/assets"
-  cp -R "$ROOT_DIR/builder" "$RESOURCE_REPO_DIR/builder"
   cp -R "$ROOT_DIR/config/copy" "$RESOURCE_REPO_DIR/config/copy"
-  cp "$ROOT_DIR/tools/avatar_builder_bridge.py" "$RESOURCE_REPO_DIR/tools/avatar_builder_bridge.py"
 }
 
 sign_bundle_if_needed() {

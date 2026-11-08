@@ -47,12 +47,6 @@ func testPetAssetLocatorAcceptsBundledRuntimeRootWithoutSwiftPackage() throws {
             .appendingPathComponent("base.json", isDirectory: false),
         contents: "{}"
     )
-    try writeFixtureFile(
-        at: root
-            .appendingPathComponent("tools", isDirectory: true)
-            .appendingPathComponent("avatar_builder_bridge.py", isDirectory: false),
-        contents: "#!/usr/bin/env python3"
-    )
 
     let inferred = PetAssetLocator.inferredRepoRoot(
         environment: ["ICU_REPO_ROOT": root.path],
