@@ -22,7 +22,7 @@ class OllamaClient:
         try:
             with open('config/settings.json', 'r') as f:
                 config = json.load(f)
-            avatar_id = config.get('avatar', {}).get('current_id', 'seal')
+            avatar_id = config.get('avatar', {}).get('current_id', 'capybara')
 
             avatar_config_path = Path(f'assets/pets/{avatar_id}/config.json')
             if avatar_config_path.exists():

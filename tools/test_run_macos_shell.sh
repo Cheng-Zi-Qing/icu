@@ -37,7 +37,7 @@ if [[ ! -f "$RUNNER" ]]; then
 fi
 
 ICU_SHELL_SWIFT_BIN="$swift_stub" \
-ICU_PET_ID="seal" \
+ICU_PET_ID="capybara" \
 bash "$RUNNER" >"$output_file" 2>&1
 
 output="$(cat "$output_file")"
@@ -45,6 +45,6 @@ assert_contains "$output" "[run_macos_shell] Launching ICUShell..."
 assert_contains "$output" "swift:run --package-path $ROOT_DIR/apps/macos-shell --scratch-path "
 assert_contains "$output" " ICUShell"
 assert_contains "$output" "ICU_REPO_ROOT=$ROOT_DIR"
-assert_contains "$output" "ICU_PET_ID=seal"
+assert_contains "$output" "ICU_PET_ID=capybara"
 
 echo "[test_run_macos_shell] PASS"

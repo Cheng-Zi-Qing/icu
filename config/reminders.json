@@ -1,9 +1,9 @@
 {
   "personas": {
-    "seal": {
-      "name": "海豹君",
-      "traits": "努力但笨拙，总是鼓励自己",
-      "tone": "温柔励志"
+    "capybara": {
+      "name": "淡定水豚",
+      "traits": "看透红尘，精神稳定，佛系处世",
+      "tone": "淡定从容"
     }
   },
   "eye_care": [
