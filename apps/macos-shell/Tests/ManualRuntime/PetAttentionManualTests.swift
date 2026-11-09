@@ -194,7 +194,8 @@ func testPetAttentionCoordinatorUsesLongTaskCopyWhileClaudeWorks() throws {
 func testAgentWaitCardSaysWhoWaitsAndWhatFor() throws {
     var record: [String: Any] = ["v": 1, "session": "a", "event": "PermissionRequest", "tool": "Bash", "at": 1.0, "project": "icu", "app": "com.mitchellh.ghostty"]
     let bash = AgentWaitCardContent(summary: summary(.waiting, AgentSession(record: record)))
-    try expect(bash?.title == "icu 在等你" && bash?.detail == "想用 Bash，等你批准", "names the project and the tool (got \(String(describing: bash)))")
+    try expect(bash?.title == "icu 在等你" && bash?.detail == "回终端批准 Bash", "points you back to the terminal to approve, naming the tool (got \(String(describing: bash)))")
+    try expect(bash?.titleName == "icu" && bash?.detailTool == "Bash", "the parts that may be cut to fit are kept apart from the fixed words")
     try expect(bash?.appBundleID == "com.mitchellh.ghostty", "knows which app to jump to")
 
     record["event"] = "Notification"
@@ -202,10 +203,12 @@ func testAgentWaitCardSaysWhoWaitsAndWhatFor() throws {
     record["project"] = nil
     record["app"] = nil
     let question = AgentWaitCardContent(summary: summary(.waiting, AgentSession(record: record), count: 2))
-    try expect(question?.title == "Claude 在等你（2 个）" && question?.detail == "在问你问题", "no project: Claude; several: counted (got \(String(describing: question)))")
+    try expect(question?.title == "Claude 在等你 ×2" && question?.detail == "回终端回答问题", "no project: Claude; several: counted (got \(String(describing: question)))")
+    try expect(question?.detailTool == nil, "a question names no tool")
     try expect(question?.appBundleID == nil, "no app known: nowhere to jump")
 
-    record["project"] = "a-very-long-project-name"
-    try expect(AgentWaitCardContent(summary: summary(.waiting, AgentSession(record: record)))?.title == "a-very-lon… 在等你", "long names are cut so the card fits")
     try expect(AgentWaitCardContent(summary: summary(.done, session("a", "Stop"))) == nil, "only for waiting")
+    record["event"] = "PermissionRequest"
+    record["tool"] = "mcp__claude_ai_Claude_Docs__batch"
+    try expect(AgentWaitCardContent(summary: summary(.waiting, AgentSession(record: record)))?.detail == "回终端批准 batch", "an MCP tool shows its action name")
 }

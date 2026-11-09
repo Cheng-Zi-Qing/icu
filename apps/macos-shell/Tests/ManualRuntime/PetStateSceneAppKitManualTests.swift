@@ -159,8 +159,9 @@ func testPetWaitsWithACardThenCelebratesAndLetsTheReminderThrough() throws {
     controller.presentReminder(payload: ReminderPresentationPayload(id: UUID(), type: .hydration, text: "喝水"))
     try expect(view.reminderCardView.isHidden, "a reminder waits behind the agent")
 
-    let jump = view.waitCardView.jumpButton
-    _ = jump.sendAction(jump.action, to: jump.target)
+    try expect(view.waitCardView.interactiveHitView(at: NSPoint(x: 20, y: 10)) === view.waitCardView, "the card body is clickable too")
+    try testWaitCardTextFitsTheCard(view.waitCardView)
+    view.waitCardView.mouseUp(with: try leftMouseUp(in: view.waitCardView))
     try expect(jumped == ["com.example.term"] && !view.isShowingWaitCard, "jumping brings the terminal forward and puts the card away")
 
     let followUp = AgentSession(record: ["v": 1, "session": "s1", "event": "Notification", "kind": "permission_prompt", "at": 1.5,
@@ -177,4 +178,29 @@ func testPetWaitsWithACardThenCelebratesAndLetsTheReminderThrough() throws {
     try expect(view.scene == .done, "after the card the pet celebrates (got \(String(describing: view.scene)))")
     view.workPlayer.finishForTesting()
     try expect(view.scene == nil, "and settles back to idle")
+}
+
+@MainActor
+private func leftMouseUp(in view: NSView) throws -> NSEvent {
+    guard let event = NSEvent.mouseEvent(
+        with: .leftMouseUp, location: .zero, modifierFlags: [], timestamp: 0,
+        windowNumber: view.window?.windowNumber ?? 0, context: nil, eventNumber: 0, clickCount: 1, pressure: 0
+    ) else { throw TestFailure(message: "could not make a mouse event") }
+    return event
+}
+
+/// 项目名、工具名再长也只截它们，「在等你」「回终端批准」完整留着，字不出卡片
+@MainActor
+private func testWaitCardTextFitsTheCard(_ card: AgentWaitCardView) throws {
+    let record: [String: Any] = ["v": 1, "session": "s9", "event": "PermissionRequest", "tool": "SomeVeryLongToolNameIndeed",
+                                 "at": 1.0, "project": "a-very-long-project-name", "app": "com.example.term"]
+    guard let content = AgentWaitCardContent(summary: AgentSummary(kind: .waiting, count: 3, lead: AgentSession(record: record))) else {
+        throw TestFailure(message: "content")
+    }
+    card.configure(with: content)
+    let room = card.textWidth
+    try expect(card.shownTitle.hasSuffix("… 在等你 ×3") && PixelPaint.textSize(card.shownTitle).width <= room,
+               "the project name is cut (got \(card.shownTitle), \(PixelPaint.textSize(card.shownTitle).width) > \(room)?)")
+    try expect(card.shownDetail.hasPrefix("回终端批准 ") && card.shownDetail.hasSuffix("…") && PixelPaint.textSize(card.shownDetail).width <= room,
+               "the tool name is cut (got \(card.shownDetail))")
 }

@@ -1,6 +1,7 @@
 import AppKit
 
-/// 在等你时桌宠头顶的卡片：谁在等、等什么，「跳过去」切回那个终端，「知道了」先收起来。
+/// 在等你时桌宠头顶的卡片：谁在等、等什么，「跳过去」（或点卡片任何地方）切回那个终端，「知道了」先收起来。
+/// 批准 / 回答都回终端里做，卡片上不做（见 AgentWaitCardContent）。
 /// 和提醒卡一个样子（像素底板 + 指向桌宠的小尖角），挂着时不抢焦点
 final class AgentWaitCardView: NSView {
     private enum Metrics {
@@ -21,6 +22,18 @@ final class AgentWaitCardView: NSView {
     let dismissButton = PixelButton(title: "知道了", identifier: "desktopPet.waitCard.dismiss")
 
     private(set) var content: AgentWaitCardContent?
+    /// 文字能占多宽
+    var textWidth: CGFloat { bounds.width - Metrics.textInset * 2 }
+    /// 实际画出来的标题 / 副行（项目名、工具名按宽度截过）
+    var shownTitle: String {
+        guard let content else { return "" }
+        return Self.fitting(content.titleName, before: " \(content.titleSuffix)", width: textWidth)
+    }
+    var shownDetail: String {
+        guard let content else { return "" }
+        guard let tool = content.detailTool else { return content.detailLead }
+        return Self.fitting(tool, after: "\(content.detailLead) ", width: textWidth)
+    }
     var onJump: ((String) -> Void)?
     var onDismiss: (() -> Void)?
 
@@ -66,14 +79,14 @@ final class AgentWaitCardView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        guard let content else { return }
+        guard content != nil else { return }
         let plate = NSRect(x: 0, y: 0, width: bounds.width, height: bounds.height - Metrics.tailHeight)
         PixelPaint.plate(plate, PixelPalette.paper, corner: 2)
         drawTail(below: plate)
-        let width = bounds.width - Metrics.textInset * 2
-        PixelPaint.text(content.title, in: NSRect(x: Metrics.textInset, y: Metrics.padding, width: width, height: Metrics.titleHeight))
+        let width = textWidth
+        PixelPaint.text(shownTitle, in: NSRect(x: Metrics.textInset, y: Metrics.padding, width: width, height: Metrics.titleHeight))
         PixelPaint.text(
-            content.detail,
+            shownDetail,
             in: NSRect(x: Metrics.textInset, y: Metrics.detailTop, width: width, height: Metrics.detailHeight),
             color: PixelPalette.shade
         )
@@ -90,6 +103,19 @@ final class AgentWaitCardView: NSView {
                 PixelPaint.fill(NSRect(x: bounds.midX - half + unit, y: y, width: half * 2 - unit * 2, height: unit), PixelPalette.paper)
             }
         }
+    }
+
+    /// 可截的那段（项目名、工具名）从尾巴上一个字一个字地去掉、补「…」，直到整行放得下；固定的字不动
+    static func fitting(_ cuttable: String, before fixed: String = "", after lead: String = "", width: CGFloat) -> String {
+        let whole = lead + cuttable + fixed
+        guard PixelPaint.textSize(whole).width > width else { return whole }
+        var kept = cuttable
+        while !kept.isEmpty {
+            kept.removeLast()
+            let line = lead + kept + "…" + fixed
+            if PixelPaint.textSize(line).width <= width { return line }
+        }
+        return lead + "…" + fixed
     }
 
     // MARK: - 点击
@@ -111,6 +137,11 @@ final class AgentWaitCardView: NSView {
 
     override func mouseDown(with event: NSEvent) {}
     override func mouseDragged(with event: NSEvent) {}
+
+    /// 点卡片空白处也跳回终端（目标比按钮大，好点）
+    override func mouseUp(with event: NSEvent) {
+        handleJump()
+    }
 
     // MARK: - 私有
 
