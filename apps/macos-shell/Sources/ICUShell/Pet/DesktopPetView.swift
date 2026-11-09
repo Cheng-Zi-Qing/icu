@@ -73,6 +73,8 @@ class DesktopPetView: NSView {
     var currentAnimationStateID = "idle"
     var currentAnimationVariant: PetAnimationDescriptor?
     var currentAnimationFamily: [PetAnimationDescriptor] = []
+    /// 当前动画家族放大后的帧：每帧的 URL 固定，读盘解码 + 像素放大只做一次
+    var frameImageCache: [URL: NSImage] = [:]
     let animationEngine = PetAnimationEngine()
     let dragController = PetDragController()
     var poseSprites: PetPoseSprites?
