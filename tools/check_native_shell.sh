@@ -171,6 +171,8 @@ swiftc -framework AppKit \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/DesktopPetView+Animation.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/DesktopPetView+Overlays.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/DesktopPetView+Cursor.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/DesktopPetView+Presentation.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/DesktopPetView+Mouse.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/PetPlaceholderImage.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/NSImage+AlphaSampling.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/DesktopPetWindowController.swift" \
