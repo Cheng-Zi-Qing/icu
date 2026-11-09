@@ -51,6 +51,7 @@ struct StateStoreManualMain {
             try testDragPhysicsSwingsAgainstHorizontalMotion()
             try testDragPhysicsPlaysLandingThenFullyResets()
             try testDragPhysicsGetsDizzyAfterHardShaking()
+            try testDragPhysicsStaysDizzyOnTheGroundAfterLanding()
             try testDragPhysicsSlowDraggingDoesNotCauseDizziness()
             try testDragPhysicsStaysStableAcrossLongFrameGaps()
             try testDragPhysicsSwingFollowsTheShakeFrequency()

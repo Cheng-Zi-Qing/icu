@@ -4,6 +4,7 @@ import AppKit
 ///
 ///   hold_<tilt>.png             tilt ∈ -2...2
 ///   dizzy_<tilt>_<twinkle>.png  twinkle ∈ 0...1
+///   dizzy_grounded_<twinkle>.png  twinkle ∈ 0...1（落地那套坐姿帧，见 DragPose.dizzyGrounded）
 ///   land_<frame>.png            frame ∈ 0...1
 ///
 /// 缺少某张帧时返回 nil，调用方保持当前画面，只做变形效果。
@@ -27,6 +28,8 @@ final class PetPoseSprites {
             return "hold_\(tilt).png"
         case let .dizzy(tilt, twinkle):
             return "dizzy_\(tilt)_\(twinkle).png"
+        case let .dizzyGrounded(twinkle):
+            return "dizzy_grounded_\(twinkle).png"
         case let .landing(frame):
             return "land_\(frame).png"
         }
