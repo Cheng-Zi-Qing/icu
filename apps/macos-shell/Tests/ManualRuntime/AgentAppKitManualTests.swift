@@ -121,7 +121,8 @@ func testPetChasesTheBallWhileTheAgentSearches() throws {
     try expect(!controller.isChasing, "done: stops chasing")
     try expect(view.workActivity == .search, "still running frames on the way home (got \(String(describing: view.workActivity)))")
     let backBy = Date().addingTimeInterval(2)
-    while window.frame.origin != home && Date() < backBy { RunLoop.main.run(until: Date().addingTimeInterval(0.05)) }
+    // 等它跑完整趟（最后几帧四舍五入后位置可能已经等于原位，但还没到站）
+    while view.workActivity != nil && Date() < backBy { RunLoop.main.run(until: Date().addingTimeInterval(0.05)) }
     try expect(window.frame.origin == home, "trots back to where it was (got \(window.frame.origin), home \(home))")
     try expect(view.workActivity == nil, "home: the run stops (got \(String(describing: view.workActivity)))")
 }

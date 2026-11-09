@@ -36,9 +36,11 @@ final class PetDragController {
             return nil
         }
 
+        // 拎着时身体画高了 liftHeight；窗口（落地的地面）放低同样多，被拎的豚鼠正好在手里，
+        // 松手后才从手里往下掉这一截
         let proposed = CGPoint(
             x: pressWindowOrigin.x + (mouseLocation.x - pressMouseLocation.x),
-            y: pressWindowOrigin.y + (mouseLocation.y - pressMouseLocation.y)
+            y: pressWindowOrigin.y + (mouseLocation.y - pressMouseLocation.y) - physics.config.liftHeight
         )
         guard let visibleFrame else {
             return proposed

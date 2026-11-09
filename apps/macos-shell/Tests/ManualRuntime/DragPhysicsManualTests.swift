@@ -75,6 +75,17 @@ func testDragPhysicsSwingsAgainstHorizontalMotion() throws {
     try expect(output.swingDegrees < -3, "moving right should swing the body back to the left (got \(output.swingDegrees))")
 }
 
+/// 下落要看得出是「掉」下来（用户 2026-11-09：原来 28pt 太短）；高度加了，时间按同样的重力算，
+/// 不变成慢动作；落地压扁回弹的时长不被下落挤短；松手后复位的期限要等压扁回弹做完
+func testDragPhysicsDropIsLongEnoughAndFallsAtTheSameGravity() throws {
+    let config = DragPhysicsConfig()
+    try expect(config.liftHeight >= 50, "a drop you can see (got \(config.liftHeight)pt)")
+    let gravity = config.liftHeight / CGFloat(config.fallDuration * config.fallDuration)
+    try expect(abs(gravity - 28 / 0.09) / (28 / 0.09) < 0.05, "same gravity as the original 28pt in 0.3s (got \(gravity)pt/s²)")
+    try expect(config.landingDuration - config.fallDuration >= 0.4 - 1e-9, "the landing squash keeps its 0.4s (got \(config.landingDuration - config.fallDuration))")
+    try expect(config.settleDuration >= config.landingDuration + 0.1 - 1e-9, "fully settled only after the landing (got settle \(config.settleDuration), landing \(config.landingDuration))")
+}
+
 func testDragPhysicsFallsFromTheLiftedHeightBeforeItLands() throws {
     let config = DragPhysicsConfig()
     let moving = dragging(

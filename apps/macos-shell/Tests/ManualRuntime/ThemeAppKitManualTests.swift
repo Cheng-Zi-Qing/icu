@@ -304,7 +304,9 @@ func testPetDragControllerMovesWindowWithPointerAfterThreshold() throws {
 
     now = 0.05
     let moved = controller.mouseDragged(mouseLocation: CGPoint(x: 540, y: 330), keepVisible: body, visibleFrame: visibleFrame)
-    try expect(moved == CGPoint(x: 480, y: 270), "window should follow the pointer offset (got \(String(describing: moved)))")
+    // 拎着时身体画高了 liftHeight；窗口（落地的地面）就放低同样多，被拎的豚鼠正好在手里，松手才往下掉这一截
+    let lift = DragPhysicsConfig().liftHeight
+    try expect(moved == CGPoint(x: 480, y: 270 - lift), "window follows the pointer, its ground a lift height below the hand (got \(String(describing: moved)))")
 
     now = 0.1
     let clamped = controller.mouseDragged(mouseLocation: CGPoint(x: 1500, y: 330), keepVisible: body, visibleFrame: visibleFrame)

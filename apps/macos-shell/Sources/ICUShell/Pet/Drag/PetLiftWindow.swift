@@ -8,8 +8,8 @@ import QuartzCore
 final class PetLiftWindow: NSWindow {
     /// 左右各留多少：最大摆角时脚能荡出画布约 90pt
     static let sideMargin: CGFloat = 112
-    /// 头顶留白：转起来时画布上角会翘到后颈上方
-    static let topMargin: CGFloat = 48
+    /// 头顶留白：拎着时身体抬高 liftHeight，转起来时画布上角还会再翘 20pt
+    static let topMargin: CGFloat = 76
     /// 脚下留白：拉长后身体往下坠
     static let bottomMargin: CGFloat = 64
 

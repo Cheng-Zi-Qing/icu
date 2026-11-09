@@ -46,6 +46,7 @@ struct StateStoreManualMain {
             try testIdleActionScheduleWeighsYuzuWobbleOverBirdVisits()
             try testIdleActionScheduleSpacesActionsOut()
             try testDragPhysicsTreatsTinyMovementAsClick()
+            try testDragPhysicsDropIsLongEnoughAndFallsAtTheSameGravity()
             try testDragPhysicsStartsHoldPoseAfterThreshold()
             try testDragPhysicsStretchesWhileHeldAndStaysBounded()
             try testDragPhysicsSwingsAgainstHorizontalMotion()
