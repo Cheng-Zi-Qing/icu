@@ -1,65 +1,48 @@
-# I.C.U. - 原生 macOS AI 桌宠
+# I.C.U. — 原生 macOS 桌宠
 
-中文 | [English](README.md)
+[中文](README_CN.md) | [English](README.md)
 
-> 一个基于 Swift/AppKit 的 macOS 桌宠项目，默认提供像素风主题、工作状态机，
-> 以及轻量的 `./icu` 本地启动入口。
+> 一个 Swift/AppKit 写的 macOS 桌宠。默认形象是像素风淡定水豚，工作时盯着你的健康，
+> 有个衣柜可以给它换装，还能实时跟着你的 Claude Code 会话演小动作。
 
-[![Swift](https://img.shields.io/badge/Swift-6-orange.svg)](https://www.swift.org/)
-[![Platform](https://img.shields.io/badge/Platform-macOS-green.svg)](https://www.apple.com/macos/)
+[![Swift](https://img.shields.io/badge/Swift-5.10-orange.svg)](https://www.swift.org/)
+[![Platform](https://img.shields.io/badge/macOS-14%2B-green.svg)](https://www.apple.com/macos/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-## 当前运行形态
+## 它是什么
 
-- `./icu` 默认拉起 `apps/macos-shell` 下的原生 Swift/AppKit shell。
-- 当前默认 GUI 主题是像素风，已经覆盖桌宠、状态气泡、右键菜单、更换形象页和模型工作台。
-- 运行时状态机是 `idle -> working -> focus/break -> working -> idle`。
-- 冷启动时如果读到上次持久化的是活动态，会自动归一回 `idle`，但保留窗口位置。
-- 首次启动会把桌宠放在屏幕右下角附近；后续启动会优先恢复上次仍然可见的位置。
-- 轻量本地开发只需要 Apple Command Line Tools；完整 Xcode 只在你希望 `./icu --verify` 顺带跑 `swift test` 时才需要。
-- Python 已经不参与应用启动链路，只保留在形象生成桥接上。
-- 当前用户可见文案默认是简体中文，并且已经抽离为可覆盖资源。
+- **一只住在桌面上的宠物。** 像素风水豚，待机 / 工作 / 专注 / 暂离四种状态，逐帧手绘动画，
+  会转头看你鼠标、被你摸头、会打盹，闲着没事随机做点小动作。
+- **工作时的健康提醒。** 护眼提醒（默认 20-20-20）和按体重、杯容量、每天工作时长算出来的喝水提醒。
+- **能感知 Claude Code。** 接入后，你的 Agent 在读文件、搜代码、改文件、跑命令、派子 Agent 时，
+  桌宠分别演对应的小场景；有会话在等你批准或等你回话时，它会冒张卡提醒你。
+- **衣柜。** 装扮表在 `config/wardrobe.json`；带整套帧的装扮（目前是草帽）一换，所有动画跟着换。
+- **不挡事的窗口行为。** 拖着有弹性物理，松手贴屏幕边，久了自动藏起来只探个头。
+- **文案可覆盖。** 界面上所有文字都来自 `config/copy/base.json`，改文案不用重新编译。
 
-## 当前可用能力
+这个项目已经没有 Python 了，整个 app 都是 Swift/AppKit。
 
-- 拉起一个悬浮桌宠，并通过菜单栏面板或桌宠右键菜单控制它。
-- 通过 `更换形象` 打开统一工作台，里面分为 `主题风格`、`桌宠形象动画`、`话术` 三个 tab。
-- 通过 `生成配置` 配置三类模型能力：`文本描述`、`动画形象`、`主题代码`。
-- 所有 AI 生成都走统一节奏：先生成草稿和预览，不满意就重生成，满意后再应用。
-- 可以切换内置桌宠，也可以保存 AI 生成的新形象。
-- 可以不改代码直接覆盖用户可见文案。
-
-## 🚀 快速开始
+## 快速开始
 
 ### 环境要求
 
-- macOS
-- Apple Command Line Tools 或 Xcode
-- shell 中能直接执行 `swift`
-- 可选：如果希望 `./icu --verify` 里顺带跑 `swift test`，需要完整 Xcode
-
-轻量模式安装 Command Line Tools：
-
-```bash
-xcode-select --install
-```
+- macOS 14 及以上
+- Apple Command Line Tools（`xcode-select --install`）——够编译、够跑
+- 完整 Xcode 可选，只在你想让 `./icu --verify` 里跑 `swift test` 时才需要
 
 ### 启动
 
 ```bash
-git clone https://github.com/yourusername/icu.git
+git clone https://github.com/Cheng-Zi-Qing/icu.git
 cd icu
 ./icu
 ```
 
-这会直接从当前源码目录启动 Swift/AppKit 原生 shell。
+它会用独立的 SwiftPM scratch 路径（`~/Library/Caches/icu/swiftpm/…`）跑
+`swift run ICUShell`，不用手动清理 `.build`。
 
-启动行为说明：
-
-- 首次启动会把桌宠放到屏幕右下角附近。
-- 如果之前保存过仍然可见的位置，后续会自动恢复。
-- 如果上次退出前停在 `working`，这次启动会先归一到 `idle`，不会一拉起就直接进入工作中。
-- 启动脚本会自动使用隔离的 SwiftPM scratch path，因此一般不需要手工清 `apps/macos-shell/.build`。
+首次启动桌宠出现在右下角附近，之后恢复上次还在屏幕上的位置。退出时还开着的工作会话会被规范
+回 `idle`，不会一开机就进 `working`。
 
 ### 校验
 
@@ -67,13 +50,11 @@ cd icu
 ./icu --verify
 ```
 
-这条命令会：
+按顺序做三件事：
 
-- 运行 `apps/macos-shell` 的 `swift build`
-- 运行手工 runtime 校验
-- 仅在当前环境启用了完整 Xcode 时才继续跑 `swift test`
-
-如果机器上只有 Command Line Tools，这条命令仍然可用；脚本会明确跳过 `swift test`。
+1. 编译 `apps/macos-shell`
+2. 跑手动运行时检查（`tools/check_native_shell.sh`，直接用 `swiftc`，不需要 Xcode）
+3. 跑 `swift test`——只有当 `xcodebuild` 可用时才跑，否则明确跳过
 
 ### 打包本地 `.app`
 
@@ -82,26 +63,7 @@ cd icu
 bash tools/check_macos_app_bundle.sh dist/ICU.app
 ```
 
-底层脚本：
-
-```bash
-bash tools/run_macos_shell.sh
-bash tools/verify_macos_shell.sh
-```
-
-如果要看打包、签名和 notarize 说明，见：
-
-```bash
-docs/macos-shell-release.md
-```
-
-发布环境变量模板：
-
-```bash
-tools/macos_shell_release.env.example
-```
-
-可选 release 风格校验：
+带发布级检查（bundle 结构 + 脱离终端的运行时冒烟测试）：
 
 ```bash
 VERIFY_MACOS_SHELL_PACKAGE_CHECK=1 \
@@ -109,245 +71,248 @@ VERIFY_MACOS_SHELL_RUNTIME_SMOKE_CHECK=1 \
 ./icu --verify
 ```
 
-### 运行时控制
+签名和公证说明见 [`docs/macos-shell-release.md`](docs/macos-shell-release.md)，
+环境变量模板在 `tools/macos_shell_release.env.example`。
 
-菜单栏面板：
+## 怎么用
 
-- `显示桌宠`
-- `更换形象`
-- `生成配置`
-- `退出`
+### 菜单栏
 
-桌宠处于待机态时的右键菜单：
+| 菜单项 | 作用 |
+|--------|------|
+| 显示桌宠 | 把桌宠窗口显示出来 |
+| 衣柜 | 打开衣柜窗口 |
+| 设置… | 打开设置窗口 |
+| 接入 / 断开 Claude Code | 装上或卸掉 Claude Code 钩子 |
+| 退出 | 退出 app |
 
-- `开始工作`
-- `更换形象`
-- `生成配置`
-- `隐藏桌宠`
-- `退出`
+只有在 `icu-hook` 可执行文件找得到时，菜单里才会出现 Claude Code 那一项。
 
-桌宠处于工作态时的右键菜单：
+### 桌宠右键菜单
 
-- `进入专注`
-- `暂离`
-- `下班`
-- `更换形象`
-- `生成配置`
-- `隐藏桌宠`
-- `退出`
+| 状态 | 菜单项 |
+|------|--------|
+| 待机 | 开始工作 |
+| 工作中 | 进入专注 · 暂离 · 下班 |
+| 专注 / 暂离 | 回来工作 · 下班 |
+| 任何状态 | 衣柜 · 设置… ·（Claude Code）· 隐藏桌宠 · 退出 |
 
-桌宠处于专注或暂离态时的右键菜单：
+### 工作状态
 
-- `回来工作`
-- `下班`
-- `更换形象`
-- `生成配置`
-- `隐藏桌宠`
-- `退出`
+`待机 → 工作 → 专注 / 暂离 → 工作 → 待机`
 
-当前提醒逻辑：
+- **开始工作**：同时武装护眼和喝水提醒。
+- **进入专注**：暂停两类提醒，桌宠换成专注的样子。
+- **暂离**：同样暂停；**回来工作**重新武装，并且如果刚才专注得够久，桌宠会建议你歇一会儿。
+- **下班**：全部停掉，包括还没到点的「等会儿」。
 
-- 进入 `working` 会启动护眼提醒和喝水提醒。
-- 进入 `focus` 会暂停提醒。
-- 从 `focus` 或 `break` 回到工作态后会重新启动提醒。
-- 当前 Swift 迁移版已经落地护眼提醒、喝水提醒，以及日报/周报健康报告；拉伸仍然属于后续路线。
+### 提醒卡
 
-### 模型工作台（`生成配置`）
+- **护眼**：带倒计时的卡片（20-20-20 是 20 秒，每小时歇歇是 5 分钟），三个操作——主按钮文字随机
+  （看过了 / 好嘞 / 看完啦…）、「等会儿」（5 分钟后再来一次）、拒绝也是随机的（我就不 / 不要 / 偏不）。
+  卡片标题同样随机抽，不会天天一个腔调。
+- **喝水**：不倒计时，显示「第 x/y 杯」加 10 格进度条；超过目标是「超额 N 杯」。
+- 提醒文案：卡片标题和按钮文字来自 `Pet/ReminderQuips.swift` 里的随机池；提醒那句话本身
+  （`pet.eye_reminder` / `pet.hydration_reminder`）可以走文案表覆盖。
 
-`生成配置` 只负责配置模型，不负责生成和应用内容。
+### 设置窗口
 
-当前能力分栏：
+- **健康资料**：体重、杯子容量、每天工作几小时
+- **提醒**：护眼方式——`20-20-20 推荐`（20 分钟 / 20 秒）、`每小时歇歇`（60 分钟 / 5 分钟）、
+  `自定义`（60 秒到 4 小时）
+- 下面实时显示算出来的喝水计划，例如「建议上班时喝 6 杯（约 2050 ml）」「每 80 分钟提醒一次」
 
-- `文本描述`：把 prompt 变成结构化文字意图
-- `动画形象`：生成桌宠形象与动作素材
-- `主题代码`：把文字意图变成主题草稿
+喝水算法：每公斤体重每天 35 ml，工作时段喝掉其中 65%，按你的杯容量分成若干杯，一杯一次提醒。
 
-当前支持的 provider：
+### 衣柜
 
-- `ollama`
-- `huggingface`
-- `openai-compatible`
+`config/wardrobe.json` 里每件装扮有槽位（`head` / `mouth` / `neck` / `face`）、稀有度和是否默认拥有，
+另外配了好几套套装。带 `sprite_set` 的装扮（目前是草帽）在
+`assets/pets/<pet>/outfits/<sprite_set>/` 下有一整套帧，待机、干活、拖拽、贴边探头、睡觉全都跟着换。
 
-每一类能力都会保存这些字段：
+## 接入 Claude Code
 
-- provider
-- model
-- base URL
-- auth JSON
-- options JSON
+桌宠可以跟着你的 Claude Code 会话。在菜单栏或宠物菜单里选「接入 Claude Code」：
 
-### 统一形象工作台（`更换形象`）
+- 会把 `icu-hook`（同一个 package 里的第二个可执行文件）拷到
+  `<App Support>/ICU/bin/icu-hook`，并注册进 `~/.claude/settings.json`（尊重 `CLAUDE_CONFIG_DIR`）。
+- 第一次写之前会备份你的 `settings.json`；你自己的钩子和其他设置原样保留。
+- 注册的每个钩子都是 `async`，Claude Code 不会因为桌宠卡住。
+- 卸载只删命令里带 `/bin/icu-hook` 的条目。
 
-`更换形象` 才是生成、预览、重生成、应用真正发生的地方。
+接上之后，桌宠按 Agent 在干的活演 `assets/pets/<pet>/work/scenes.json` 里的场景：
+思考中、读取中、搜索中、更新中、运行 Bash、子 Agent 运行中。有会话在等你批准工具或等你回话时会弹卡，
+方便你跳回对应的终端或 IDE。
 
-当前 tab：
+**隐私边界。** `icu-hook` 只记状态。提示词、命令、工具参数、模型回答、对话记录路径一律不落盘。
+记的只有：会话 id、事件名、工具**名**、错误类型、工作目录的最后一段（项目文件夹名）、
+前台 app 的 bundle id 和时间戳。
 
-- `主题风格`
-- `桌宠形象动画`
-- `话术`
+## 数据存在哪
 
-当前统一操作流：
+全部在 App Support 下：
 
-1. 输入原始 prompt。
-2. 优化 prompt。
-3. 生成预览。
-4. 不满意就重生成。
-5. 满意后再应用。
-
-各 tab 的职责：
-
-- `主题风格` 会先预览桌宠气泡、右键菜单和表单控件，再决定是否应用主题。
-- `桌宠形象动画` 可以浏览已有形象，也可以生成新的 `idle`、`working`、`alert` 动作图，随后保存并应用。
-- `话术` 会先生成文本草稿和真实气泡预览，再决定是否应用文案 override。
-
-### 持久化与文件位置
-
-运行时状态：
-
-```bash
-~/Library/Application Support/ICU/state/current_state.json
+```
+~/Library/Application Support/ICU/
+├── config/      # settings.json、衣柜存档、文案覆盖
+├── state/       # current_state.json、健康指标
+├── assets/      # 运行时安装的宠物
+├── agents/      # 每个 Claude Code 会话一个 JSON，由 icu-hook 写
+├── logs/
+└── bin/         # 安装好的 icu-hook
 ```
 
-模型配置与当前主题选择：
-
-```bash
-~/Library/Application Support/ICU/config/settings.json
-```
-
-话术与用户可见文案 override：
-
-```bash
-~/Library/Application Support/ICU/config/copy/active.json
-```
-
-生成后的主题草稿：
-
-```bash
-~/Library/Application Support/ICU/state/themes/
-```
-
-以源码仓库模式运行时，AI 生成的新桌宠图片素材当前会保存到：
-
-```bash
-assets/pets/<avatar_id>/
-```
-
-高级用法：覆盖 App Support 根目录：
+开发时想把整棵树挪别处：
 
 ```bash
 ICU_APP_SUPPORT_ROOT=/tmp/icu-dev ./icu
 ```
 
-### Python 边界
+文案覆盖：在 `config/copy/active.json` 里放要改的键（先找 App Support，再找仓库），
+没写的键保持原样。
 
-现在只在形象生成桥接层保留 Python：
+### 仓库里的配置文件
 
-- `tools/avatar_builder_bridge.py`
-- `builder/`
-
-下面这些运行面已经是原生 Swift/AppKit，不再依赖旧 Python 启动路径：
-
-- 应用启动
-- 桌宠窗口
-- 右键菜单
-- 菜单栏面板
-- 状态流转
-- 主题运行时
-- 气泡渲染
-
-## 📚 科学依据
-
-下面这些研究链接描述的是更完整的产品方向。当前 Swift shell 里已经真实启用护眼提醒、喝水提醒，以及健康报告；拉伸和更丰富的教练能力仍然属于后续路线。
-
-### 👁️ 护眼模块：20-20-20 法则与数字眼疲劳 (DES)
-
-**核心研究：**
-- **[The 20/20/20 rule: Practicing pattern and associations with asthenopic symptoms](https://pubmed.ncbi.nlm.nih.gov/37203083/)**
-  - 证实遵循 20-20-20 法则（每 20 分钟看向 20 英尺外 20 秒）能有效降低眼干、烧灼感、视力模糊等视疲劳症状
-  - [PMC 免费全文](https://pmc.ncbi.nlm.nih.gov/articles/PMC10391416/)
-
-**进阶研究：**
-- **[Digital Eye Strain - A Comprehensive Review](https://pmc.ncbi.nlm.nih.gov/articles/PMC9434525/)**
-  - 使用电脑时眨眼频率断崖式下跌：从 18.4 次/分钟降至 3.6 次/分钟
-  - 眨眼减少导致眼表泪膜破裂和水分蒸发，引发数字眼疲劳
-
-### 🧘 拉伸模块：久坐对肌肉骨骼与认知的影响
-
-**核心研究：**
-- **[The Short Term Musculoskeletal and Cognitive Effects of Prolonged Sitting During Office Computer Work](https://pubmed.ncbi.nlm.nih.gov/30087262/)**
-  - 连续静坐 2 小时后，全身肌肉骨骼不适感显著增加（尤其下背部）
-  - 创造性解决问题时的错误率上升
-  - 强烈建议通过"微休息"打断久坐
-  - [PMC 免费全文](https://pmc.ncbi.nlm.nih.gov/articles/PMC6122014/)
-
-**进阶研究：**
-- **[Musculoskeletal neck pain in children and adolescents: Risk factors and complications](https://pmc.ncbi.nlm.nih.gov/articles/PMC5445652/)**
-  - 头部中立姿势重量：4.54-5.44 公斤（10-12 磅）
-  - 前倾姿势 (FHP) 导致颈椎负荷剧增：
-    - 前倾 15°：12.25 公斤
-    - 前倾 45°：22.23 公斤
-    - 前倾 60°：27.22 公斤（60 磅）
-  - 长期 FHP 导致"短信颈"综合征
-
-### 💧 补水模块：轻度脱水对认知表现的影响
-
-**核心研究：**
-- **[The Hydration Equation: Update on Water Balance and Cognitive Performance](https://pmc.ncbi.nlm.nih.gov/articles/PMC4207053/)**
-  - 仅 1-2% 体液流失（口渴感临界点）就会导致：
-    - 精神疲劳增加
-    - 注意力下降
-    - 反应时间变慢
-    - 情绪恶化
-  - 不要等渴了再喝水 - 保持高频次、小口径摄入
-
-**进阶研究：**
-- **[Water, Hydration and Health](https://pmc.ncbi.nlm.nih.gov/articles/PMC2908954/)**
-  - 肾脏最大排尿容积：约 1 升/小时
-  - 一次性大量喝水无效 - 超量水分会迅速排出
-  - 支持"少量多次、高频滴灌"补水策略
-
-## 🛠️ 技术栈
-
-| 技术 | 用途 |
+| 文件 | 内容 |
 |------|------|
-| Swift 6 / SwiftPM | 原生 macOS shell |
-| AppKit | 桌宠窗口与菜单交互 |
-| Python 3.9+ | 仅用于形象生成 bridge（非启动链） |
-| Ollama | 本地 AI（可选） |
-| Hugging Face Inference API | 图像生成 |
-| SQLite | 数据持久化 |
+| `config/settings.json` | 首次启动时的默认值：`edge_snap`、`timers`、`user` |
+| `config/wardrobe.json` | 装扮表和现成套装 |
+| `config/copy/base.json` | 界面上每一条文字 |
 
-## 📁 项目结构
+贴边那一组参数（`enabled`、`snap_distance`、`peek_width`、`auto_hide_delay`）启动时会读，
+但设置窗口里还没有对应项，要改只能动 `config/settings.json`。
+
+## 项目结构
 
 ```
 icu/
-├── icu                     # Swift-first 根启动脚本 (`./icu`)
-├── apps/
-│   └── macos-shell/        # Swift/AppKit 运行时应用
-├── builder/                # AI 生成工具
-│   ├── prompt_optimizer.py # 提示词增强
-│   ├── vision_generator.py # 图像生成
-│   └── persona_forge.py    # 人设创建
-├── src/                    # 剩余 legacy 非 UI Python 模块
-├── docs/macos-shell-release.md # Swift shell 发布说明
-├── assets/pets/            # 宠物形象与配置
-└── config/                 # 用户设置
+├── icu                          # 根启动器：./icu [--verify|--package-app]
+├── apps/macos-shell/            # 整个 app
+│   ├── Sources/ICUShell/        # 主 target
+│   │   ├── Agent/               # Claude Code 会话、钩子安装、Agent 面板
+│   │   ├── Copy/                # 界面文案表 + 覆盖
+│   │   ├── Health/              # 健康资料、喝水计划、指标存储
+│   │   ├── Menu/                # 菜单栏面板
+│   │   ├── Pet/                 # 宠物窗口、动画、行为、拖拽、贴边、干活场景
+│   │   ├── Runtime/             # 状态机、设置、持久化、素材查找
+│   │   ├── Settings/            # 设置窗口（像素风表单控件）
+│   │   ├── Theme/               # 像素主题
+│   │   ├── UI/Pixel/            # 像素按钮 / 字体 / 图标 / 绘制 / 窗口
+│   │   └── Wardrobe/            # 装扮表、窗口、状态
+│   ├── Sources/ICUHook/         # Claude Code 钩子可执行文件
+│   ├── Tests/ICUShellTests/     # 单元测试（swift test）
+│   └── Tests/ManualRuntime/     # 无头 AppKit 运行时检查
+├── assets/
+│   ├── fonts/                   # 像素字体及其许可证
+│   └── pets/capybara/           # 帧、config.json、装扮、光标
+├── config/                      # settings.json、wardrobe.json、copy/base.json
+├── tools/                       # 编译 / 校验 / 打包 / 测试脚本
+│   └── pixel_pets/capybara/     # 生成宠物帧的 Node 管线
+└── docs/                        # 发布指南、动画引擎设计
 ```
 
-## 🎯 开发路线图
+### 宠物素材布局
 
-- [x] PRD 1.1: FSM + 健康提醒
-- [x] PRD 1.2: 桌面宠物 UI
-- [x] PRD 1.3: 报告 + AI 助手
-- [x] PRD 1.4: 自定义形象创建器
-- [ ] 多语言支持
-- [ ] 云端同步（可选）
-- [ ] 移动端伴侣应用
+```
+assets/pets/capybara/
+├── config.json        # id、名字、风格、人设备注（仅作记录）、动画参数
+├── base.png           # 兜底静态图
+├── idle/              # 待机动画，一个目录一个变体（main、chew）
+├── idle_act/          # 随机小动作（bird、wobble）
+├── react/ sleep/      # 被摸、打盹、醒来
+├── work/              # Agent 干活场景 + scenes.json
+├── drag/ edge/        # 拎起 / 转晕帧、贴边探头和转身帧
+├── cursor/            # grab / grabbing / pat 光标
+├── ui/                # 菜单栏和衣柜图标
+└── outfits/           # 按装扮覆盖的帧
+```
 
-## 📄 许可证
+`config.json` 的 `animations` 给每个状态配 `fps`、`loop_mode`、`default_variant`。
+`persona` 那段目前只是文档，app 还没有读它。
+`work/scenes.json` 把场景名映射到关键帧顺序和 fps；`"motion": "chase"` 表示边演边把窗口左右挪
+（搜索时追球）。
 
-MIT License - 详见 [LICENSE](LICENSE) 文件
+### 重新生成宠物素材
 
----
+帧是一个小 Node 管线产出的，不是手抠的：
 
-**Made with ❤️ for developers who care about health**
+```bash
+node tools/pixel_pets/capybara/build.mjs      # 渲染全部素材
+node tools/pixel_pets/capybara/validate.mjs   # 校验产物
+node tools/pixel_pets/capybara/editor.js      # 本地像素编辑器
+```
+
+## 技术栈
+
+| 技术 | 用途 |
+|------|------|
+| Swift 5.10 / SwiftPM | 整个 app，两个可执行文件（`ICUShell`、`icu-hook`） |
+| AppKit / Core Animation | 宠物窗口、菜单、面板、分层像素动画 |
+| Node.js | 像素素材管线（`tools/pixel_pets/`） |
+| Claude Code 钩子 | Agent 会话感知 |
+
+## 科学依据
+
+提醒节奏参照下面这些已发表研究，设置界面里引用的就是它们。
+
+### 护眼：20-20-20 与数字眼疲劳
+
+- **[The 20/20/20 rule: Practicing pattern and associations with asthenopic symptoms](https://pubmed.ncbi.nlm.nih.gov/37203083/)**
+  （Talens-Estarelles 等，*Contact Lens & Anterior Eye* 46:101744，2023）——用提醒落实 20-20-20
+  能减轻眼疲劳和干眼症状。[全文](https://pmc.ncbi.nlm.nih.gov/articles/PMC10391416/)
+- **[Digital Eye Strain — A Comprehensive Review](https://pmc.ncbi.nlm.nih.gov/articles/PMC9434525/)**
+  ——看屏幕时眨眼频率从约 18.4 次/分掉到 3.6 次/分，泪膜破裂加快。
+- **[A field study of supplementary rest breaks for data-entry operators](https://pubmed.ncbi.nlm.nih.gov/10877480/)**
+  （Galinsky 等，*Ergonomics* 43(5):622，2000）——每天多加两次 15 分钟休息，肌肉不适和眼酸都减少，
+  产出不降；这就是「每小时歇歇」预设的依据。
+
+### 拉伸：久坐
+
+- **[The short term musculoskeletal and cognitive effects of prolonged sitting during office computer work](https://pubmed.ncbi.nlm.nih.gov/30087262/)**
+  ——连续坐 2 小时后肌肉骨骼不适明显上升，创造性解题的错误率也上升。
+  [全文](https://pmc.ncbi.nlm.nih.gov/articles/PMC6122014/)
+- **[Assessment of stresses in the cervical spine caused by posture and position of the head](https://pubmed.ncbi.nlm.nih.gov/25393825/)**
+  （Hansraj，*Surgical Technology International* 25:277，2014）——颈椎负荷从正中位的约 4.5–5.4 kg
+  升到前倾 15° 的约 12.2 kg、45° 的 22.2 kg、60° 的 27.2 kg。
+- **[Musculoskeletal neck pain in children and adolescents: Risk factors and complications](https://pmc.ncbi.nlm.nih.gov/articles/PMC5445652/)**
+  ——该研究纳入的受试者全部报告学习和 / 用手机时存在错误的颈背屈曲姿势。
+
+### 补水：轻度脱水
+
+- **[The Hydration Equation: Update on Water Balance and Cognitive Performance](https://pmc.ncbi.nlm.nih.gov/articles/PMC4207053/)**
+  ——体液流失 1–2 % 就足以加重精神疲劳、降低注意力、减慢反应速度；口渴是迟到的信号。
+- **[Water, Hydration and Health](https://pmc.ncbi.nlm.nih.gov/articles/PMC2908954/)**——肾脏每小时
+  最多排约 1 L 尿，一次猛灌大量水会被直接排掉；少量多次更有效，所以喝水计划是分成杯的。
+
+目前实现的是护眼和喝水提醒。**拉伸提醒还没有**——`config/settings.json` 里的 `stretch_interval`
+现在没有任何代码读它。
+
+## 开发路线图
+
+已完成：
+
+- 桌宠本体：状态机、分层像素动画、眼神跟随、摸头、打盹
+- 护眼与喝水提醒，支持「等会儿」
+- 设置窗口：健康资料 + 护眼方式预设
+- 衣柜与整套换装帧
+- 贴边吸附、自动藏边、探头扒边
+- 拖拽物理：拉伸与拎起姿势
+- Claude Code 会话感知（钩子不记对话内容）
+- 文案表覆盖
+- 本地 `.app` 打包、bundle 检查、运行时冒烟测试
+
+还没做：
+
+- 拉伸 / 久坐提醒（上面的研究就是依据，缺口在 `stretch_interval` 没人读）
+- 健康指标看板和日报 / 周报（`Health/HealthMetricsStore.swift` 里已经有原始事件和按日 / 周的
+  汇总计算，但没有任何界面去渲染）
+- 更多宠物（素材管线支持，目前只发了水豚）
+- 剩下装扮的整套帧（目前只有草帽有）
+- 多语言（文案是简体中文，但文案表就是为覆盖设计的）
+- 云同步
+
+## 许可证
+
+MIT，见 [LICENSE](LICENSE)。
+
+`assets/fonts/` 下的像素字体保留各自的许可证（OFL 等），在 `assets/fonts/LICENSES/`。
