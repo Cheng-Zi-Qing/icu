@@ -22,11 +22,11 @@ func testPetWorkScenesFollowTheManifestOrderAndLoop() throws {
     guard let scenes = PetWorkScenes(directory: directory, canvasPointSize: NSSize(width: 128, height: 128)) else {
         throw TestFailure(message: "work scenes should load")
     }
-    let names = [0.0, 0.25, 0.5, 0.75].map { scenes.frameName(for: .read, after: $0) }
+    let names = [0.0, 0.25, 0.5, 0.75].map { scenes.frameName(for: .work(.read), after: $0) }
     try expect(names == ["read_0.png", "read_0.png", "read_1.png", "read_0.png"], "plays the order at 4 fps and loops (got \(names))")
-    try expect(scenes.image(for: .read, after: 0) != nil, "frames load as images")
-    try expect(scenes.frameName(for: .eat, after: 0.25) == nil, "an order index past the key frames is skipped rather than crashing")
-    try expect(scenes.frameName(for: .write, after: 0) == nil, "a scene this pet does not have plays nothing")
+    try expect(scenes.image(for: .work(.read), after: 0) != nil, "frames load as images")
+    try expect(scenes.frameName(for: .work(.eat), after: 0.25) == nil, "an order index past the key frames is skipped rather than crashing")
+    try expect(scenes.frameName(for: .work(.write), after: 0) == nil, "a scene this pet does not have plays nothing")
     try expect(PetWorkScenes(directory: directory.appendingPathComponent("missing"), canvasPointSize: NSSize(width: 128, height: 128)) == nil, "no manifest, no scenes")
 }
 
@@ -40,7 +40,7 @@ func testPetWorkScenePlayerStaysQuietForASceneWithoutFrames() throws {
     var reports: [Bool] = []
     player.onImageChanged = { reports.append($0 != nil) }
 
-    player.play(.think)
+    player.play(.work(.think))
     clock = 1
     player.tick()
     player.tick()
@@ -107,9 +107,9 @@ func testPetWorkScenesReadPerSceneSpeedAndMotion() throws {
     guard let scenes = PetWorkScenes(directory: directory, canvasPointSize: NSSize(width: 128, height: 128)) else {
         throw TestFailure(message: "work scenes should load")
     }
-    try expect(scenes.framesPerSecond(for: .search) == 8 && scenes.framesPerSecond(for: .read) == 4, "a scene can run faster than the default")
-    try expect(scenes.frameName(for: .search, after: 0.125) == "search_1.png", "…and its frames follow its own speed")
-    try expect(scenes.chases(.search) && !scenes.chases(.read), "only the chase scene moves the window")
+    try expect(scenes.framesPerSecond(for: .work(.search)) == 8 && scenes.framesPerSecond(for: .work(.read)) == 4, "a scene can run faster than the default")
+    try expect(scenes.frameName(for: .work(.search), after: 0.125) == "search_1.png", "…and its frames follow its own speed")
+    try expect(scenes.chases(.work(.search)) && !scenes.chases(.work(.read)), "only the chase scene moves the window")
 }
 
 /// 追球：从原位先往左跑，跑到头掉头，来回跑；屏幕边上没地方就跑短一点

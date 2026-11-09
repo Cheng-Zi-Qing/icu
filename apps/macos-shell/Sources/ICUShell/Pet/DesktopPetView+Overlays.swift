@@ -26,7 +26,7 @@ extension DesktopPetView {
     }
 
     var currentOverlayLayoutMode: OverlayLayoutMode {
-        if !reminderCardView.isHidden {
+        if !reminderCardView.isHidden || waitCardView?.isHidden == false {
             return .reminderCard
         }
         if !transientBubbleContainer.isHidden {

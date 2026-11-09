@@ -7,7 +7,7 @@ extension DesktopPetView {
 
     /// 能不能转头看鼠标：探头、被拎着、正在打盹 / 被摸头时都不转
     var canTurnTowardCursor: Bool {
-        !isPeeking && !isDraggingPet && behavior.activeClip == nil && workPlayer.activity == nil
+        !isPeeking && !isDraggingPet && behavior.activeClip == nil && workPlayer.scene?.facesSideways != false
     }
 
     /// 没有拖拽 / 探头时该显示的画面：Agent 干活小场景 > 摸头打盹片段 > 待机动画帧
@@ -22,7 +22,7 @@ extension DesktopPetView {
         coordinator.isAvailable = { [weak self] in
             guard let self else { return false }
             return !self.isPeeking && !self.dragController.isDragging && self.currentOverlayLayoutMode == .compact
-                && self.workPlayer.activity == nil
+                && self.workPlayer.scene == nil
         }
         coordinator.onImageChanged = { [weak self] image in
             self?.applyActionImage(image)

@@ -12,6 +12,12 @@ extension DesktopPetView {
                 return reminderCardView.interactiveHitView(at: reminderPoint) ?? reminderCardView
             }
         }
+        if !waitCardView.isHidden {
+            let cardPoint = convert(point, to: waitCardView)
+            if waitCardView.bounds.contains(cardPoint) {
+                return waitCardView.interactiveHitView(at: cardPoint) ?? waitCardView
+            }
+        }
 
         let fallbackHitView = super.hitTest(point)
         if

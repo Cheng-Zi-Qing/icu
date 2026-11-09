@@ -62,6 +62,7 @@ class DesktopPetView: NSView {
     var transientBubbleLabel: NSTextField!
     var transientBubbleTail: NSView!
     var reminderCardView: ReminderCardView!
+    var waitCardView: AgentWaitCardView!
     var currentImage: NSImage?
     let assetLocator: PetAssetLocator
     let animationPlayer = PetAnimationPlayer()
@@ -119,6 +120,8 @@ class DesktopPetView: NSView {
 
     /// 一次拖拽结束（松手）时回调，用于保存窗口位置
     var onPetDragEnded: (() -> Void)?
+    /// 只放一遍的场景（干完了、出错了）放完了
+    var onSceneFinished: ((PetScene) -> Void)?
     var isDraggingPet: Bool { dragController.isDragging }
     var completedVariantLoops = 0
     var variantRotationTicksRemaining = 0
@@ -184,6 +187,7 @@ class DesktopPetView: NSView {
         loadAnimation(for: .idle)
         setupTransientBubble()
         setupReminderCard()
+        setupWaitCard()
         setupStatusLabel()
         applyTheme()
         subscribeToThemeChanges()
@@ -337,6 +341,8 @@ class DesktopPetView: NSView {
     }
 
     func dismissReminderCard() {
+        // 收起后倒计时不能接着走，按钮也不能再报结果（被「在等你」收起的卡之后会重新弹）
+        reminderCardView.deactivate()
         activeReminderTooltip = nil
         reminderCardView.isHidden = true
         notifyOverlayLayoutModeChanged()
@@ -354,6 +360,7 @@ class DesktopPetView: NSView {
         layoutPetChrome()
         layoutTransientBubble()
         layoutReminderCard()
+        layoutWaitCard()
         animationEngine.layoutShadow(petCanvasBounds: petCanvasRect)
     }
 
@@ -362,6 +369,9 @@ class DesktopPetView: NSView {
         super.setFrameSize(newSize)
         if reminderCardView != nil, !reminderCardView.isHidden {
             layoutReminderCard()
+        }
+        if waitCardView != nil, !waitCardView.isHidden {
+            layoutWaitCard()
         }
     }
 

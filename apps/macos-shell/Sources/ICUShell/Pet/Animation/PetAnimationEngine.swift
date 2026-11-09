@@ -57,6 +57,10 @@ final class PetAnimationEngine {
         interactionLayer.handleDoubleClick(at: CACurrentMediaTime())
     }
 
+    func hop(pixels: Int, duration: CFTimeInterval) {
+        interactionLayer.hop(pixels: pixels, duration: duration, at: CACurrentMediaTime())
+    }
+
     // MARK: - 布局
 
     func layoutShadow(petCanvasBounds: CGRect) {
@@ -135,7 +139,7 @@ final class PetAnimationEngine {
         return CATransform3DConcat(CATransform3DConcat(toPivot, transform), back)
     }
 
-    /// 除拖拽以外的变换：只有点击蹦跳（整像素）
+    /// 除拖拽以外的变换：只有蹦跳（点击、场景要求的起跳，整像素）
     func baseTransform(at t: CFTimeInterval) -> LayerTransform {
         interactionLayer.evaluate(at: t)
     }

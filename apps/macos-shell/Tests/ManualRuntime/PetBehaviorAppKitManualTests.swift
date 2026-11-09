@@ -342,3 +342,36 @@ func testPetGazeControllerSitsFacingTheMiddleOfTheScreen() throws {
     controller.tick()
     try expect(!facingRight, "on the right half of the screen, with the cursor far away, it should sit facing left")
 }
+
+/// 你离开 / 回来：睡着了就等醒来那段放完再说「回来了」（回来后的那句话紧跟在醒来动画后面）
+func testPetBehaviorTellsWhenTheUserLeavesAndComesBackAfterWaking() throws {
+    let fixture = try makeBehaviorFixture()
+    let clock = FakeClock()
+    let coordinator = makeCoordinator(fixture, clock: clock)
+    var events: [String] = []
+    coordinator.onUserLeft = { events.append("left") }
+    coordinator.onUserReturned = { events.append("back") }
+
+    clock.userIdle = PetNapSchedule.napAfterIdle
+    coordinator.tick()
+    try expect(coordinator.isUserAway && events == ["left"], "away once idle long enough (got \(events))")
+    clock.now += PetNapSchedule.dozeDuration
+    coordinator.tick()
+    try expect(coordinator.activeClip == .nap, "napping")
+
+    clock.userIdle = 0.5
+    coordinator.tick()
+    try expect(coordinator.activeClip == .wake && events == ["left"], "waking up first, not back yet (got \(events))")
+    clock.now += PetNapSchedule.wakeDuration
+    clock.userIdle = PetNapSchedule.userReturnedIdle + 1
+    coordinator.tick()
+    try expect(!coordinator.isUserAway && events == ["left", "back"], "back once the wake animation ends, even if the mouse rests meanwhile (got \(events))")
+
+    // 没睡着（比如一直在等你、不能打盹）：一回来马上说
+    clock.isFree = false
+    clock.userIdle = PetNapSchedule.napAfterIdle
+    coordinator.tick()
+    clock.userIdle = 0
+    coordinator.tick()
+    try expect(events == ["left", "back", "left", "back"], "without a nap the return is immediate (got \(events))")
+}

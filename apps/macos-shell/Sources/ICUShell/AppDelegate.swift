@@ -16,6 +16,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var agentMonitor: AgentStatusMonitor?
     private var claudeInstaller: ClaudeHookInstaller?
     private var healthTracker: HealthSessionTracker?
+    private let fullscreenMonitor = FullscreenMonitor()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupStatusBarMenu()
@@ -92,6 +93,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             )
             petWindowController?.setOutfit(wardrobe.outfitID)
             configureClaudeCode(paths: paths)
+            configureFullscreenQuiet()
             petWindowController?.showWindow(nil)
         } catch {
             NSLog("[ICUShell] failed to bootstrap runtime: \(error.localizedDescription)")
@@ -100,6 +102,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        fullscreenMonitor.stop()
         reminderScheduler?.stop()
         petWindowController?.close()
     }
@@ -147,6 +150,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     // MARK: - Claude Code
+
+    /// 前台全屏（看视频、演示）时安静：除了「在等你」都先压着。只看窗口大小，不要权限
+    private func configureFullscreenQuiet() {
+        fullscreenMonitor.onChange = { [weak self] fullscreen in
+            self?.petWindowController?.setFullscreen(fullscreen)
+        }
+        fullscreenMonitor.start()
+    }
 
     /// 读 icu-hook 写下的会话状态，交给桌宠表现；菜单里能接入 / 断开
     private func configureClaudeCode(paths: AppPaths) {
