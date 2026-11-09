@@ -85,6 +85,9 @@ swiftc \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Attention/PetAttentionCoordinator.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Agent/AgentWaitCardContent.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/PetAttentionManualTests.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/UsageSamples.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/UsageRecorder.swift" \
+  "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/UsageSampleManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/StateStoreManualMain.swift" \
   -o "$TMP_DIR/runtime-tests"
 
@@ -145,6 +148,7 @@ swiftc -framework AppKit \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Attention/AgentReminderCopy.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Attention/FullscreenDetector.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Attention/PetAttentionCoordinator.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/UsageSamples.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Agent/AgentWaitCardContent.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Work/PetWorkScenes.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Work/PetChase.swift" \

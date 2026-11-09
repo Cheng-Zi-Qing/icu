@@ -32,6 +32,8 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
     private let attention = PetAttentionCoordinator()
     /// 点了「知道了」的那个会话；它还在等时不再弹卡片，不等了就清掉
     private var dismissedWait: String?
+    /// 每秒报一次你多久没碰键盘鼠标（使用时长统计）
+    var onUserIdleChecked: ((TimeInterval) -> Void)?
     /// 「跳过去」：把那个终端叫到前台
     var activateApp: (String) -> Void = DesktopPetWindowController.activateApplication
     private lazy var contextMenuController = ContextMenuPanelController { [weak self] action in
@@ -222,6 +224,7 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
         petView.onSceneFinished = { [weak self] scene in self?.attention.sceneFinished(scene) }
         petView.behavior.onUserLeft = { [weak self] in self?.attention.userLeft() }
         petView.behavior.onUserReturned = { [weak self] in self?.attention.userReturned() }
+        petView.behavior.onUserIdleChecked = { [weak self] idle in self?.onUserIdleChecked?(idle) }
     }
 
     private func showReminder(_ payload: ReminderPresentationPayload) {

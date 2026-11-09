@@ -25,6 +25,8 @@ final class PetBehaviorCoordinator {
     var onUserLeft: (() -> Void)?
     /// 你回来了；桌宠睡着的话，等醒来那段放完才报
     var onUserReturned: (() -> Void)?
+    /// 每次看过你多久没碰键盘鼠标（使用时长统计顺手用，不再另开计时器）
+    var onUserIdleChecked: ((TimeInterval) -> Void)?
 
     private let sprites: (PetActionClip) -> PetPoseSprites?
     private let userIdle: () -> TimeInterval
@@ -92,6 +94,7 @@ final class PetBehaviorCoordinator {
         }
         showCurrentFrame()
         updatePresence(userIdle: idle)
+        onUserIdleChecked?(idle)
         playIdleActionIfDue(available: available, at: time)
     }
 
