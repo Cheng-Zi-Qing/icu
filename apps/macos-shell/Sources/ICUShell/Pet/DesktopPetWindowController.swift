@@ -151,7 +151,7 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
         let gaze = PetGazeController(
             bodyFrameOnScreen: { [weak self] in self?.petBodyFrameOnScreen() },
             isFacingRight: { [weak petView] in petView?.isFacingRight ?? false },
-            onTurn: { [weak petView] facingRight in petView?.setFacingRight(facingRight) }
+            onTurn: { [weak petView] facingRight in petView?.turn(toFacingRight: facingRight) }
         )
         gaze.canTurn = { [weak self] in
             guard let self, self.petView.canTurnTowardCursor else { return false }

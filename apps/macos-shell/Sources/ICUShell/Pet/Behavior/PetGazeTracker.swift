@@ -6,16 +6,21 @@ import Foundation
 /// - 鼠标在身上（摸头、点它）时不算，免得摸着摸着翻来翻去
 /// - 离得太远、或就在正上 / 正下方中间那一条时不理
 /// - 鼠标要在另一侧停够 `dwell` 秒，两次转身至少隔 `cooldown` 秒
-/// - 鼠标走远了就转回「家」的朝向：在屏幕右半边脸朝左，左半边脸朝右（朝着屏幕中间蹲）
+/// - 鼠标走远了，过 `homeDwell` 秒再转回「家」的朝向：在屏幕右半边脸朝左，左半边脸朝右（朝着屏幕中间蹲）
+///
+/// 只理离得近、停得久的鼠标：范围大、反应快时，平常干活鼠标路过就会让它左右乱翻（用户 2026-11-09 反馈）。
 ///
 /// 不可变：`observing` 返回新状态和要转向的方向（nil 表示不动）。
 struct PetGazeTracker: Equatable {
-    static let attentionRadius: CGFloat = 420
+    /// 鼠标离身体中心这么近才理它（约两个身位）
+    static let attentionRadius: CGFloat = 200
     /// 身体中线左右各这么宽（占身体宽度的比例）算「正中间」
     static let deadZoneFraction: CGFloat = 0.25
     static let bodyMargin: CGFloat = 12
-    static let dwell: TimeInterval = 0.4
-    static let cooldown: TimeInterval = 1.5
+    static let dwell: TimeInterval = 1.5
+    static let cooldown: TimeInterval = 5
+    /// 鼠标走开后多久才转回家的朝向
+    static let homeDwell: TimeInterval = 4
 
     /// 鼠标想让它朝的方向（true = 朝右），以及从什么时候开始一直在那边
     private var pendingFacingRight: Bool?
@@ -40,7 +45,8 @@ struct PetGazeTracker: Equatable {
         guard pendingFacingRight == wanted else {
             return (withPending(wanted, since: time), nil)
         }
-        guard time - pendingSince >= Self.dwell, time - lastTurn >= Self.cooldown else {
+        let needed = isAway(cursor: cursor, body: body) ? Self.homeDwell : Self.dwell
+        guard time - pendingSince >= needed, time - lastTurn >= Self.cooldown else {
             return (self, nil)
         }
         let turned = PetGazeTracker(pendingFacingRight: nil, pendingSince: time, lastTurn: time)

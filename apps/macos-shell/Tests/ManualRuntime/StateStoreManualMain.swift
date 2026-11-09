@@ -50,6 +50,7 @@ struct StateStoreManualMain {
             try testNapScheduleDozesOffAfterTheUserIsAwayForAWhile()
             try testNapScheduleWakesUpWhenTheUserComesBack()
             try testNapScheduleNeverNapsWhileBusy()
+            try testGazeOnlyMindsACursorThatIsCloseAndLingers()
             try testGazeTurnsTowardACursorThatStaysOnTheOtherSide()
             try testGazeIgnoresCursorOnTheBodyFarAwayOrInTheMiddle()
             try testGazeWaitsBetweenTurns()

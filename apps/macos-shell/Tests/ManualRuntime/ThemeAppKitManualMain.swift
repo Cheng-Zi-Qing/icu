@@ -102,6 +102,8 @@ struct ThemeAppKitManualMain {
             try testDesktopPetViewShowsHappyFramesWhenItsHeadIsRubbed()
             try testPetGazeControllerTurnsThePetTowardALingeringCursor()
             try testPetGazeControllerSitsFacingTheMiddleOfTheScreen()
+            try testDesktopPetViewLooksAtYouMidwayThroughATurn()
+            try testDesktopPetViewTurnsAtOnceWithoutAFrontFrame()
             try testPetCursorKindFollowsWhatThePointerIsOver()
             try testPetCursorOnlyTouchesTheCursorOverThePet()
             try testPetCursorSetLoadsPixelCursorsWithTheirHotSpots()

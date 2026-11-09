@@ -153,6 +153,7 @@ swiftc -framework AppKit \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Work/PetWorkScenes.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Work/PetChase.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/DesktopPetView+Work.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/DesktopPetView+Turn.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/DesktopPetView+WaitCard.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/AgentWaitCardView.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Edge/WindowSlideAnimator.swift" \

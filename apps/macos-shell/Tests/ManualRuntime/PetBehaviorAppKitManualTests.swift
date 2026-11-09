@@ -285,7 +285,7 @@ func testDesktopPetViewShowsHappyFramesWhenItsHeadIsRubbed() throws {
 
 func testPetGazeControllerTurnsThePetTowardALingeringCursor() throws {
     var now: TimeInterval = 0
-    var cursor = CGPoint(x: 1300, y: 360)
+    var cursor = CGPoint(x: 1220, y: 360)
     var facingRight = false
     var canTurn = true
     let controller = PetGazeController(
@@ -304,7 +304,7 @@ func testPetGazeControllerTurnsThePetTowardALingeringCursor() throws {
     try expect(facingRight, "cursor lingering on the right should turn the pet right")
 
     canTurn = false
-    cursor = CGPoint(x: 700, y: 360)
+    cursor = CGPoint(x: 900, y: 360)
     for _ in 0..<20 {
         now += 0.2
         controller.tick()
@@ -317,6 +317,55 @@ func testPetGazeControllerTurnsThePetTowardALingeringCursor() throws {
     now += PetGazeTracker.dwell
     controller.tick()
     try expect(!facingRight, "turns back once it is allowed again")
+}
+
+/// 转身：先正脸对着你停一下，再转到另一边
+func testDesktopPetViewLooksAtYouMidwayThroughATurn() throws {
+    let appPaths = try makeTemporaryAppPaths()
+    let petRoot = appPaths.assetsDirectory
+        .appendingPathComponent("pets", isDirectory: true)
+        .appendingPathComponent("capybara", isDirectory: true)
+    try makeColorPNG(at: petRoot.appendingPathComponent("idle/main/0.png"), color: .brown)
+    try makeColorPNG(at: petRoot.appendingPathComponent("turn/front.png"), color: .systemTeal)
+    let view = DesktopPetView(
+        frame: NSRect(origin: .zero, size: DesktopPetView.compactContentSize),
+        assetLocator: PetAssetLocator(appPaths: appPaths),
+        petID: "capybara"
+    )
+    view.layoutSubtreeIfNeeded()
+    let imageView = try requirePetImageView(in: view)
+    let sideImage = imageView.image
+
+    view.turn(toFacingRight: true)
+    try expect(view.isTurning && !view.isFacingRight, "it first looks straight at you")
+    let frontImage = imageView.image
+    try expect(frontImage !== sideImage, "the front frame is on screen mid-turn")
+    view.turn(toFacingRight: true)
+    try expect(imageView.image === frontImage, "asking again mid-turn does not restart it")
+
+    view.finishTurnForTesting()
+    try expect(!view.isTurning && view.isFacingRight, "then it faces the other way")
+    try expect(imageView.image !== frontImage && imageView.image !== sideImage, "showing the mirrored side frame")
+
+    view.turn(toFacingRight: false)
+    view.setFacingRight(true)
+    try expect(!view.isTurning && view.isFacingRight, "docking / chasing / being put down cancels a turn in progress")
+    try expect(imageView.image !== frontImage, "and the front frame goes away")
+}
+
+func testDesktopPetViewTurnsAtOnceWithoutAFrontFrame() throws {
+    let appPaths = try makeTemporaryAppPaths()
+    let petRoot = appPaths.assetsDirectory
+        .appendingPathComponent("pets", isDirectory: true)
+        .appendingPathComponent("capybara", isDirectory: true)
+    try makeColorPNG(at: petRoot.appendingPathComponent("idle/main/0.png"), color: .brown)
+    let view = DesktopPetView(
+        frame: NSRect(origin: .zero, size: DesktopPetView.compactContentSize),
+        assetLocator: PetAssetLocator(appPaths: appPaths),
+        petID: "capybara"
+    )
+    view.turn(toFacingRight: true)
+    try expect(!view.isTurning && view.isFacingRight, "pets without a front frame just flip")
 }
 
 private func require<T>(_ value: T?, _ message: String) throws -> T {
@@ -338,7 +387,7 @@ func testPetGazeControllerSitsFacingTheMiddleOfTheScreen() throws {
     )
     try expect(controller.homeFacingRight(body: CGRect(x: 1200, y: 100, width: 104, height: 116)) == false, "right half → home is facing left")
     controller.tick()
-    now += PetGazeTracker.cooldown + PetGazeTracker.dwell
+    now += PetGazeTracker.homeDwell
     controller.tick()
     try expect(!facingRight, "on the right half of the screen, with the cursor far away, it should sit facing left")
 }

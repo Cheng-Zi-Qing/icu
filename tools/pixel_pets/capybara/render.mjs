@@ -3,6 +3,7 @@ import { Grid, SIDES, canvasPixel, partMask } from './raster.mjs';
 import { renderFrontPeek, renderFrontUpright } from './front-peek.mjs';
 import { HEADWEAR, itemIcon, sideHeadwear } from './headwear.mjs';
 import { workFrames } from './front-work.mjs';
+import { renderFrontSit } from './front-sit.mjs';
 
 export const CANVAS_HEIGHT = 32;
 
@@ -374,6 +375,8 @@ export function allFrames(model, { headwear = HEADWEAR[0] } = {}) {
   frames.push(['edge/peek_3.png', front({ flinch: true })]);
   frames.push(['edge/turn_0.png', pose('peek', {})]);
   frames.push(['edge/turn_1.png', pose('peek', { blink: true })]);
+  // 转身那一下先正脸对着你（侧面 → 正面 → 另一侧）
+  frames.push(['turn/front.png', renderFrontSit({ headwear })]);
   // 设置 / 衣柜窗口标题栏上趴着的那只（正面，爪子压在画布底边）
   frames.push(['ui/bar_peek.png', renderFrontUpright({ headwear })]);
   for (const kind of HEADWEAR) frames.push([`ui/item_${kind}.png`, itemIcon(kind)]);
@@ -383,4 +386,4 @@ export function allFrames(model, { headwear = HEADWEAR[0] } = {}) {
 }
 
 /** 素材里按帧重新生成的目录（写之前清空，避免旧帧残留） */
-export const GENERATED_DIRECTORIES = ['idle/main', 'idle/chew', 'drag', 'edge', 'react', 'sleep', 'idle_act', 'ui', 'work'];
+export const GENERATED_DIRECTORIES = ['idle/main', 'idle/chew', 'drag', 'edge', 'react', 'sleep', 'idle_act', 'ui', 'work', 'turn'];
