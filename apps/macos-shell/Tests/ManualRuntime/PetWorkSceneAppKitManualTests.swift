@@ -151,6 +151,53 @@ func testPetChaseRunnerMovesTheWindowAndBringsItHome() throws {
     try expect(window.frame.origin.x < 400 && window.frame.origin.y == 100, "runs sideways only (got \(window.frame.origin))")
     try expect(facing.last == false, "faces left while running left")
 
+    // 不追了：不是一下子跳回去，而是转身小跑回原位
+    var arrivals = 0
+    runner.onReturnedHome = { arrivals += 1 }
+    let stoppedAt = window.frame.origin.x
     runner.stop()
-    try expect(!runner.isRunning && window.frame.origin == CGPoint(x: 400, y: 100), "goes back to where it sat (got \(window.frame.origin))")
+    try expect(!runner.isRunning && runner.isReturning, "stopped chasing, now heading home")
+    try expect(window.frame.origin.x == stoppedAt, "no jump when it stops (got \(window.frame.origin.x), was \(stoppedAt))")
+    try expect(facing.last == true, "turns around to face home on its right")
+    let trip = PetChaseMotion.returnDuration(from: stoppedAt - 400)
+    clock += trip / 2
+    runner.tick()
+    try expect(window.frame.origin.x > stoppedAt && window.frame.origin.x < 400, "halfway back (got \(window.frame.origin.x))")
+    try expect(arrivals == 0, "not there yet")
+    clock += trip
+    runner.tick()
+    try expect(!runner.isReturning && window.frame.origin == CGPoint(x: 400, y: 100), "back where it sat (got \(window.frame.origin))")
+    try expect(arrivals == 1, "tells the controller once it is home (got \(arrivals))")
+}
+
+/// 往回跑的路上又开始搜：从当前位置接着追，不先跳回原位
+func testPetChaseRunnerResumesWhereItIsWhenSearchingAgain() throws {
+    let screen = CGRect(x: 0, y: 0, width: 1000, height: 800)
+    let window = NSWindow(contentRect: NSRect(x: 400, y: 100, width: 128, height: 128), styleMask: [.borderless], backing: .buffered, defer: true)
+    var clock: TimeInterval = 0
+    let runner = PetChaseRunner(window: window, visibleFrame: { _ in screen }, now: { clock }, startsTimer: false)
+    runner.start()
+    clock = 0.5
+    runner.tick()
+    runner.stop()
+    clock += 0.2
+    runner.tick()
+    let here = window.frame.origin.x
+    runner.start()
+    try expect(runner.isRunning && !runner.isReturning, "chasing again")
+    try expect(abs(window.frame.origin.x - here) <= 1, "picks up from where it is (got \(window.frame.origin.x), was \(here))")
+
+    // 被拎起来：哪儿也不去
+    runner.stop(returnHome: false)
+    try expect(!runner.isRunning && !runner.isReturning, "picked up: stays in the hand")
+}
+
+/// 一个来回里，「往左跑、离原位 offset」是第几秒：往回跑的路上接着追时用
+func testPetChaseMotionFindsWhereToResume() throws {
+    let motion = PetChaseMotion(leftRoom: 60, rightRoom: 60)
+    for offset: CGFloat in [-40, -1, 0, 1, 40] {
+        let position = motion.position(after: motion.elapsed(resumingAt: offset))
+        try expect(abs(position.offset - offset) < 0.01 && !position.movingRight, "resume at \(offset) heading left (got \(position))")
+    }
+    try expect(PetChaseMotion.returnDuration(from: -55) == 1, "55pt at 55pt/s is one second")
 }

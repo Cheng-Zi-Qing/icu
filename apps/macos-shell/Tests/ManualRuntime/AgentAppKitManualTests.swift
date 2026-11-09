@@ -105,14 +105,23 @@ func testPetChasesTheBallWhileTheAgentSearches() throws {
         onQuitRequested: {}
     )
     defer { controller.close() }
-    guard let window = controller.window else { throw TestFailure(message: "pet window missing") }
+    guard let window = controller.window, let view = window.contentView as? DesktopPetView else { throw TestFailure(message: "pet window missing") }
     let home = window.frame.origin
 
     let searching = AgentSession(record: ["v": 1, "session": "s1", "event": "PreToolUse", "tool": "Grep", "at": 1.0])
     controller.setAgentSummary(AgentSummary(kind: .working, count: 1, lead: searching))
     try expect(controller.isChasing, "searching sends it after the ball")
 
+    // 先跑出去一段，再让它停
+    let deadline = Date().addingTimeInterval(0.6)
+    while Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.05)) }
+    try expect(window.frame.origin != home, "ran away from home (got \(window.frame.origin))")
+
     controller.setAgentSummary(AgentSummary(kind: .done, count: 1, lead: agentSession("Stop")))
-    try expect(!controller.isChasing, "done: stops running")
-    try expect(window.frame.origin == home, "and sits back where it was (got \(window.frame.origin), home \(home))")
+    try expect(!controller.isChasing, "done: stops chasing")
+    try expect(view.workActivity == .search, "still running frames on the way home (got \(String(describing: view.workActivity)))")
+    let backBy = Date().addingTimeInterval(2)
+    while window.frame.origin != home && Date() < backBy { RunLoop.main.run(until: Date().addingTimeInterval(0.05)) }
+    try expect(window.frame.origin == home, "trots back to where it was (got \(window.frame.origin), home \(home))")
+    try expect(view.workActivity == nil, "home: the run stops (got \(String(describing: view.workActivity)))")
 }

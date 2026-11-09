@@ -53,6 +53,8 @@ struct ThemeAppKitManualMain {
             try testIdleAnimationTicksDoNotFlickerOverTheWorkScene()
             try testPetChaseMotionRunsBackAndForthAroundHome()
             try testPetChaseRunnerMovesTheWindowAndBringsItHome()
+            try testPetChaseRunnerResumesWhereItIsWhenSearchingAgain()
+            try testPetChaseMotionFindsWhereToResume()
             try testPixelArtScalerUsesHardEdgesWhenUpscaling()
             try testPixelArtScalerLeavesHighResolutionImagesUntouched()
             try testPixelArtScalerMirrorsHorizontallyWithoutBlending()

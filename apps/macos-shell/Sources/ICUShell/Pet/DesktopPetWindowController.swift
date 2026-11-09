@@ -24,6 +24,10 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
     /// 搜索时追着球跑来跑去（见 PetChaseRunner）
     private var chaseRunner: PetChaseRunner?
     var isChasing: Bool { chaseRunner?.isRunning == true }
+    /// 追球或往回跑时窗口位置是临时的，不存
+    private var isChaseMovingWindow: Bool { isChasing || chaseRunner?.isReturning == true }
+    /// 正在追的那个场景：往回跑的路上接着放它的跑步帧
+    private var chasedActivity: AgentActivity?
     private lazy var contextMenuController = ContextMenuPanelController { [weak self] action in
         self?.handleMenuAction(action)
     }
@@ -168,8 +172,9 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
             self?.persistWindowPlacement(origin)
         }
         petView.onPetDragStarted = { [weak self, weak edgeDock] in
-            // 被拎起来就不追了，留在手里
+            // 被拎起来就不追了，留在手里（往回跑的路上被拎起来，跑步帧也停）
             self?.chaseRunner?.stop(returnHome: false)
+            if let self { self.petView.setWorkActivity(self.sceneHold.shown) }
             edgeDock?.dragStarted()
         }
         petView.onPointerEntered = { [weak edgeDock] in edgeDock?.pointerEntered() }
@@ -215,7 +220,7 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
         // 拖拽中每个事件都会移动窗口，等松手（onPetDragEnded）再落盘；
         // 吸边 / 藏边动画的中间位置也不保存（贴好后由 onDockedOriginSettled 保存）
         // 追球时跑来跑去的位置也不保存（停下会回原位）
-        guard !petView.isDraggingPet, edgeDock?.isManagingWindowPosition != true, !isChasing else { return }
+        guard !petView.isDraggingPet, edgeDock?.isManagingWindowPosition != true, !isChaseMovingWindow else { return }
         persistCurrentWindowPlacement()
     }
 
@@ -236,17 +241,18 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
         sceneRecheck = nil
         let (hold, recheckAfter) = sceneHold.updated(desired: agentSummary.activity, at: ProcessInfo.processInfo.systemUptime)
         sceneHold = hold
-        petView.setWorkActivity(hold.shown)
+        updateChase()
+        // 不追了但还在往回跑：接着放跑步帧，到家再换
+        petView.setWorkActivity(chaseRunner?.isReturning == true ? chasedActivity : hold.shown)
         // 字跟着画面换（画面要停够 3 秒，字也一样）；字没变时 setStatusText 什么都不做
         petView.setStatusText(statusText(for: workSessionController.state))
-        updateChase()
         guard let recheckAfter else { return }
         let recheck = DispatchWorkItem { [weak self] in self?.applyAgentScene() }
         sceneRecheck = recheck
         DispatchQueue.main.asyncAfter(deadline: .now() + recheckAfter, execute: recheck)
     }
 
-    /// 正在演追球（搜索）就让窗口跑起来；贴在边上、藏起来、被拎着时不跑。停下回原位、朝回屏幕中间
+    /// 正在演追球（搜索）就让窗口跑起来；贴在边上、藏起来、被拎着时不跑。停下小跑回原位，到家再朝回屏幕中间
     private func updateChase() {
         let chasing = sceneHold.shown.map { petView.workPlayer.scenes?.chases($0) == true } ?? false
         let free = edgeDock.map { $0.dock == .none && !$0.isHidden } ?? true
@@ -255,11 +261,15 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
         if shouldRun {
             let runner = chaseRunner ?? PetChaseRunner(window: window)
             runner.onFacingChanged = { [weak petView] facingRight in petView?.setFacingRight(facingRight) }
+            runner.onReturnedHome = { [weak self] in
+                self?.faceHome()
+                self?.applyAgentScene()
+            }
             chaseRunner = runner
+            chasedActivity = sceneHold.shown
             runner.start()
         } else {
             chaseRunner?.stop()
-            faceHome()
         }
     }
 
