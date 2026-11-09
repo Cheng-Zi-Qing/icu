@@ -3,7 +3,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { DEFAULT_MODEL } from './model.mjs';
 import { allFrames } from './render.mjs';
@@ -76,4 +78,22 @@ test('work frames are part of every outfit and come with the manifest', () => {
     assert.ok(existsSync(join(dir, 'outfits', outfit, 'work/read_0.png')), `${outfit} has its own work frames`);
     assert.ok(existsSync(join(dir, 'outfits', outfit, 'work/scenes.json')), `${outfit} has the manifest too`);
   }
+});
+
+test('the chase body stays inside the canvas: its outline is never cut off', () => {
+  // 身体已经拉到 32 格画布的右边缘，再往外就会被切掉（嘴里的草和坐姿一样本来就伸到边上，不算）
+  const bodyInks = new Set(['body', 'shade', 'light', 'dark']);
+  for (const grid of workSceneFrames('search')) {
+    for (let i = 0; i < 32; i += 1) {
+      for (const [x, y] of [[0, i], [31, i], [i, 0], [i, 31]]) {
+        assert.ok(!bodyInks.has(grid.get(x, y)), `body touches the edge at (${x}, ${y})`);
+      }
+    }
+  }
+});
+
+test('chase.mjs loads on its own (no import cycle through render.mjs)', () => {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const run = spawnSync(process.execPath, ['--input-type=module', '-e', "await import('./chase.mjs')"], { cwd: here, encoding: 'utf8' });
+  assert.equal(run.status, 0, run.stderr);
 });

@@ -251,8 +251,9 @@ const SCENE_DEFINITIONS = {
   // 侧身小跑，8 帧/秒；motion: chase 让 App 把窗口左右来回挪
   search: {
     render: ({ beat, headwear, model }) => chaseFrame(model, beat, { headwear }),
-    keys: Array.from({ length: CHASE_BEATS }, (_, beat) => ({ beat })),
-    order: Array.from({ length: CHASE_BEATS * 6 }, (_, i) => i % CHASE_BEATS),
+    // 用到时才读 CHASE_BEATS：从 chase.mjs 进入时它还没初始化（chase → render → front-work → chase）
+    get keys() { return Array.from({ length: CHASE_BEATS }, (_, beat) => ({ beat })); },
+    get order() { return Array.from({ length: CHASE_BEATS * 6 }, (_, i) => i % CHASE_BEATS); },
     fps: 8,
     motion: 'chase',
   },

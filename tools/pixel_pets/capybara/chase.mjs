@@ -1,5 +1,5 @@
 // 搜索时侧身追球：水豚撒腿小跑，前面滚着一个小球。
-// 用侧面那套模型（头、配色和坐姿一样），身体横过来、四条腿交替；脸朝左，往右跑时 App 整张镜像。
+// 用侧面那套模型（头和配色和坐姿一样，头缩到 0.85 倍配横过来的身体），四条腿交替；脸朝左，往右跑时 App 整张镜像。
 // 画面本身原地跑，App 把窗口左右来回挪，看起来就是追着球跑来跑去。
 import { HEADWEAR } from './headwear.mjs';
 import { renderPose } from './render.mjs';
@@ -22,21 +22,23 @@ const GAIT = [
 
 function runPose({ bob, nearFront, farFront, nearHind, farHind }) {
   const shoulder = [13, 24 + bob];
-  const hip = [24, 24 + bob];
+  const hip = [25, 24 + bob];
   const leg = (id, ink, [x0, y0], [x1, y1]) => cap(id, ink, x0, y0, x1, y1 - 0.5, 1.1);
   const paw = (id, ink, [x, y], onlyOver) => ell(id, 'dark', x, y, 1.3, 0.9, { onlyOver });
   return {
     width: 32,
-    head: { x: 8.5, y: 15 + bob, rot: -4, scale: 1 },
+    // 身体横过来没有坐姿厚，头照原尺寸会显得头大身小：头略缩、身体加厚加长（屁股已到画布右边缘），头身比接近坐姿
+    head: { x: 8.5, y: 15.5 + bob, rot: -4, scale: 0.85 },
     yuzu: true,
     parts: [
       leg('farFrontLeg', 'shade', shoulder, farFront),
       leg('farHindLeg', 'shade', hip, farHind),
-      ell('barrel', 'body', 19, 21 + bob, 9.5, 5.4),
-      ell('rump', 'body', 25, 20 + bob, 5.6, 5.8),
-      ell('chest', 'body', 13, 20.5 + bob, 5, 5.2),
-      ell('nape', 'body', 14, 15.5 + bob, 4, 4),
-      ell('tummy', 'light', 17, 24 + bob, 5, 2, { onlyOver: 'body' }),
+      ell('barrel', 'body', 19.5, 19.6 + bob, 10.6, 6.9),
+      // 屁股和背连成一条顺的线，不单独鼓成一个球
+      ell('rump', 'body', 25, 19.8 + bob, 5.9, 6.3),
+      ell('chest', 'body', 12.5, 19.6 + bob, 5.8, 6.4),
+      ell('nape', 'body', 14, 14.4 + bob, 4.6, 4.6),
+      ell('tummy', 'light', 18, 24.8 + bob, 6.2, 2.4, { onlyOver: 'body' }),
       HEAD,
       leg('nearFrontLeg', 'body', shoulder, nearFront),
       leg('nearHindLeg', 'body', hip, nearHind),
@@ -45,7 +47,7 @@ function runPose({ bob, nearFront, farFront, nearHind, farHind }) {
       paw('farFrontPaw', 'dark', farFront, 'shade'),
       paw('farHindPaw', 'dark', farHind, 'shade'),
     ],
-    marks: [{ ink: 'light', points: [[21, 16 + bob], [22, 16 + bob], [23, 16 + bob]] }],
+    marks: [{ ink: 'light', points: [[21, 14 + bob], [22, 14 + bob], [23, 14 + bob], [24, 14 + bob]] }],
   };
 }
 
