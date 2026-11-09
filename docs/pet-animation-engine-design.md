@@ -357,7 +357,8 @@ final class PetAnimationEngine {
 | `PetAnimationModels` | **保留**，数据结构不变 |
 | `PetMotionEnhancer` | 标注 `@available(*, deprecated)`，引擎稳定后删除 |
 | `DesktopPetWindowController` | **不动**，接口不变 |
-| `AvatarCoordinator` / `AvatarSettingsStore` | **不动** |
+
+形象 / Avatar 子系统在后续迭代中已整体移除，不再有兼容约定。
 
 ---
 

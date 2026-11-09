@@ -126,30 +126,24 @@ Notes:
 
 ## Runtime Resources
 
-The packaged `.app` embeds these read-only runtime resources inside the bundle:
+The packaged `.app` embeds these read-only runtime resources under `Contents/Resources/repo/`:
 
-- `assets/`
-- `builder/`
-- `config/copy/base.json`
-- `tools/avatar_builder_bridge.py`
+- `assets/` — pet frames, cursors, UI icons and pixel fonts
+- `config/copy/` — the user-visible string catalog
+- `config/wardrobe.json` — the wardrobe catalog
 
-User-writeable settings do not live in the bundle. They are stored at:
+User-writeable settings do not live in the bundle:
 
 ```bash
 ~/Library/Application Support/ICU/config/settings.json
 ```
 
-Speech override copy is stored at:
+`edge_snap`, `timers` and `user` live in that file. If it does not exist, the app falls back to its
+built-in defaults (or, in a source checkout, to `config/settings.json` in the repo) and writes the
+file once you change a setting.
+
+Copy overrides are merged on top of the bundled catalog:
 
 ```bash
 ~/Library/Application Support/ICU/config/copy/active.json
 ```
-
-## Python Boundary
-
-Python is now retained only for avatar generation bridge work:
-
-- `tools/avatar_builder_bridge.py`
-- `builder/`
-
-Desktop pet startup, AppKit windows, menu interactions, theme runtime, state transitions, and bubble rendering no longer depend on the old Python startup path.
