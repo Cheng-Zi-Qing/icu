@@ -126,3 +126,16 @@ test('the straw hat is big: a wide crown on the side, a tall wide crown from the
     }
   }
 });
+
+test('a lifted pet keeps its headwear, whole, below the top edge of the canvas', () => {
+  for (const [headwear, ink] of [['orange', 'orange'], ['straw_hat', 'straw']]) {
+    const frames = new Map(allFrames(DEFAULT_MODEL, { headwear }));
+    for (const name of ['drag/hold_0.png', 'drag/dizzy_0_0.png']) {
+      const grid = frames.get(name);
+      const rows = [];
+      for (let y = 0; y < grid.height; y += 1) for (let x = 0; x < grid.width; x += 1) if (grid.get(x, y) === ink) rows.push(y);
+      assert.ok(rows.length > 0, `${headwear} is worn in ${name}`);
+      assert.ok(Math.min(...rows) >= 2, `${headwear} is not cut off at the top of ${name} (top row ${Math.min(...rows)})`);
+    }
+  }
+});
