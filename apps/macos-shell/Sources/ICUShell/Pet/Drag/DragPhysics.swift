@@ -37,8 +37,14 @@ struct DragPhysicsConfig {
     var dizzyReversals = 4
     var dizzyWindow: TimeInterval = 1.0
     var dizzyDuration: TimeInterval = 1.5
-    /// 松手后落地压扁的时长
-    var landingDuration: TimeInterval = 0.45
+    /// 松手到完全站稳的总时长：前 fallDuration 是下落，剩下是落地压扁回弹
+    var landingDuration: TimeInterval = 0.7
+    /// 拎着时身体离地抬高多少（pt）：松手后从这里落回地面，才有「下落」的视觉效果
+    var liftHeight: CGFloat = 28
+    /// 松手后下落多久；这段时间身体还是拎着的样子，落地那一刻才换成地上姿势
+    var fallDuration: TimeInterval = 0.3
+    /// 甩晕后落地，还要在地上晕多久（从落地帧播完起算）
+    var groundedDizzyDuration: TimeInterval = 0.8
     /// 松手后多久必须完全复位
     var settleDuration: TimeInterval = 0.8
     /// 落地最大压扁量
@@ -51,6 +57,11 @@ enum DragPose: Equatable {
     /// tilt: -2...2，负数表示身体下半往左摆
     case hold(tilt: Int)
     case dizzy(tilt: Int, twinkle: Int)
+    /// 甩晕后已经落地的样子：单独一套坐姿帧（`drag/dizzy_grounded_<twinkle>.png`）。
+    /// 拎着的那套 `.dizzy` 用的是 hold 姿势，身体是悬空下垂的，放到地上会像挂着。
+    /// 松手后若接着用 `.dizzy`，DesktopPetView 还会按 `isLifted` 把它重新拎进拎起窗口，
+    /// 甩晕的豚鼠就会「落地又飞回去」，所以落地这段必须单独一个 case
+    case dizzyGrounded(twinkle: Int)
     case landing(frame: Int)
 }
 
@@ -65,6 +76,8 @@ struct DragOutput: Equatable {
     var bendDegrees: CGFloat = 0
     /// 以脚底为锚的纵向压扁，1 表示不变
     var landingSquash: CGFloat
+    /// 身体离地抬高多少（pt），0 表示贴地；正值表示悬在空中
+    var fallOffset: CGFloat = 0
 
     static let rest = DragOutput(pose: .none, stretchY: 1, swingDegrees: 0, landingSquash: 1)
 }
@@ -156,6 +169,13 @@ struct DragPhysics {
             next.phase = .settling(releasedAt: time)
             next.lastReleaseWasDrag = true
             next.velocity = CGVector(dx: 0, dy: 0)
+            // 晕劲儿是从甩的过程中开始计的，松手时往往已经剩不了多少，扣掉落地帧只剩零点几秒，
+            // 用户根本看不到星星；松手时补到落地帧播完之后，让它在地上明显地再晕一会。
+            // 必须先判断松手这一刻还晕着：dizzyUntil 只要设过就一直是 non-nil（只有复位才整个清掉），
+            // 不判断的话星星早熄了再松手，也会凭空多出一段待地晕
+            if isDizzy(at: time), let dizzyUntil, dizzyUntil < time + config.landingDuration + config.groundedDizzyDuration {
+                next.dizzyUntil = time + config.landingDuration + config.groundedDizzyDuration
+            }
         case .resting, .settling:
             break
         }
@@ -202,22 +222,35 @@ struct DragPhysics {
             let pose: DragPose = isDizzy(at: time)
                 ? .dizzy(tilt: tilt, twinkle: twinkle(at: time))
                 : .hold(tilt: tilt)
-            return DragOutput(pose: pose, stretchY: 1 + stretch, swingDegrees: swingAngle, bendDegrees: bend, landingSquash: 1)
+            return DragOutput(pose: pose, stretchY: 1 + stretch, swingDegrees: swingAngle, bendDegrees: bend, landingSquash: 1, fallOffset: config.liftHeight)
         case let .settling(releasedAt):
             let elapsed = time - releasedAt
             let pose: DragPose
-            if elapsed < config.landingDuration {
-                pose = .landing(frame: elapsed < config.landingDuration / 2 ? 0 : 1)
+            // 前 fallDuration 是下落：姿势还是拎着那套，位置从抬高处往地面掉，
+            // 落地那一刻才换成地上姿势——中间不换窗口，下落才是连续的
+            if elapsed < config.fallDuration {
+                pose = isDizzy(at: time)
+                    ? .dizzy(tilt: tilt, twinkle: twinkle(at: time))
+                    : .hold(tilt: tilt)
             } else if isDizzy(at: time) {
-                pose = .dizzy(tilt: 0, twinkle: twinkle(at: time))
+                // 晕着落地不能播正常落地帧：那是坐姿 + 灰尘的「趴下」，看着像没晕，
+                // 落地瞬间就该趴在地上冒星星（压扁照走 landingSquash，照样是先墩一下再晕）
+                pose = .dizzyGrounded(twinkle: twinkle(at: time))
+            } else if elapsed < config.landingDuration {
+                pose = .landing(frame: elapsed < config.landingDuration / 2 ? 0 : 1)
             } else {
                 pose = .none
             }
+            // 自由落体：剩余高度 ∝ (1 - t²)，起步慢、落地快
+            let progress = elapsed / config.fallDuration
+            let fallOffset = elapsed < config.fallDuration ? config.liftHeight * (1 - progress * progress) : 0
             return DragOutput(
                 pose: pose,
                 stretchY: 1 + stretch,
                 swingDegrees: swingAngle,
-                landingSquash: landingSquash(elapsed: elapsed)
+                bendDegrees: bend,
+                landingSquash: landingSquash(elapsed: elapsed),
+                fallOffset: fallOffset
             )
         }
     }
@@ -247,9 +280,10 @@ struct DragPhysics {
     }
 
     private func landingSquash(elapsed: TimeInterval) -> CGFloat {
-        guard elapsed >= 0, elapsed < config.landingDuration else { return 1 }
+        // 悬空时不能压扁：压扁是落地那一下的事，从 fallDuration 之后才开始
+        guard elapsed >= config.fallDuration, elapsed < config.landingDuration else { return 1 }
         // 衰减余弦：先压扁、轻微回弹，到 landingDuration 时归零
-        let progress = CGFloat(elapsed / config.landingDuration)
+        let progress = CGFloat((elapsed - config.fallDuration) / (config.landingDuration - config.fallDuration))
         let envelope = (1 - progress) * exp(-3 * progress)
         return 1 - config.landingSquashAmount * envelope * cos(progress * .pi * 2.5)
     }
@@ -328,16 +362,11 @@ struct DragPhysics {
 }
 
 extension DragPose {
-    var isLanding: Bool {
-        if case .landing = self { return true }
-        return false
-    }
-
     /// 悬在半空（拎着、甩晕）：这时整只画在更大的拎起窗口里，跟着摆角转
     var isLifted: Bool {
         switch self {
         case .hold, .dizzy: return true
-        case .none, .landing: return false
+        case .none, .landing, .dizzyGrounded: return false
         }
     }
 
@@ -346,6 +375,7 @@ extension DragPose {
         switch self {
         case let .hold(tilt): return .hold(tilt: -tilt)
         case let .dizzy(tilt, twinkle): return .dizzy(tilt: -tilt, twinkle: twinkle)
+        case let .dizzyGrounded(twinkle): return .dizzyGrounded(twinkle: twinkle)
         case .none, .landing: return self
         }
     }

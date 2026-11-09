@@ -75,6 +75,39 @@ func testDragPhysicsSwingsAgainstHorizontalMotion() throws {
     try expect(output.swingDegrees < -3, "moving right should swing the body back to the left (got \(output.swingDegrees))")
 }
 
+func testDragPhysicsFallsFromTheLiftedHeightBeforeItLands() throws {
+    let config = DragPhysicsConfig()
+    let moving = dragging(
+        DragPhysics(config: config).pressed(at: .zero, at: 0),
+        from: .zero, to: CGPoint(x: 80, y: 40), start: 0, duration: 0.2
+    )
+    let released = moving.released(at: 0.2)
+    // 拎着就已经抬起来了
+    try expect(released.output(at: 0.2).fallOffset == config.liftHeight, "holding should lift the pet off the ground (got \(released.output(at: 0.2).fallOffset))")
+
+    let frame = 1.0 / 60
+    var physics = released
+    var offsets: [CGFloat] = []
+    var poses: [DragPose] = []
+    var time: TimeInterval = 0.2
+    let end = 0.2 + config.fallDuration + frame
+    while time < end {
+        time = min(end, time + frame)
+        physics = physics.stepped(to: time)
+        let output = physics.output(at: time)
+        offsets.append(output.fallOffset)
+        poses.append(output.pose)
+    }
+    // 从抬高处一路掉到贴地，中间只降不升、也不越界
+    try expect(abs((offsets.first ?? 0) - config.liftHeight) < 0.5, "the fall starts from the lifted height (got \(offsets.first ?? 0))")
+    try expect(abs(offsets.last ?? -1) < 0.001, "the fall ends exactly on the ground (got \(offsets.last ?? 0))")
+    try expect(offsets.allSatisfy { $0 >= 0 && $0 <= config.liftHeight }, "the fall stays between the ground and the lift height")
+    try expect(zip(offsets, offsets.dropFirst()).allSatisfy { $0 >= $1 }, "the pet should only go down while it falls")
+    // 下落全程姿势还是拎着那套（窗户不会中途切回主窗口），最后一帧才换成地上姿势
+    try expect(poses.dropLast().allSatisfy { $0.isLifted }, "the pet should keep hanging in the lift window while it falls (got \(poses))")
+    try expect(!(poses.last ?? .none).isLifted, "landing should put the pet back into the normal window (got \(poses.last ?? DragPose.none))")
+}
+
 func testDragPhysicsPlaysLandingThenFullyResets() throws {
     let config = DragPhysicsConfig()
     let moving = dragging(
@@ -84,11 +117,23 @@ func testDragPhysicsPlaysLandingThenFullyResets() throws {
     let released = moving.released(at: 0.2)
     try expect(released.lastReleaseWasDrag == true, "release after a drag should be reported as a drag")
 
-    let justLanded = released.stepped(to: 0.22)
-    guard case .landing = justLanded.output(at: 0.22).pose else {
-        throw TestFailure(message: "release should play the landing pose (got \(justLanded.output(at: 0.22).pose))")
+    // 松手后先往下坠：身体还是拎着的样子，只是位置越来越低（起步慢、落地快）
+    let falling = released.stepped(to: 0.2 + config.fallDuration * 0.5)
+    let midFall = falling.output(at: 0.2 + config.fallDuration * 0.5)
+    guard case .hold = midFall.pose else {
+        throw TestFailure(message: "the pet should keep hanging while it falls (got \(midFall.pose))")
     }
-    try expect(justLanded.output(at: 0.22).landingSquash < 1, "landing should squash the body")
+    try expect(midFall.fallOffset > 0 && midFall.fallOffset < config.liftHeight, "free fall should drop from the lifted height (got \(midFall.fallOffset))")
+    try expect(midFall.landingSquash == 1, "nothing should squash while it is still in the air (got \(midFall.landingSquash))")
+
+    // 落地那一刻才换成地上姿势，压扁也从这一刻才开始
+    let landedAt = 0.2 + config.fallDuration + 0.02
+    let justLanded = released.stepped(to: landedAt)
+    guard case .landing = justLanded.output(at: landedAt).pose else {
+        throw TestFailure(message: "release should play the landing pose once it hits the ground (got \(justLanded.output(at: landedAt).pose))")
+    }
+    try expect(justLanded.output(at: landedAt).fallOffset == 0, "once it lands it sits on the ground (got \(justLanded.output(at: landedAt).fallOffset))")
+    try expect(justLanded.output(at: landedAt).landingSquash < 1, "landing should squash the body")
 
     let rested = stepping(released, from: 0.2, to: 0.2 + config.settleDuration + 0.05)
     try expect(
@@ -115,9 +160,74 @@ func testDragPhysicsGetsDizzyAfterHardShaking() throws {
     }
 
     let released = physics.released(at: time)
-    let end = time + config.dizzyDuration + config.settleDuration + 0.1
+    // 晕劲儿被续到落地帧播完之后，所以复位要等到那之后
+    let end = time + config.landingDuration + config.groundedDizzyDuration + config.settleDuration + 0.1
     let rested = stepping(released, from: time, to: end)
     try expect(rested.output(at: end) == .rest, "dizziness should wear off and fully reset (got \(rested.output(at: end)))")
+}
+
+func testDragPhysicsStaysDizzyOnTheGroundAfterLanding() throws {
+    let config = DragPhysicsConfig()
+    var physics = DragPhysics(config: config).pressed(at: .zero, at: 0)
+    var time: TimeInterval = 0
+    // 0.8 秒内左右各甩 3 次（5 次换向），先把豚鼠甩晕
+    for index in 0..<6 {
+        let from = CGPoint(x: index % 2 == 0 ? 0 : 80, y: 0)
+        let to = CGPoint(x: index % 2 == 0 ? 80 : 0, y: 0)
+        physics = dragging(physics, from: from, to: to, start: time, duration: 0.13)
+        time += 0.13
+    }
+
+    let released = physics.released(at: time)
+    // 晕着松手：先拎着往下坠，星星还亮着，姿势不能提前换成地上的
+    let midFall = released.output(at: time + config.fallDuration * 0.5)
+    guard case .dizzy = midFall.pose else {
+        throw TestFailure(message: "a dizzy release should keep the stars while it falls (got \(midFall.pose))")
+    }
+    try expect(midFall.fallOffset > 0, "a dizzy release falls from the lifted height too (got \(midFall.fallOffset))")
+    // 落地那一刻就该是待地晕，不能先播坐姿 + 灰尘的普通落地帧
+    let impact = time + config.fallDuration + 0.02
+    guard case .dizzyGrounded = released.output(at: impact).pose else {
+        throw TestFailure(message: "release while dizzy should be dizzy on the ground right away (got \(released.output(at: impact).pose))")
+    }
+    // 压扁照走：落地那一刻仍然先墩一下，不是硬切（取刚落地那片刻，中段是回弹、会大于 1）
+    let squashAtImpact = released.output(at: impact).landingSquash
+    try expect(squashAtImpact < 1, "a dizzy landing still squashes on impact (got \(squashAtImpact))")
+
+    // 落地帧播完、晕劲儿还没过：姿势该待在地上，不再拎回拎起窗口
+    let grounded = stepping(released, from: time, to: time + config.landingDuration + 1.0 / 60)
+    let groundedTime = time + config.landingDuration + 1.0 / 60
+    guard case let .dizzyGrounded(twinkle) = grounded.output(at: groundedTime).pose else {
+        throw TestFailure(message: "a dizzy pet that already landed should stay dizzy on the ground (got \(grounded.output(at: groundedTime).pose))")
+    }
+    try expect(!grounded.output(at: groundedTime).pose.isLifted, "dizziness on the ground must not pull the pet back into the lift window")
+    try expect(twinkle == 0 || twinkle == 1, "the grounded pose still picks a dizzy_grounded_<twinkle> frame (got twinkle \(twinkle))")
+    try expect(
+        DragPose.dizzyGrounded(twinkle: twinkle).mirrored == .dizzyGrounded(twinkle: twinkle),
+        "grounded dizzy frames have no lean to mirror"
+    )
+
+    // 星星还在闪：说明确实在播甩晕那套帧（采样窗口覆盖整个待地晕）
+    var twinkles: Set<Int> = []
+    var sample = grounded
+    var sampleTime = groundedTime
+    let groundedEnd = time + config.landingDuration + config.groundedDizzyDuration
+    while sampleTime < groundedEnd - 1.0 / 60 {
+        sampleTime = min(groundedEnd - 1.0 / 60, sampleTime + 1.0 / 60)
+        sample = sample.stepped(to: sampleTime)
+        if case let .dizzyGrounded(twinkle) = sample.output(at: sampleTime).pose { twinkles.insert(twinkle) }
+    }
+    try expect(twinkles == [0, 1], "the twinkle should keep flipping while it is dizzy on the ground (got \(twinkles.sorted()))")
+
+    // 待地晕要持续到配置的时长，差一帧都还该晕着
+    let stillDizzy = stepping(released, from: time, to: groundedEnd - 1.0 / 60)
+    guard case .dizzyGrounded = stillDizzy.output(at: groundedEnd - 1.0 / 60).pose else {
+        throw TestFailure(message: "the pet should stay dizzy on the ground for the full \(config.groundedDizzyDuration)s (got \(stillDizzy.output(at: groundedEnd - 1.0 / 60).pose))")
+    }
+
+    let end = groundedEnd + config.settleDuration + 0.1
+    let rested = stepping(released, from: time, to: end)
+    try expect(rested.output(at: end) == .rest, "once the dizziness wears off it should return to rest (got \(rested.output(at: end)))")
 }
 
 func testDragPhysicsSlowDraggingDoesNotCauseDizziness() throws {

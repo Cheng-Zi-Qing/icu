@@ -86,12 +86,9 @@ final class PetAnimationEngine {
         }
         CATransaction.commit()
 
-        let lifted = drag.pose == .none || drag.pose.isLanding ? 0 : Self.liftedShadowHeight
-        groundShadow.update(floatHeight: base.translateY / InteractionLayer.spritePixel + lifted)
+        // 阴影按实际离地高度浮高：贴地时不含偏移（和贴地待机一致），拎着和下落时跟着下沉
+        groundShadow.update(floatHeight: base.translateY / InteractionLayer.spritePixel + drag.fallOffset / InteractionLayer.spritePixel)
     }
-
-    /// 拎起来时阴影按“浮高”这么多来缩小变淡
-    private static let liftedShadowHeight: CGFloat = 3.5
 
     /// 合成最终 transform：
     /// - 常规效果与落地压扁以脚底中点为轴（站在地上缩放，不会往右上角长）
@@ -114,7 +111,9 @@ final class PetAnimationEngine {
         let baseMatrix = pivoted(base.caTransform, around: bottomCenter)
         let landingMatrix = pivoted(landing.caTransform, around: bottomCenter)
         let stretchMatrix = pivoted(stretch.caTransform, around: topCenter)
-        return CATransform3DConcat(CATransform3DConcat(stretchMatrix, landingMatrix), baseMatrix)
+        let lifted = CATransform3DConcat(CATransform3DConcat(stretchMatrix, landingMatrix), baseMatrix)
+        // 离地抬高放最后一手：压扁、拉长都按贴地的脚底/头顶算，抬多少再整体搬多少
+        return CATransform3DConcat(lifted, CATransform3DMakeTranslation(0, drag.fallOffset, 0))
     }
 
     /// 拎在半空：先以后颈（头顶中点）为轴往下拉长，再绕后颈按摆角甩出去。
@@ -125,7 +124,9 @@ final class PetAnimationEngine {
         let stretchY = max(drag.stretchY, 0.01)
         let stretch = LayerTransform(scaleX: 1 / stretchY.squareRoot(), scaleY: stretchY)
         let swing = CATransform3DMakeRotation(drag.swingDegrees * .pi / 180, 0, 0, 1)
-        return CATransform3DConcat(pivoted(stretch.caTransform, around: scruff), pivoted(swing, around: scruff))
+        let hanging = CATransform3DConcat(pivoted(stretch.caTransform, around: scruff), pivoted(swing, around: scruff))
+        // 离地抬高放最后一手：摆动的支点（后颈）跟着身体一起抬，视觉上是整只被拎高
+        return CATransform3DConcat(hanging, CATransform3DMakeTranslation(0, drag.fallOffset, 0))
     }
 
     private static func pivoted(_ transform: CATransform3D, around pivot: CGPoint) -> CATransform3D {
