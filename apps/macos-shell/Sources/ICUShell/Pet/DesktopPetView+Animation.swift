@@ -33,14 +33,21 @@ extension DesktopPetView {
     }
 
     func updateDisplayedImage(from assetURL: URL) {
-        if let image = NSImage(contentsOf: assetURL) {
-            print("[DesktopPetView] Loaded image from: \(assetURL.path)")
-            updateDisplayedImage(PixelArtScaler.upscaledForDisplay(image, canvasPointSize: Self.compactContentSize))
+        // 帧 URL 固定，放大结果可以一直复用：compactContentSize 是 static 常量，跟窗口大小无关
+        if let cached = frameImageCache[assetURL] {
+            updateDisplayedImage(cached)
             return
         }
 
-        print("[DesktopPetView] Failed to decode image at: \(assetURL.path), using placeholder")
-        updateDisplayedImage(PetPlaceholderImage.make())
+        guard let image = NSImage(contentsOf: assetURL) else {
+            print("[DesktopPetView] Failed to decode image at: \(assetURL.path), using placeholder")
+            updateDisplayedImage(PetPlaceholderImage.make())
+            return
+        }
+
+        let upscaled = PixelArtScaler.upscaledForDisplay(image, canvasPointSize: Self.compactContentSize)
+        frameImageCache[assetURL] = upscaled
+        updateDisplayedImage(upscaled)
     }
 
     func updateDisplayedImage(_ image: NSImage) {
@@ -112,13 +119,21 @@ extension DesktopPetView {
     ) {
         guard !animationFamily.isEmpty else { return }
 
+        // 换宠物 / 换装 / 换状态会换成另一套帧 URL，旧家族放大好的图继续用就是上一套形象的帧，
+        // 所以整份缓存作废；同家族内的变体轮换带着同一家族进来，缓存照用，不然每轮都重新解码
+        if animationFamily != currentAnimationFamily {
+            frameImageCache.removeAll()
+        }
+
         currentAnimationFamily = animationFamily
         currentAnimationStateID = animationFamily[0].stateID
 
         let animation = animationFamily.first(where: { $0.variantID == selectedVariantID }) ?? animationFamily[0]
         currentAnimationVariant = animation
         completedVariantLoops = animation.frameURLs.count <= 1 ? 1 : 0
-        variantRotationTicksRemaining = 0
+        // 按状态的节奏冷却再轮换变体：置 0 的话第一圈动画一结束就换，而单帧变体会让
+        // completedVariantLoops 恒为 1，桌宠会在 main/alt 之间每帧抖
+        variantRotationTicksRemaining = PetMotionEnhancer.profile(for: currentAnimationStateID).variantRotationCooldownTicks
 
         guard let initialFrameURL = animationPlayer.load(animation) else {
             updateDisplayedImage(PetPlaceholderImage.make())

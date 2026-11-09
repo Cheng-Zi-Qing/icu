@@ -86,6 +86,8 @@ write_info_plist() {
   <string>${APP_VERSION}</string>
   <key>LSMinimumSystemVersion</key>
   <string>14.0</string>
+  <key>LSMultipleInstancesProhibited</key>
+  <true/>
   <key>LSUIElement</key>
   <true/>
   <key>NSHighResolutionCapable</key>

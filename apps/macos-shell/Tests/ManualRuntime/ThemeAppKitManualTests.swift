@@ -904,21 +904,51 @@ func makeTinyPNG() throws -> URL {
 func makeColorPNG(at url: URL, color: NSColor) throws {
     try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
 
-    let image = NSImage(size: NSSize(width: 8, height: 8))
-    image.lockFocus()
-    color.setFill()
-    NSBezierPath(rect: NSRect(x: 0, y: 0, width: 8, height: 8)).fill()
-    image.unlockFocus()
+    // 位图色彩空间必须钉死成设备 RGB：lockFocus 走的是校准 RGB，app 侧 NSImage(contentsOf:)
+    // 读图时会做色彩管理转换，纯蓝会被转成 (7,28,255) 这类值，超出 matchesColor 的容差
+    let deviceColor = color.usingColorSpace(.deviceRGB) ?? color
+    let width = 8
+    let height = 8
+    let bytesPerPixel = 4
+    let pixels = UnsafeMutablePointer<UInt8>.allocate(capacity: width * height * bytesPerPixel)
+    defer { pixels.deallocate() }
+
+    for index in 0..<(width * height) {
+        let offset = index * bytesPerPixel
+        pixels[offset] = quantizedChannel(deviceColor.redComponent)
+        pixels[offset + 1] = quantizedChannel(deviceColor.greenComponent)
+        pixels[offset + 2] = quantizedChannel(deviceColor.blueComponent)
+        pixels[offset + 3] = 255
+    }
+
+    var planes: [UnsafeMutablePointer<UInt8>?] = [pixels]
+    let bitmap = NSBitmapImageRep(
+        bitmapDataPlanes: &planes,
+        pixelsWide: width,
+        pixelsHigh: height,
+        bitsPerSample: 8,
+        samplesPerPixel: bytesPerPixel,
+        hasAlpha: true,
+        isPlanar: false,
+        colorSpaceName: .deviceRGB,
+        bitmapFormat: .alphaNonpremultiplied,
+        bytesPerRow: width * bytesPerPixel,
+        bitsPerPixel: 8 * bytesPerPixel
+    )
 
     guard
-        let data = image.tiffRepresentation,
-        let bitmap = NSBitmapImageRep(data: data),
+        let bitmap,
         let pngData = bitmap.representation(using: .png, properties: [:])
     else {
         throw TestFailure(message: "failed to generate color png")
     }
 
     try pngData.write(to: url, options: .atomic)
+}
+
+private func quantizedChannel(_ component: CGFloat) -> UInt8 {
+    let clamped = min(max(component, 0), 1)
+    return UInt8((clamped * 255).rounded())
 }
 
 func makeStateColorPNG(
