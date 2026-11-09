@@ -1,7 +1,7 @@
 {
   "id": "capybara",
   "name": "淡定水豚",
-  "style": "16-bit 像素风",
+  "style": "Q 版像素风（32×32）",
   "prompt": "Pixel art of a calm capybara, 16-bit style, relaxed standing pose, transparent background, 64x64 pixels",
   "persona": {
     "traits": "看透红尘，精神稳定，佛系处世",
@@ -25,6 +25,13 @@
         "一口水，一次呼吸，一份宁静",
         "补充水分，也补充内心的平和"
       ]
+    }
+  },
+  "animations": {
+    "idle": {
+      "fps": 8,
+      "loop_mode": "loop",
+      "default_variant": "main"
     }
   }
 }

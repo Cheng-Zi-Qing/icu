@@ -1,0 +1,26 @@
+{
+  "items": [
+    { "id": "orange", "slot": "head", "name": "橙子", "rarity": "common", "default_owned": true },
+    { "id": "straw_hat", "slot": "head", "name": "草帽", "rarity": "common", "default_owned": true, "sprite_set": "straw_hat" },
+    { "id": "orange_stack", "slot": "head", "name": "一叠橙子", "rarity": "common" },
+    { "id": "flower", "slot": "head", "name": "小花", "rarity": "common" },
+    { "id": "duck", "slot": "head", "name": "小黄鸭", "rarity": "rare" },
+    { "id": "onsen_towel", "slot": "head", "name": "温泉毛巾", "rarity": "common" },
+    { "id": "santa_hat", "slot": "head", "name": "圣诞帽", "rarity": "rare" },
+    { "id": "grass", "slot": "mouth", "name": "草", "rarity": "common" },
+    { "id": "foxtail", "slot": "mouth", "name": "狗尾巴草", "rarity": "common" },
+    { "id": "carrot", "slot": "mouth", "name": "小胡萝卜", "rarity": "common" },
+    { "id": "sakura", "slot": "mouth", "name": "樱花枝", "rarity": "rare" },
+    { "id": "bell", "slot": "neck", "name": "铃铛", "rarity": "common" },
+    { "id": "scarf", "slot": "neck", "name": "围巾", "rarity": "common" },
+    { "id": "badge", "slot": "neck", "name": "工牌", "rarity": "rare" },
+    { "id": "round_glasses", "slot": "face", "name": "圆眼镜", "rarity": "common" },
+    { "id": "sunglasses", "slot": "face", "name": "墨镜", "rarity": "rare" }
+  ],
+  "suits": [
+    { "id": "default", "name": "默认", "items": { "head": "orange" } },
+    { "id": "summer", "name": "夏天", "items": { "head": "straw_hat" } },
+    { "id": "programmer", "name": "程序员", "items": { "neck": "badge", "face": "round_glasses" } },
+    { "id": "spring", "name": "春天", "items": { "head": "flower", "mouth": "sakura" } }
+  ]
+}

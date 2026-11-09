@@ -6,12 +6,24 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
     private let workSessionController: WorkSessionController
     private let reminderScheduler: ReminderScheduler
     private let healthTracker: HealthSessionTracker
-    private let healthReportPresenter: (HealthDaySummary, HealthWeekSummary) -> Void
-    private let onChangeAvatarRequested: () -> Void
-    private let onOpenGenerationConfigRequested: () -> Void
     private let onQuitRequested: () -> Void
+    private let onOpenSettingsRequested: () -> Void
+    private let onOpenWardrobeRequested: () -> Void
+    private let todaySummaryProvider: () -> MenuTodaySummary?
     private let nowProvider: () -> Date
     private let petView: DesktopPetView
+    private var edgeDock: PetEdgeDockController?
+    private var gaze: PetGazeController?
+    /// Claude Code 接上了没有（菜单里显示「接入 / 断开」）；nil = 没法接，不显示
+    var claudeConnection: () -> Bool? = { nil }
+    var onClaudeConnectionChange: (Bool) -> Void = { _ in }
+    private(set) var agentSummary = AgentSummary.idle
+    /// 干活小场景：换场景至少隔 3 秒（见 AgentSceneHold）
+    private var sceneHold = AgentSceneHold.none
+    private var sceneRecheck: DispatchWorkItem?
+    /// 搜索时追着球跑来跑去（见 PetChaseRunner）
+    private var chaseRunner: PetChaseRunner?
+    var isChasing: Bool { chaseRunner?.isRunning == true }
     private lazy var contextMenuController = ContextMenuPanelController { [weak self] action in
         self?.handleMenuAction(action)
     }
@@ -20,20 +32,21 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
         workSessionController: WorkSessionController,
         reminderScheduler: ReminderScheduler,
         healthTracker: HealthSessionTracker,
-        healthReportPresenter: @escaping (HealthDaySummary, HealthWeekSummary) -> Void,
         assetLocator: PetAssetLocator,
         petID: String,
-        onChangeAvatarRequested: @escaping () -> Void,
-        onOpenGenerationConfigRequested: @escaping () -> Void,
         onQuitRequested: @escaping () -> Void,
+        edgeSnapSettings: EdgeSnapSettings = .default,
+        onOpenSettingsRequested: @escaping () -> Void = {},
+        onOpenWardrobeRequested: @escaping () -> Void = {},
+        todaySummaryProvider: @escaping () -> MenuTodaySummary? = { nil },
         nowProvider: @escaping () -> Date = { .now }
     ) {
+        self.onOpenSettingsRequested = onOpenSettingsRequested
+        self.onOpenWardrobeRequested = onOpenWardrobeRequested
+        self.todaySummaryProvider = todaySummaryProvider
         self.workSessionController = workSessionController
         self.reminderScheduler = reminderScheduler
         self.healthTracker = healthTracker
-        self.healthReportPresenter = healthReportPresenter
-        self.onChangeAvatarRequested = onChangeAvatarRequested
-        self.onOpenGenerationConfigRequested = onOpenGenerationConfigRequested
         self.onQuitRequested = onQuitRequested
         self.nowProvider = nowProvider
 
@@ -59,7 +72,8 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
 
         // 浮在所有普通窗口之上
         window.level = .floating
-        window.isMovableByWindowBackground = true
+        // 拖拽由 DesktopPetView 自己处理（带拎起 / 摆动 / 落地效果）
+        window.isMovableByWindowBackground = false
 
         // 不抢焦点
         window.ignoresMouseEvents = false
@@ -75,8 +89,18 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
 
         super.init(window: window)
         window.delegate = self
+        configureEdgeDock(window: window, settings: edgeSnapSettings)
+        configureGaze(window: window)
+        petView.onPetDragEnded = { [weak self] in
+            self?.persistCurrentWindowPlacement()
+            self?.edgeDock?.dragEnded()
+            self?.faceHome()
+            // 还在搜：从放下的地方接着追
+            self?.updateChase()
+        }
         petView.onOverlayLayoutModeChanged = { [weak self] mode in
             self?.updateWindowSize(for: mode)
+            self?.edgeDock?.overlayVisibilityChanged(mode != .compact)
         }
 
         window.menuModelProvider = { [weak self] in
@@ -86,10 +110,71 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
             self?.handleMenuAction(action)
         }
         window.contextMenuController = contextMenuController
+        window.menuSummaryProvider = todaySummaryProvider
 
         applyCurrentStateToView(showBubble: true)
         persistCurrentWindowPlacement()
         window.makeKeyAndOrderFront(nil)
+        edgeDock?.restoreAfterLaunch()
+        faceHome()
+    }
+
+    /// 放下来 / 刚启动：朝着屏幕中间蹲（右半边朝左，左半边朝右）；贴在左右边时朝向归贴边管
+    private func faceHome() {
+        guard edgeDock?.dock.horizontal == nil,
+              let body = petBodyFrameOnScreen(),
+              let home = gaze?.homeFacingRight(body: body)
+        else { return }
+        petView.setFacingRight(home)
+    }
+
+    private func petBodyFrameOnScreen() -> CGRect? {
+        guard let body = petView.petBodyRect, let origin = window?.frame.origin else { return nil }
+        return body.offsetBy(dx: origin.x, dy: origin.y)
+    }
+
+    /// 转头看鼠标；贴在左右屏幕边时朝向归贴边管（脸朝屏幕里）
+    private func configureGaze(window: NSWindow) {
+        let gaze = PetGazeController(
+            bodyFrameOnScreen: { [weak self] in self?.petBodyFrameOnScreen() },
+            isFacingRight: { [weak petView] in petView?.isFacingRight ?? false },
+            onTurn: { [weak petView] facingRight in petView?.setFacingRight(facingRight) }
+        )
+        gaze.canTurn = { [weak self] in
+            guard let self, self.petView.canTurnTowardCursor else { return false }
+            guard let edgeDock = self.edgeDock else { return true }
+            return edgeDock.dock.horizontal == nil && !edgeDock.isHidden
+        }
+        self.gaze = gaze
+    }
+
+    private func configureEdgeDock(window: NSWindow, settings: EdgeSnapSettings) {
+        let edgeDock = PetEdgeDockController(
+            window: window,
+            settings: settings,
+            bodyRectProvider: { [weak petView] in petView?.petBodyRect }
+        )
+        edgeDock.onFacingChanged = { [weak petView] facingRight in
+            petView?.setFacingRight(facingRight)
+        }
+        edgeDock.canPeek = { [weak petView] in petView?.hasPeekPose ?? false }
+        edgeDock.onPeekChanged = { [weak petView] peeking in
+            petView?.setEdgePeek(peeking)
+        }
+        edgeDock.onPeekFlinch = { [weak petView] in
+            petView?.flinchPeek()
+        }
+        edgeDock.onDockedOriginSettled = { [weak self] origin in
+            self?.persistWindowPlacement(origin)
+        }
+        petView.onPetDragStarted = { [weak self, weak edgeDock] in
+            // 被拎起来就不追了，留在手里
+            self?.chaseRunner?.stop(returnHome: false)
+            edgeDock?.dragStarted()
+        }
+        petView.onPointerEntered = { [weak edgeDock] in edgeDock?.pointerEntered() }
+        petView.onPointerExited = { [weak edgeDock] in edgeDock?.pointerExited() }
+        self.edgeDock = edgeDock
     }
 
     @available(*, unavailable)
@@ -111,20 +196,9 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
             logHealthError("record reminder shown", error: error)
         }
 
-        petView.showReminderCard(payload) { [weak self] outcome in
+        let cups = payload.type == .hydration ? todaySummaryProvider().map(CupProgress.init(summary:)) : nil
+        petView.showReminderCard(payload, cups: cups) { [weak self] outcome in
             self?.handleReminderOutcome(outcome, for: payload)
-        }
-    }
-
-    func presentHealthReport() {
-        let now = nowProvider()
-        do {
-            let todaySummary = try healthTracker.todayReport(at: now)
-            let weekSummary = try healthTracker.weekReport(containing: now)
-            healthReportPresenter(todaySummary, weekSummary)
-        } catch {
-            logHealthError("load health report", error: error)
-            petView.showTransientMessage(DesktopPetCopy.healthReportUnavailableMessage(), duration: 1.8)
         }
     }
 
@@ -132,12 +206,61 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
         petView.setPetID(petID)
     }
 
+    /// 衣柜换装后换整套帧（nil = 默认橙子）
+    func setOutfit(_ outfit: String?) {
+        petView.setOutfit(outfit)
+    }
+
     func windowDidMove(_ notification: Notification) {
+        // 拖拽中每个事件都会移动窗口，等松手（onPetDragEnded）再落盘；
+        // 吸边 / 藏边动画的中间位置也不保存（贴好后由 onDockedOriginSettled 保存）
+        // 追球时跑来跑去的位置也不保存（停下会回原位）
+        guard !petView.isDraggingPet, edgeDock?.isManagingWindowPosition != true, !isChasing else { return }
         persistCurrentWindowPlacement()
     }
 
     private func currentMenuModel() -> DesktopPetMenuModel {
-        DesktopPetMenuModel(state: workSessionController.state)
+        DesktopPetMenuModel(state: workSessionController.state, claudeConnection: claudeConnection())
+    }
+
+    /// Agent 状态变了：状态条优先显示它（在等你、干完了……），没事时回到平时的状态
+    func setAgentSummary(_ summary: AgentSummary) {
+        guard summary != agentSummary else { return }
+        agentSummary = summary
+        applyAgentScene()
+    }
+
+    /// 按 Agent 正在干的活换小场景；刚换过不到 3 秒就等够了再换
+    private func applyAgentScene() {
+        sceneRecheck?.cancel()
+        sceneRecheck = nil
+        let (hold, recheckAfter) = sceneHold.updated(desired: agentSummary.activity, at: ProcessInfo.processInfo.systemUptime)
+        sceneHold = hold
+        petView.setWorkActivity(hold.shown)
+        // 字跟着画面换（画面要停够 3 秒，字也一样）；字没变时 setStatusText 什么都不做
+        petView.setStatusText(statusText(for: workSessionController.state))
+        updateChase()
+        guard let recheckAfter else { return }
+        let recheck = DispatchWorkItem { [weak self] in self?.applyAgentScene() }
+        sceneRecheck = recheck
+        DispatchQueue.main.asyncAfter(deadline: .now() + recheckAfter, execute: recheck)
+    }
+
+    /// 正在演追球（搜索）就让窗口跑起来；贴在边上、藏起来、被拎着时不跑。停下回原位、朝回屏幕中间
+    private func updateChase() {
+        let chasing = sceneHold.shown.map { petView.workPlayer.scenes?.chases($0) == true } ?? false
+        let free = edgeDock.map { $0.dock == .none && !$0.isHidden } ?? true
+        let shouldRun = chasing && free && !petView.isDraggingPet
+        guard shouldRun != isChasing, let window else { return }
+        if shouldRun {
+            let runner = chaseRunner ?? PetChaseRunner(window: window)
+            runner.onFacingChanged = { [weak petView] facingRight in petView?.setFacingRight(facingRight) }
+            chaseRunner = runner
+            runner.start()
+        } else {
+            chaseRunner?.stop()
+            faceHome()
+        }
     }
 
     private func handleMenuAction(_ action: DesktopPetMenuAction) {
@@ -145,7 +268,6 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
             let oldState = workSessionController.state
             let now = nowProvider()
             var transientMessage: String?
-            var shouldPresentReport = false
 
             switch action {
             case .startWork:
@@ -169,16 +291,18 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
                 try workSessionController.stopWork(now: now)
                 recordHealthTransition(from: oldState, to: workSessionController.state, at: now)
                 reminderScheduler.stop()
-                shouldPresentReport = shouldAutoPresentStopWorkReport(at: now)
-                transientMessage = shouldPresentReport ? nil : DesktopPetCopy.stopWorkMessage()
-            case .changeAvatar:
-                onChangeAvatarRequested()
+                transientMessage = DesktopPetCopy.stopWorkMessage()
+            case .openSettings:
+                onOpenSettingsRequested()
                 return
-            case .openGenerationConfig:
-                onOpenGenerationConfigRequested()
+            case .openWardrobe:
+                onOpenWardrobeRequested()
                 return
-            case .openHealthReport:
-                presentHealthReport()
+            case .connectClaude:
+                onClaudeConnectionChange(true)
+                return
+            case .disconnectClaude:
+                onClaudeConnectionChange(false)
                 return
             case .closeWindow:
                 window?.orderOut(nil)
@@ -188,12 +312,9 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
                 return
             }
 
-            applyCurrentStateToView(showBubble: transientMessage == nil && !shouldPresentReport)
+            applyCurrentStateToView(showBubble: transientMessage == nil)
             if let transientMessage {
                 petView.showTransientMessage(transientMessage)
-            }
-            if shouldPresentReport {
-                presentHealthReport()
             }
         } catch {
             NSSound.beep()
@@ -216,7 +337,8 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
             let followUpPayload = ReminderPresentationPayload(
                 id: UUID(),
                 type: payload.type,
-                text: payload.text
+                text: payload.text,
+                restSeconds: payload.restSeconds
             )
             reminderScheduler.scheduleSnooze(for: followUpPayload)
         }
@@ -230,22 +352,25 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
         }
     }
 
-    private func shouldAutoPresentStopWorkReport(at date: Date) -> Bool {
-        do {
-            return try healthTracker.shouldPresentStopWorkReport(at: date)
-        } catch {
-            logHealthError("check stop-work report eligibility", error: error)
-            return false
-        }
-    }
-
     private func applyCurrentStateToView(showBubble: Bool = false) {
         petView.setWorkState(workSessionController.state)
         petView.setStatusText(statusText(for: workSessionController.state), showBubble: showBubble)
     }
 
     private func statusText(for state: ShellWorkState) -> String {
-        DesktopPetCopy.statusText(for: state)
+        agentStatusText ?? DesktopPetCopy.statusText(for: state)
+    }
+
+    /// 干活时字跟着画面：画面还停在上一种活（不到 3 秒）就说上一种活；同一种活里换了工具，字马上换
+    private var agentStatusText: String? {
+        guard let shown = sceneHold.shown else { return agentSummary.statusText }
+        guard agentSummary.activity == shown, let text = agentSummary.statusText else { return shown.label }
+        return text
+    }
+
+    /// 在桌宠旁边冒一句话（比如接入 Claude Code 失败的原因）
+    func showMessage(_ text: String, duration: TimeInterval = 3) {
+        petView.showTransientMessage(text, duration: duration)
     }
 
     private func focusSuggestionMessage(for suggestion: FocusEndSuggestion?) -> String? {
@@ -283,7 +408,10 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
         guard let origin = window?.frame.origin else {
             return
         }
+        persistWindowPlacement(origin)
+    }
 
+    private func persistWindowPlacement(_ origin: CGPoint) {
         do {
             try workSessionController.persistWindowPlacement(SavedWindowPlacement(origin: origin))
         } catch {
@@ -306,15 +434,11 @@ class DesktopPetWindow: NSWindow {
     var menuModelProvider: (() -> DesktopPetMenuModel)?
     var actionHandler: ((DesktopPetMenuAction) -> Void)?
     var contextMenuController: ContextMenuPanelController?
+    var menuSummaryProvider: (() -> MenuTodaySummary?)?
 
     // 无边框窗口默认无法成为 key window，这里开放以接收键盘事件（Spike 阶段备用）
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
-
-    // 拖拽移动窗口
-    override func mouseDragged(with event: NSEvent) {
-        performDrag(with: event)
-    }
 
     // 右键菜单
     override func rightMouseDown(with event: NSEvent) {
@@ -324,6 +448,7 @@ class DesktopPetWindow: NSWindow {
 
         contextMenuController?.present(
             from: menuModelProvider?() ?? DesktopPetMenuModel(state: .idle),
+            summary: menuSummaryProvider?() ?? nil,
             event: event,
             in: contentView
         )

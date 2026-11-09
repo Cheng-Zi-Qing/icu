@@ -129,3 +129,30 @@ func testHydrationReminderCallbackIncludesHydrationType() throws {
         "scheduler should emit hydration reminder payloads"
     )
 }
+
+@MainActor
+func testUpdatingIntervalsWhileWorkingKeepsRemindersArmed() throws {
+    let scheduler = ReminderScheduler(eyeInterval: 1200, hydrationInterval: 3600)
+    scheduler.startWorking()
+    scheduler.updateIntervals(eye: 900, hydration: 2400)
+    try expect(scheduler.eyeInterval == 900 && scheduler.hydrationInterval == 2400, "new intervals should be stored")
+    try expect(scheduler.isEyeReminderArmed && scheduler.isHydrationReminderArmed, "reminders stay armed with the new intervals")
+}
+
+@MainActor
+func testUpdatingIntervalsWhileIdleDoesNotArmReminders() throws {
+    let scheduler = ReminderScheduler(eyeInterval: 1200, hydrationInterval: 3600)
+    scheduler.updateIntervals(eye: 900, hydration: 2400)
+    try expect(!scheduler.isEyeReminderArmed && !scheduler.isHydrationReminderArmed, "idle should stay idle")
+}
+
+@MainActor
+func testEyeReminderCarriesTheRestDurationOfTheCurrentMode() throws {
+    var payloads: [ReminderPresentationPayload] = []
+    let scheduler = ReminderScheduler(eyeInterval: 0.02, hydrationInterval: 3600, snoozeInterval: 300) { payloads.append($0) }
+    scheduler.updateIntervals(eye: 0.02, hydration: 3600, eyeRest: 300)
+    scheduler.startWorking()
+    defer { scheduler.stop() }
+    try expect(waitForCondition(timeout: 1) { !payloads.isEmpty }, "the eye reminder should fire")
+    try expect(payloads.first?.restSeconds == 300, "the card should count down the mode's rest time (got \(String(describing: payloads.first?.restSeconds)))")
+}

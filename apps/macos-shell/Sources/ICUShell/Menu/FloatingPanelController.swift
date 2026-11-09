@@ -30,7 +30,8 @@ final class FloatingPanelController {
         )
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        panel.hasShadow = true
+        // 像素板子自己画了硬投影，不要系统的柔和阴影
+        panel.hasShadow = false
         panel.level = .popUpMenu
         panel.hidesOnDeactivate = true
         panel.isMovableByWindowBackground = false

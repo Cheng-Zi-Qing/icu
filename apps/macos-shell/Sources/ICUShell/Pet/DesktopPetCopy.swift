@@ -41,23 +41,4 @@ enum DesktopPetCopy {
         text("pet.hydration_reminder", fallback: "喝口水，慢慢来。")
     }
 
-    static func reminderCompleteActionTitle() -> String {
-        TextCatalog.shared.text(.petReminderCompleteAction)
-    }
-
-    static func reminderSnoozeActionTitle() -> String {
-        TextCatalog.shared.text(.petReminderSnoozeAction)
-    }
-
-    static func reminderSkipActionTitle() -> String {
-        TextCatalog.shared.text(.petReminderSkipAction)
-    }
-
-    static func healthReportComingSoonMessage() -> String {
-        TextCatalog.shared.text(.petHealthReportComingSoon)
-    }
-
-    static func healthReportUnavailableMessage() -> String {
-        TextCatalog.shared.text(.petHealthReportUnavailable)
-    }
 }

@@ -15,66 +15,122 @@ class DesktopPetView: NSView {
         case reminderCard
     }
 
-    private enum LayoutMetrics {
+    enum LayoutMetrics {
         static let petCanvasWidth: CGFloat = 128
         static let petCanvasHeight: CGFloat = 128
+        /// 形象上方的留白：悬停放大、点击弹跳时头顶的柚子不会被窗口裁掉
+        static let petHeadroom: CGFloat = 24
+        static let petStageHeight: CGFloat = petCanvasHeight + petHeadroom
         static let transientBubbleMaxHeight: CGFloat = 56
         static let transientBubbleTailSize: CGFloat = 8
         static let transientBubbleGap: CGFloat = 6
         static let transientBubbleTopInset: CGFloat = 8
-        static let reminderCardHeight: CGFloat = 108
+        static let reminderCardHeight: CGFloat = ReminderCardView.maximumHeight
         static let reminderGap: CGFloat = 8
         static let reminderTopInset: CGFloat = 8
+        static let statusChipMargin: CGFloat = 8
+        /// Core Animation 按深度给同级图层排序：桌宠图层一旦带上 3D 变换（比如以前的悬停偏头，
+        /// 前倾半边能凸出约 15pt）就会盖住状态标签。浮层固定放在更靠前的深度
+        static let overlayZPosition: CGFloat = 100
     }
 
     static let compactContentSize = NSSize(
         width: LayoutMetrics.petCanvasWidth,
-        height: LayoutMetrics.petCanvasHeight
+        height: LayoutMetrics.petStageHeight
     )
     static let reminderExpandedContentSize = NSSize(
         width: LayoutMetrics.petCanvasWidth,
-        height: LayoutMetrics.petCanvasHeight
+        height: LayoutMetrics.petStageHeight
             + LayoutMetrics.reminderGap
             + LayoutMetrics.reminderCardHeight
             + LayoutMetrics.reminderTopInset
     )
     static let transientBubbleExpandedContentSize = NSSize(
         width: LayoutMetrics.petCanvasWidth,
-        height: LayoutMetrics.petCanvasHeight
+        height: LayoutMetrics.petStageHeight
             + LayoutMetrics.transientBubbleGap
             + LayoutMetrics.transientBubbleTailSize
             + LayoutMetrics.transientBubbleMaxHeight
             + LayoutMetrics.transientBubbleTopInset
     )
 
-    private var imageView: NSImageView!
-    private var statusLabel: NSTextField!
-    private var transientBubbleContainer: NSView!
-    private var transientBubbleLabel: NSTextField!
-    private var transientBubbleTail: NSView!
-    private var reminderCardView: ReminderCardView!
-    private var currentImage: NSImage?
-    private let assetLocator: PetAssetLocator
-    private let animationPlayer = PetAnimationPlayer()
-    private let variantIndexProvider: (Int) -> Int
-    private var petID: String
-    private var currentWorkState: ShellWorkState = .idle
-    private var currentAnimationStateID = "idle"
-    private var currentAnimationVariant: PetAnimationDescriptor?
-    private var currentAnimationFamily: [PetAnimationDescriptor] = []
-    private let animationEngine = PetAnimationEngine()
-    private var completedVariantLoops = 0
-    private var variantRotationTicksRemaining = 0
-    private var persistentStatusText = DesktopPetCopy.statusText(for: .idle)
-    private var activeReminderTooltip: String?
-    private var transientBubbleDismissTimer: Timer?
-    private var animationTimer: DispatchSourceTimer?
-    private var themeObserver: NSObjectProtocol?
-    private var copyObserver: NSObjectProtocol?
+    var imageView: NSImageView!
+    var statusLabel: NSTextField!
+    /// 主题指定的状态字体；实际显示时按文字内容可能换成能显示中文的字体
+    var statusChipThemeFont: NSFont?
+    var transientBubbleContainer: NSView!
+    var transientBubbleLabel: NSTextField!
+    var transientBubbleTail: NSView!
+    var reminderCardView: ReminderCardView!
+    var currentImage: NSImage?
+    let assetLocator: PetAssetLocator
+    let animationPlayer = PetAnimationPlayer()
+    let variantIndexProvider: (Int) -> Int
+    var petID: String
+    /// 衣柜里换的装（头顶那件对应的整套帧，`outfits/<id>/`）；nil = 默认的橙子
+    private(set) var outfitID: String?
+    var currentWorkState: ShellWorkState = .idle
+    var currentAnimationStateID = "idle"
+    var currentAnimationVariant: PetAnimationDescriptor?
+    var currentAnimationFamily: [PetAnimationDescriptor] = []
+    let animationEngine = PetAnimationEngine()
+    let dragController = PetDragController()
+    var poseSprites: PetPoseSprites?
+    var isShowingDragPose = false
+    /// 贴左边时镜像，让脸朝屏幕里
+    private(set) var isFacingRight = false
+    /// 拎在半空时用的大画框（第一次拎起时才创建）
+    private(set) var liftWindow: PetLiftWindow?
+    /// 当前上屏图的原图（未镜像）与实际上屏的图
+    var presentedSource: NSImage?
+    var presentedImage: NSImage?
+    /// 身体不透明区域（归一化、未镜像），每个形象算一次
+    var normalizedBodyBounds: CGRect?
+    /// 贴边探头
+    var peekFrames: PetPeekFrames?
+    var peekTimer: Timer?
+    var peekPlayback = PetPeekPlayback.start
+    private(set) var isPeeking = false
+    /// 现在显示的探头帧；没在探头时为 nil
+    private(set) var shownPeekFrame: PetPeekFrame?
+    /// 鼠标是否在形象不透明的像素上（透明区域不算，避免靠近屏幕边就误触发探出来）
+    var isPointerOverPet = false
+    /// 摸头 / 打盹 / 待机小动作的逐帧片段（盖在待机动画上，让位给拖拽和探头）
+    var actionSprites: [String: PetPoseSprites] = [:]
+    var actionImage: NSImage?
+    /// Agent 干活小场景当前那一帧（见 DesktopPetView+Work）
+    var workImage: NSImage?
+    lazy var workPlayer = makeWorkPlayer()
+    /// 像素手型光标（见 DesktopPetView+Cursor）
+    var cursorSet = PetCursorSet(directory: nil)
+    var currentCursorKind: PetCursorKind?
+    /// 「后台改光标」开关：只在鼠标在豚鼠身上时打开（见 BackgroundCursorGate）
+    let cursorGate: BackgroundCursorGate
+    /// 鼠标真正在屏幕上的位置（测试里换掉）；用来识别 AppKit 补发的过期鼠标事件
+    var pointerLocation: () -> CGPoint = { NSEvent.mouseLocation }
+    var isPressingPet = false
+    lazy var behavior = makeBehaviorCoordinator()
+
+    var onPetDragStarted: (() -> Void)?
+    var onPointerEntered: (() -> Void)?
+    var onPointerExited: (() -> Void)?
+
+    /// 一次拖拽结束（松手）时回调，用于保存窗口位置
+    var onPetDragEnded: (() -> Void)?
+    var isDraggingPet: Bool { dragController.isDragging }
+    var completedVariantLoops = 0
+    var variantRotationTicksRemaining = 0
+    var persistentStatusText = DesktopPetCopy.statusText(for: .idle)
+    var activeReminderTooltip: String?
+    var transientBubbleDismissTimer: Timer?
+    var animationTimer: DispatchSourceTimer?
+    var themeObserver: NSObjectProtocol?
+    var copyObserver: NSObjectProtocol?
     var onOverlayLayoutModeChanged: ((OverlayLayoutMode) -> Void)?
 
+    // 窗口移动由 mouseDragged 自己处理，不让系统接管
     override var mouseDownCanMoveWindow: Bool {
-        true
+        false
     }
 
     // MARK: - Init
@@ -88,11 +144,13 @@ class DesktopPetView: NSView {
                 return 0
             }
             return Int.random(in: 0..<upperBound)
-        }
+        },
+        cursorGate: BackgroundCursorGate = .shared
     ) {
         self.assetLocator = assetLocator
         self.petID = petID
         self.variantIndexProvider = variantIndexProvider
+        self.cursorGate = cursorGate
         super.init(frame: frameRect)
         setup()
     }
@@ -106,17 +164,21 @@ class DesktopPetView: NSView {
             }
             return Int.random(in: 0..<upperBound)
         }
+        self.cursorGate = .shared
         super.init(coder: coder)
         setup()
     }
 
     // MARK: - Setup
 
-    private func setup() {
+    func setup() {
         wantsLayer = true
         layer?.backgroundColor = NSColor.clear.cgColor
 
         setupImageView()
+        configureDragEffects()
+        // 打盹要一直留意用户在不在，不能等到第一次鼠标经过才开始
+        _ = behavior
         loadAnimation(for: .idle)
         setupTransientBubble()
         setupReminderCard()
@@ -126,7 +188,7 @@ class DesktopPetView: NSView {
         subscribeToCopyChanges()
     }
 
-    private func setupImageView() {
+    func setupImageView() {
         imageView = NSImageView(frame: bounds)
         imageView.image = currentImage
         imageView.imageScaling = .scaleProportionallyUpOrDown
@@ -137,15 +199,22 @@ class DesktopPetView: NSView {
 
     // 引擎在 viewDidMoveToWindow 时才 attach，确保 layer 已存在
 
-    private func setupStatusLabel() {
+    func setupStatusLabel() {
         statusLabel = NSTextField(labelWithString: persistentStatusText)
+        let cell = StatusChipCell(textCell: persistentStatusText)
+        cell.isEditable = false
+        cell.isSelectable = false
+        cell.isBordered = false
+        cell.lineBreakMode = .byTruncatingTail
+        cell.alignment = .center
+        statusLabel.cell = cell
         statusLabel.identifier = NSUserInterfaceItemIdentifier("desktopPet.statusLabel")
-        statusLabel.frame = NSRect(x: 8, y: 8, width: bounds.width - 16, height: 18)
-        statusLabel.autoresizingMask = [.width, .maxYMargin]
-        addSubview(statusLabel)
+        statusLabel.autoresizingMask = [.maxYMargin]
+        addOverlaySubview(statusLabel)
+        layoutStatusChip()
     }
 
-    private func setupTransientBubble() {
+    func setupTransientBubble() {
         transientBubbleContainer = NSView(frame: .zero)
         transientBubbleContainer.identifier = NSUserInterfaceItemIdentifier("desktopPet.transientBubbleContainer")
         transientBubbleContainer.wantsLayer = true
@@ -164,20 +233,29 @@ class DesktopPetView: NSView {
         transientBubbleTail.wantsLayer = true
         transientBubbleTail.isHidden = true
 
-        addSubview(transientBubbleContainer)
-        addSubview(transientBubbleTail)
+        addOverlaySubview(transientBubbleContainer)
+        addOverlaySubview(transientBubbleTail)
     }
 
-    private func setupReminderCard() {
+    func setupReminderCard() {
         reminderCardView = ReminderCardView(frame: .zero)
         reminderCardView.identifier = NSUserInterfaceItemIdentifier("desktopPet.reminderCard")
         reminderCardView.isHidden = true
-        addSubview(reminderCardView)
+        addOverlaySubview(reminderCardView)
+    }
+
+    /// 浮在桌宠上面的东西（状态标签、气泡、提醒卡片）：深度上永远在桌宠前面
+    func addOverlaySubview(_ overlay: NSView) {
+        overlay.wantsLayer = true
+        overlay.layer?.zPosition = LayoutMetrics.overlayZPosition
+        addSubview(overlay)
     }
 
     func setStatusText(_ text: String, showBubble: Bool = false) {
+        guard text != persistentStatusText || text != statusLabel.stringValue || showBubble else { return }
         persistentStatusText = text
         statusLabel.stringValue = text
+        layoutStatusChip()
         updateToolTipForVisibleContent()
         if showBubble {
             showTransientMessage(text)
@@ -186,12 +264,33 @@ class DesktopPetView: NSView {
 
     func setWorkState(_ state: ShellWorkState) {
         currentWorkState = state
-        animationEngine.setWorkState(state)
         loadAnimation(for: state)
     }
 
     func setPetID(_ petID: String) {
         self.petID = petID
+        normalizedBodyBounds = nil
+        reloadPoseSprites()
+        // 新形象没有探头图：退回正常形象
+        if isPeeking && peekFrames == nil {
+            setEdgePeek(false)
+        }
+        setWorkState(currentWorkState)
+    }
+
+    /// 换装：换一整套帧；正在贴边探头就接着探头，只是换成新衣服的那一帧
+    func setOutfit(_ outfit: String?) {
+        guard outfit != outfitID else { return }
+        outfitID = outfit
+        normalizedBodyBounds = nil
+        reloadPoseSprites()
+        if isPeeking {
+            if peekFrames == nil {
+                setEdgePeek(false)
+            } else {
+                showPeekFrame(peekPlayback.frame)
+            }
+        }
         setWorkState(currentWorkState)
     }
 
@@ -222,11 +321,12 @@ class DesktopPetView: NSView {
 
     func showReminderCard(
         _ payload: ReminderPresentationPayload,
+        cups: CupProgress? = nil,
         onAction: ((HealthReminderOutcome) -> Void)? = nil
     ) {
         transientBubbleDismissTimer?.invalidate()
         hideTransientBubble(notifyLayoutChange: false)
-        reminderCardView.configure(with: payload, onAction: onAction)
+        reminderCardView.configure(with: payload, cups: cups, onAction: onAction)
         activeReminderTooltip = payload.text
         layoutReminderCard()
         reminderCardView.isHidden = false
@@ -241,392 +341,177 @@ class DesktopPetView: NSView {
         updateToolTipForVisibleContent()
     }
 
-    // MARK: - Image Loading
+    // MARK: - 摸头与打盹
 
-    /// 按优先级尝试加载桌宠图片
-    /// 1. `~/Library/Application Support/ICU/assets/pets/<pet_id>/...`
-    /// 2. repo 内 `assets/pets/<pet_id>/...`
-    /// 3. 内置占位图
-    private func loadAnimation(for state: ShellWorkState) {
-        cancelAnimationTimer()
-
-        let preferredStateID = preferredAction(for: state) ?? "idle"
-
-        if let animationFamily = assetLocator.resolveAnimationFamily(
-            for: petID,
-            preferredAction: preferredStateID
-        ) {
-            applyAnimationFamily(animationFamily)
-            return
-        }
-
-        currentAnimationStateID = preferredStateID
-        currentAnimationVariant = nil
-        currentAnimationFamily = []
-        completedVariantLoops = 0
-        variantRotationTicksRemaining = 0
-        animationPlayer.clear()
-        print("[DesktopPetView] Asset not found, using placeholder")
-        updateDisplayedImage(makePlaceholderImage())
+    /// 能不能转头看鼠标：探头、被拎着、正在打盹 / 被摸头时都不转
+    var canTurnTowardCursor: Bool {
+        !isPeeking && !isDraggingPet && behavior.activeClip == nil && workPlayer.activity == nil
     }
 
-    private func updateDisplayedImage(from assetURL: URL) {
-        if let image = NSImage(contentsOf: assetURL) {
-            print("[DesktopPetView] Loaded image from: \(assetURL.path)")
-            updateDisplayedImage(image)
-            return
-        }
-
-        print("[DesktopPetView] Failed to decode image at: \(assetURL.path), using placeholder")
-        updateDisplayedImage(makePlaceholderImage())
+    /// 没有拖拽 / 探头时该显示的画面：Agent 干活小场景 > 摸头打盹片段 > 待机动画帧
+    var restingImage: NSImage? {
+        workImage ?? actionImage ?? currentImage
     }
 
-    private func updateDisplayedImage(_ image: NSImage) {
-        currentImage = image
-        imageView?.image = image
+    func makeBehaviorCoordinator() -> PetBehaviorCoordinator {
+        let coordinator = PetBehaviorCoordinator(sprites: { [weak self] clip in
+            self?.actionSprites[clip.directory]
+        })
+        coordinator.isAvailable = { [weak self] in
+            guard let self else { return false }
+            return !self.isPeeking && !self.dragController.isDragging && self.currentOverlayLayoutMode == .compact
+                && self.workPlayer.activity == nil
+        }
+        coordinator.onImageChanged = { [weak self] image in
+            self?.applyActionImage(image)
+        }
+        return coordinator
     }
 
-    private func scheduleAnimationIfNeeded() {
-        guard
-            shouldScheduleAnimationTimer,
-            let frameInterval = animationPlayer.frameInterval
-        else {
-            return
-        }
-
-        cancelAnimationTimer()
-        let timer = DispatchSource.makeTimerSource(queue: .main)
-        timer.schedule(deadline: .now() + frameInterval, repeating: frameInterval)
-        timer.setEventHandler { [weak self] in
-            self?.advanceAnimationTick()
-        }
-        timer.resume()
-        animationTimer = timer
+    func applyActionImage(_ image: NSImage?) {
+        actionImage = image
+        guard !isShowingDragPose && !isPeeking else { return }
+        present(restingImage)
     }
 
-    private func cancelAnimationTimer() {
-        animationTimer?.cancel()
-        animationTimer = nil
+    /// 头 = 身体上半截（侧面坐姿时头和柚子都在这里，朝左朝右都一样）
+    func isOverHead(_ point: NSPoint) -> Bool {
+        guard let body = petBodyRect, body.contains(point) else { return false }
+        return point.y >= body.minY + body.height * 0.45
     }
 
-    private func advanceAnimationFrame() {
-        let previousFrameIndex = animationPlayer.currentFrameIndex
-        guard let nextFrameURL = animationPlayer.advanceFrame() else {
-            return
-        }
-        updateDisplayedImage(from: nextFrameURL)
-        recordLoopProgress(previousFrameIndex: previousFrameIndex, newFrameIndex: animationPlayer.currentFrameIndex)
-        tickVariantRotationCooldown()
+    // MARK: - 朝向与身体轮廓（贴边用）
+
+    func setFacingRight(_ facingRight: Bool) {
+        guard facingRight != isFacingRight else { return }
+        isFacingRight = facingRight
+        present(presentedSource)
+        layoutStatusChip()
     }
 
-    private func advanceAnimationTick() {
-        if animationPlayer.shouldAnimate {
-            advanceAnimationFrame()
+    var hasPeekPose: Bool { peekFrames != nil }
+
+    /// 切换贴边探头形象（藏边时由贴边控制器调用）
+    func setEdgePeek(_ active: Bool) {
+        guard active != isPeeking else { return }
+        peekTimer?.invalidate()
+        peekTimer = nil
+        guard active, peekFrames != nil else {
+            isPeeking = false
+            shownPeekFrame = nil
+            statusLabel.isHidden = false
+            present(restingImage)
             return
         }
 
-        tickVariantRotationCooldown()
+        isPeeking = true
+        // 只探出半个脑袋时，下面的状态标签会被屏幕边截断，先藏起来
+        statusLabel.isHidden = true
+        peekPlayback = .start
+        showPeekFrame(peekPlayback.frame)
+        let timer = Timer(timeInterval: 1 / PetPeekFrames.framesPerSecond, repeats: true) { [weak self] _ in
+            guard let self, self.isPeeking else { return }
+            self.peekPlayback = self.peekPlayback.advanced(roll: Double.random(in: 0..<1))
+            self.showPeekFrame(self.peekPlayback.frame)
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        peekTimer = timer
     }
 
-    private func applyAnimationFamily(
-        _ animationFamily: [PetAnimationDescriptor],
-        selectedVariantID: String? = nil
-    ) {
-        guard !animationFamily.isEmpty else { return }
-
-        currentAnimationFamily = animationFamily
-        currentAnimationStateID = animationFamily[0].stateID
-
-        let animation = animationFamily.first(where: { $0.variantID == selectedVariantID }) ?? animationFamily[0]
-        currentAnimationVariant = animation
-        completedVariantLoops = animation.frameURLs.count <= 1 ? 1 : 0
-        variantRotationTicksRemaining = 0
-
-        guard let initialFrameURL = animationPlayer.load(animation) else {
-            updateDisplayedImage(makePlaceholderImage())
-            return
-        }
-
-        updateDisplayedImage(from: initialFrameURL)
-
-        if window != nil {
-            scheduleAnimationIfNeeded()
-        }
+    /// 探着头被碰到：停下待机循环，定在吓一跳那一帧，等贴边控制器把它缩回去
+    func flinchPeek() {
+        guard isPeeking else { return }
+        peekTimer?.invalidate()
+        peekTimer = nil
+        showPeekFrame(.flinch)
     }
 
-    private func recordLoopProgress(previousFrameIndex: Int, newFrameIndex: Int) {
-        guard let currentAnimationVariant else {
-            return
-        }
-
-        if currentAnimationVariant.frameURLs.count <= 1 {
-            completedVariantLoops = max(completedVariantLoops, 1)
-            return
-        }
-
-        let lastFrameIndex = currentAnimationVariant.frameURLs.count - 1
-
-        if currentAnimationVariant.loopMode == .loop
-            && previousFrameIndex == lastFrameIndex
-            && newFrameIndex == 0 {
-            completedVariantLoops += 1
-        } else if currentAnimationVariant.loopMode == .once
-            && previousFrameIndex < lastFrameIndex
-            && newFrameIndex == lastFrameIndex {
-            completedVariantLoops = max(completedVariantLoops, 1)
-        }
+    private func showPeekFrame(_ frame: PetPeekFrame) {
+        shownPeekFrame = frame
+        present(peekFrames?.image(for: frame))
     }
 
-    private func tickVariantRotationCooldown() {
-        guard currentAnimationFamily.count > 1 else {
-            return
-        }
-
-        variantRotationTicksRemaining = max(variantRotationTicksRemaining - 1, 0)
-        guard variantRotationTicksRemaining == 0 else {
-            return
-        }
-
-        attemptVariantRotation(force: false)
-    }
-
-    private func attemptVariantRotation(force: Bool) {
-        guard currentAnimationFamily.count > 1 else { return }
-        guard force || variantRotationTicksRemaining == 0 else { return }
-        guard completedVariantLoops > 0 else { return }
-
-        let alternateAnimations = currentAnimationFamily.filter {
-            $0.variantID != currentAnimationVariant?.variantID
-        }
-        guard !alternateAnimations.isEmpty else {
-            variantRotationTicksRemaining = 5
-            return
-        }
-
-        let index = max(0, min(variantIndexProvider(alternateAnimations.count), alternateAnimations.count - 1))
-        applyAnimationFamily(
-            currentAnimationFamily,
-            selectedVariantID: alternateAnimations[index].variantID
+    /// 身体在视图（= 窗口）里的矩形；还没加载出图时为 nil
+    var petBodyRect: CGRect? {
+        let normalizedBounds = isPeeking ? peekFrames?.normalizedBounds : normalizedBodyBounds
+        guard let normalized = normalizedBounds, let image = currentImage else { return nil }
+        return EdgeDockLayout.bodyRect(
+            normalizedBounds: normalized,
+            facingRight: isFacingRight,
+            in: aspectFitRect(for: image.size, in: petCanvasRect)
         )
     }
 
-    private var petCanvasRect: NSRect {
-        NSRect(
-            x: 0,
-            y: 0,
-            width: bounds.width,
-            height: min(LayoutMetrics.petCanvasHeight, bounds.height)
-        )
+    /// 拖拽时必须留在屏幕内的部分：身体，加上正在显示的气泡 / 提醒卡片
+    var dragKeepVisibleRect: CGRect {
+        let body = petBodyRect ?? petCanvasRect
+        guard currentOverlayLayoutMode != .compact else { return body }
+        return body.union(CGRect(x: body.minX, y: body.minY, width: body.width, height: bounds.height - body.minY))
     }
 
-    private var usesExpandedReminderLayout: Bool {
-        bounds.height >= Self.reminderExpandedContentSize.height - 1
-    }
+    // MARK: - Drag Effects
 
-    private var usesExpandedTransientBubbleLayout: Bool {
-        bounds.height >= Self.transientBubbleExpandedContentSize.height - 1
-            && bounds.height < Self.reminderExpandedContentSize.height - 1
-    }
-
-    private var currentOverlayLayoutMode: OverlayLayoutMode {
-        if !reminderCardView.isHidden {
-            return .reminderCard
+    func configureDragEffects() {
+        reloadPoseSprites()
+        animationEngine.dragOutputProvider = { [weak self] time in
+            self?.dragController.output(at: time) ?? .rest
         }
-        if !transientBubbleContainer.isHidden {
-            return .transientBubble
+        animationEngine.onDragPoseChanged = { [weak self] pose in
+            self?.applyDragPose(pose)
         }
-        return .compact
+        animationEngine.liftedLayer = { [weak self] in
+            guard let lift = self?.liftWindow, lift.isVisible else { return nil }
+            return lift.spriteLayer
+        }
     }
 
-    private func notifyOverlayLayoutModeChanged() {
-        onOverlayLayoutModeChanged?(currentOverlayLayoutMode)
+    func reloadPoseSprites() {
+        poseSprites = assetLocator.resolvePoseSpriteDirectory(for: petID, outfit: outfitID).map {
+            PetPoseSprites(directory: $0, canvasPointSize: Self.compactContentSize)
+        }
+        let actionDirectories = Set(PetActionClip.allCases.map(\.directory))
+        cursorSet = PetCursorSet(directory: assetLocator.resolvePoseSpriteDirectory(for: petID, subdirectory: "cursor", outfit: outfitID))
+        workPlayer.reload(scenes: PetWorkScenes(
+            directory: assetLocator.resolvePoseSpriteDirectory(for: petID, subdirectory: "work", outfit: outfitID),
+            canvasPointSize: Self.compactContentSize
+        ))
+        actionSprites = Dictionary(uniqueKeysWithValues: actionDirectories.compactMap { name in
+            assetLocator.resolvePoseSpriteDirectory(for: petID, subdirectory: name, outfit: outfitID).map {
+                (name, PetPoseSprites(directory: $0, canvasPointSize: Self.compactContentSize))
+            }
+        })
+        peekFrames = PetPeekFrames(sprites: assetLocator.resolvePoseSpriteDirectory(for: petID, subdirectory: "edge", outfit: outfitID).map {
+            PetPoseSprites(directory: $0, canvasPointSize: Self.compactContentSize)
+        })
     }
 
-    private func layoutPetChrome() {
-        guard imageView != nil, statusLabel != nil else {
+    func applyDragPose(_ pose: DragPose) {
+        if let image = poseSprites?.image(for: isFacingRight ? pose.mirrored : pose) {
+            isShowingDragPose = true
+            present(image)
+            if pose.isLifted { showLift() } else { hideLift() }
             return
         }
-        let petRect = petCanvasRect
-        imageView.frame = petRect
-        statusLabel.frame = NSRect(x: 8, y: 8, width: petRect.width - 16, height: 18)
+        hideLift()
+        // 姿势结束，或该宠物没有对应姿势帧：回到当前动画帧
+        guard isShowingDragPose else { return }
+        isShowingDragPose = false
+        present(restingImage)
     }
 
-    private func layoutTransientBubble() {
-        guard transientBubbleContainer != nil, transientBubbleLabel != nil else {
-            return
-        }
-
-        let petRect = petCanvasRect
-        let maxBubbleWidth = max(72, petRect.width - 20)
-        let horizontalPadding: CGFloat = 10
-        let verticalPadding: CGFloat = 7
-        let maxTextSize = NSSize(width: maxBubbleWidth - (horizontalPadding * 2), height: 52)
-        let font = transientBubbleLabel.font ?? NSFont.monospacedSystemFont(ofSize: 11, weight: .medium)
-        let textRect = NSString(string: transientBubbleLabel.stringValue).boundingRect(
-            with: maxTextSize,
-            options: [.usesLineFragmentOrigin, .usesFontLeading],
-            attributes: [.font: font]
-        )
-        let bubbleWidth = min(maxBubbleWidth, ceil(textRect.width) + (horizontalPadding * 2))
-        let bubbleHeight = max(28, min(LayoutMetrics.transientBubbleMaxHeight, ceil(textRect.height) + (verticalPadding * 2)))
-        let bubbleX = max(6, min(petRect.midX - (bubbleWidth / 2), petRect.width - bubbleWidth - 6))
-        let bubbleY: CGFloat
-        if usesExpandedTransientBubbleLayout {
-            bubbleY = petRect.maxY + LayoutMetrics.transientBubbleGap + LayoutMetrics.transientBubbleTailSize
-        } else {
-            bubbleY = max(petRect.maxY - bubbleHeight - 12, 28)
-        }
-
-        transientBubbleContainer.frame = NSRect(
-            x: bubbleX,
-            y: bubbleY,
-            width: bubbleWidth,
-            height: bubbleHeight
-        )
-        transientBubbleLabel.frame = transientBubbleContainer.bounds.insetBy(dx: horizontalPadding, dy: verticalPadding)
-        let tailY: CGFloat
-        if usesExpandedTransientBubbleLayout {
-            tailY = petRect.maxY + LayoutMetrics.transientBubbleGap
-        } else {
-            tailY = transientBubbleContainer.frame.minY - 6
-        }
-        transientBubbleTail.frame = NSRect(
-            x: transientBubbleContainer.frame.midX - 4,
-            y: tailY,
-            width: 8,
-            height: 8
-        )
+    /// 拎起来：换到四周留足地方的拎起窗口里画，原窗口里的这只先让开
+    private func showLift() {
+        guard let window, imageView != nil else { return }
+        let canvas = window.convertToScreen(convert(imageView.frame, to: nil))
+        let lift = liftWindow ?? PetLiftWindow()
+        liftWindow = lift
+        lift.show(image: presentedImage, canvas: canvas, over: window)
+        imageView.alphaValue = 0
     }
 
-    private func hideTransientBubble(notifyLayoutChange: Bool = true) {
-        transientBubbleContainer.isHidden = true
-        transientBubbleTail.isHidden = true
-        if notifyLayoutChange {
-            notifyOverlayLayoutModeChanged()
-        }
-        updateToolTipForVisibleContent()
-    }
-
-    private func layoutReminderCard() {
-        let width = min(max(120, bounds.width - 12), 220)
-        let height = LayoutMetrics.reminderCardHeight
-        let y: CGFloat
-        if usesExpandedReminderLayout {
-            y = petCanvasRect.maxY + LayoutMetrics.reminderGap
-        } else {
-            y = max(26, bounds.height - height - 8)
-        }
-        reminderCardView.frame = NSRect(
-            x: (bounds.width - width) / 2,
-            y: y,
-            width: width,
-            height: height
-        )
-    }
-
-    private func preferredAction(for state: ShellWorkState) -> String? {
-        switch state {
-        case .idle:
-            return "idle"
-        case .working, .focus:
-            return "working"
-        case .breakState:
-            return "alert"
-        }
-    }
-
-    /// 内置占位图：程序化绘制水豚
-    private func makePlaceholderImage() -> NSImage {
-        let size = NSSize(width: 128, height: 128)
-        let image = NSImage(size: size, flipped: false) { rect in
-            guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
-            let cx = rect.midX, cy = rect.midY - 4
-            let bRX: CGFloat = 44, bRY: CGFloat = 32, hR: CGFloat = 32
-            let cs = CGColorSpaceCreateDeviceRGB()
-
-            // 身体
-            ctx.setFillColor(NSColor(calibratedRed:0.58,green:0.48,blue:0.36,alpha:1).cgColor)
-            ctx.fillEllipse(in: CGRect(x:cx-bRX,y:cy-bRY,width:bRX*2,height:bRY*2))
-            // 身体渐变高光
-            if let g = CGGradient(colorsSpace:cs,
-                colors:[NSColor(calibratedRed:0.78,green:0.68,blue:0.52,alpha:0.55).cgColor,
-                        NSColor.clear.cgColor] as CFArray, locations:[0,1]) {
-                ctx.saveGState()
-                ctx.addEllipse(in:CGRect(x:cx-bRX,y:cy-bRY,width:bRX*2,height:bRY*2)); ctx.clip()
-                ctx.drawLinearGradient(g,start:CGPoint(x:cx,y:cy+bRY),end:CGPoint(x:cx,y:cy-bRY),options:[])
-                ctx.restoreGState()
-            }
-            // 腹部
-            ctx.setFillColor(NSColor(calibratedRed:0.82,green:0.74,blue:0.60,alpha:0.55).cgColor)
-            ctx.fillEllipse(in:CGRect(x:cx-20,y:cy-24,width:40,height:34))
-
-            // 腿
-            ctx.setFillColor(NSColor(calibratedRed:0.50,green:0.40,blue:0.28,alpha:1).cgColor)
-            for (lx,ly) in [(cx-26,cy-bRY+3),(cx-10,cy-bRY+1),(cx+10,cy-bRY+1),(cx+26,cy-bRY+3)] as [(CGFloat,CGFloat)] {
-                ctx.fillEllipse(in:CGRect(x:lx-7,y:ly-13,width:14,height:14))
-            }
-
-            // 头
-            let hCY = cy + bRY*0.5 + hR*0.55
-            ctx.setFillColor(NSColor(calibratedRed:0.60,green:0.50,blue:0.38,alpha:1).cgColor)
-            ctx.fillEllipse(in:CGRect(x:cx-hR,y:hCY-hR*0.85,width:hR*2,height:hR*1.7))
-
-            // 耳朵
-            for (ex,ey) in [(cx-hR*0.62,hCY+hR*0.68),(cx+hR*0.62,hCY+hR*0.68)] as [(CGFloat,CGFloat)] {
-                ctx.setFillColor(NSColor(calibratedRed:0.52,green:0.42,blue:0.30,alpha:1).cgColor)
-                ctx.fillEllipse(in:CGRect(x:ex-10,y:ey-7,width:20,height:16))
-                ctx.setFillColor(NSColor(calibratedRed:0.88,green:0.64,blue:0.60,alpha:0.7).cgColor)
-                ctx.fillEllipse(in:CGRect(x:ex-5,y:ey-3,width:10,height:8))
-            }
-
-            // 眼白→瞳孔→高光
-            for ex in [cx-hR*0.36, cx+hR*0.36] as [CGFloat] {
-                let ey = hCY+hR*0.10
-                ctx.setFillColor(NSColor.white.withAlphaComponent(0.92).cgColor)
-                ctx.fillEllipse(in:CGRect(x:ex-8,y:ey-7,width:16,height:15))
-                ctx.setFillColor(NSColor(calibratedRed:0.10,green:0.07,blue:0.04,alpha:1).cgColor)
-                ctx.fillEllipse(in:CGRect(x:ex-5,y:ey-5,width:10,height:11))
-                ctx.setFillColor(NSColor.white.cgColor)
-                ctx.fillEllipse(in:CGRect(x:ex+1,y:ey+1,width:4,height:4))
-            }
-
-            // 鼻子
-            ctx.setFillColor(NSColor(calibratedRed:0.35,green:0.25,blue:0.16,alpha:1).cgColor)
-            ctx.fillEllipse(in:CGRect(x:cx-9,y:hCY-hR*0.28,width:18,height:11))
-            ctx.setFillColor(NSColor(calibratedRed:0.20,green:0.12,blue:0.07,alpha:0.8).cgColor)
-            for nx in [cx-3.5,cx+3.5] as [CGFloat] {
-                ctx.fillEllipse(in:CGRect(x:nx-2,y:hCY-hR*0.26,width:4,height:3.5))
-            }
-
-            // 嘴
-            ctx.setStrokeColor(NSColor(calibratedRed:0.28,green:0.18,blue:0.10,alpha:0.7).cgColor)
-            ctx.setLineWidth(1.5); ctx.setLineCap(.round)
-            ctx.move(to:CGPoint(x:cx-5,y:hCY-hR*0.42))
-            ctx.addCurve(to:CGPoint(x:cx+5,y:hCY-hR*0.42),
-                         control1:CGPoint(x:cx-2,y:hCY-hR*0.52),
-                         control2:CGPoint(x:cx+2,y:hCY-hR*0.52))
-            ctx.strokePath()
-
-            // 毛发纹理
-            ctx.setStrokeColor(NSColor(calibratedRed:0.70,green:0.58,blue:0.42,alpha:0.32).cgColor)
-            ctx.setLineWidth(1.0)
-            for _ in 0..<22 {
-                let a = CGFloat.random(in:0...(.pi*2))
-                let r = CGFloat.random(in:bRX*0.4...bRX*0.8)
-                let sx = cx+cos(a)*r, sy = cy+sin(a)*r*(bRY/bRX)
-                ctx.move(to:CGPoint(x:sx,y:sy))
-                ctx.addLine(to:CGPoint(x:sx+cos(a)*4,y:sy+sin(a)*4))
-                ctx.strokePath()
-            }
-
-            // 腮红
-            ctx.setFillColor(NSColor(calibratedRed:0.95,green:0.55,blue:0.55,alpha:0.25).cgColor)
-            for bx in [cx-hR*0.66, cx+hR*0.66] as [CGFloat] {
-                ctx.fillEllipse(in:CGRect(x:bx-10,y:hCY-hR*0.06,width:20,height:12))
-            }
-            return true
-        }
-        return image
+    func hideLift() {
+        liftWindow?.hide()
+        imageView?.alphaValue = 1
     }
 
     // MARK: - 透明区域点击穿透
@@ -650,7 +535,7 @@ class DesktopPetView: NSView {
             return self
         }
 
-        guard let image = currentImage else { return super.hitTest(point) }
+        guard let image = presentedImage ?? currentImage else { return super.hitTest(point) }
         guard let imagePoint = imagePixelPoint(for: point, image: image) else {
             return nil
         }
@@ -667,7 +552,7 @@ class DesktopPetView: NSView {
         return fallbackHitView
     }
 
-    private func imagePixelPoint(for point: NSPoint, image: NSImage) -> NSPoint? {
+    func imagePixelPoint(for point: NSPoint, image: NSImage) -> NSPoint? {
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             return nil
         }
@@ -685,7 +570,7 @@ class DesktopPetView: NSView {
         )
     }
 
-    private func aspectFitRect(for imageSize: NSSize, in bounds: NSRect) -> NSRect {
+    func aspectFitRect(for imageSize: NSSize, in bounds: NSRect) -> NSRect {
         guard imageSize.width > 0, imageSize.height > 0, bounds.width > 0, bounds.height > 0 else {
             return .zero
         }
@@ -705,33 +590,83 @@ class DesktopPetView: NSView {
     // MARK: - 鼠标事件 —— 路由给 AnimationEngine
 
     override func mouseEntered(with event: NSEvent) {
-        animationEngine.handleMouseEntered()
+        let localPos = convert(event.locationInWindow, from: nil)
+        updatePointerOverPet(at: localPos)
+        updateCursor(at: localPos)
     }
 
     override func mouseMoved(with event: NSEvent) {
         let localPos = convert(event.locationInWindow, from: nil)
-        animationEngine.handleMouseMoved(localPosition: localPos, petBounds: petCanvasRect)
+        behavior.pointerMoved(x: localPos.x, overHead: isOverHead(localPos))
+        updatePointerOverPet(at: localPos)
+        updateCursor(at: localPos)
     }
 
     override func mouseExited(with event: NSEvent) {
-        animationEngine.handleMouseExited()
+        behavior.pointerExited()
+        updatePointerOverPet(at: nil)
+        updateCursor(at: nil)
+    }
+
+    func updatePointerOverPet(at point: NSPoint?) {
+        let isOver = point.map(isOpaquePetPixel(at:)) ?? false
+        guard isOver != isPointerOverPet else { return }
+        isPointerOverPet = isOver
+        if isOver {
+            onPointerEntered?()
+        } else {
+            onPointerExited?()
+        }
+    }
+
+    func isOpaquePetPixel(at point: NSPoint) -> Bool {
+        guard
+            let image = presentedImage ?? currentImage,
+            let imagePoint = imagePixelPoint(for: point, image: image),
+            let alpha = image.alphaValue(at: imagePoint)
+        else {
+            return false
+        }
+        return alpha >= 0.1
     }
 
     override func mouseDown(with event: NSEvent) {
+        isPressingPet = true
+        updateCursor(at: convert(event.locationInWindow, from: nil))
         animationEngine.handleMouseDown()
         if event.clickCount == 2 {
             animationEngine.handleDoubleClick()
         }
-        window?.performDrag(with: event)
+        dragController.mouseDown(
+            mouseLocation: NSEvent.mouseLocation,
+            windowOrigin: window?.frame.origin ?? .zero
+        )
     }
 
     override func mouseUp(with event: NSEvent) {
-        animationEngine.handleMouseUp()
+        isPressingPet = false
+        if dragController.mouseUp() {
+            onPetDragEnded?()
+        }
+        updateCursor(at: convert(event.locationInWindow, from: nil))
     }
 
+    // 自己移动窗口（不用 performDrag），这样每次移动都能拿到速度驱动拖拽效果
     override func mouseDragged(with event: NSEvent) {
-        animationEngine.handleDragBegan()
-        window?.performDrag(with: event)
+        guard let window else { return }
+        let mouseLocation = NSEvent.mouseLocation
+        let wasDragging = dragController.isDragging
+        guard let origin = dragController.mouseDragged(
+            mouseLocation: mouseLocation,
+            keepVisible: dragKeepVisibleRect,
+            visibleFrame: PetDragController.visibleFrame(containing: mouseLocation)
+        ) else {
+            return
+        }
+        if !wasDragging {
+            onPetDragStarted?()
+        }
+        window.setFrameOrigin(origin)
     }
 
     // MARK: - 拖拽传递给 window
@@ -748,10 +683,19 @@ class DesktopPetView: NSView {
         animationEngine.layoutShadow(petCanvasBounds: petCanvasRect)
     }
 
+    /// 窗口为提醒卡变高时立刻把卡片挪到桌宠上方，不等下一次布局（否则会先盖住桌宠闪一下）
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        if reminderCardView != nil, !reminderCardView.isHidden {
+            layoutReminderCard()
+        }
+    }
+
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
 
         if window == nil {
+            hideLift()
             cancelAnimationTimer()
             animationEngine.stop()
         } else {
@@ -773,12 +717,15 @@ class DesktopPetView: NSView {
         trackingAreas.forEach { removeTrackingArea($0) }
         let trackingArea = NSTrackingArea(
             rect: bounds,
-            options: [.mouseEnteredAndExited, .mouseMoved, .activeInKeyWindow],
+            // 桌宠常驻在别的 App 之上，不是 key window 时也要能感知鼠标（藏边后探出来）
+            options: [.mouseEnteredAndExited, .mouseMoved, .activeAlways],
             owner: self,
             userInfo: nil
         )
         addTrackingArea(trackingArea)
     }
+
+    var activeActionClipForTesting: PetActionClip? { behavior.activeClip }
 
     func advanceAnimationFrameForTesting() {
         advanceAnimationFrame()
@@ -806,6 +753,7 @@ class DesktopPetView: NSView {
 
     deinit {
         cancelAnimationTimer()
+        peekTimer?.invalidate()
         transientBubbleDismissTimer?.invalidate()
         animationEngine.stop()
         if let themeObserver {
@@ -816,117 +764,4 @@ class DesktopPetView: NSView {
         }
     }
 
-    private func subscribeToThemeChanges() {
-        themeObserver = NotificationCenter.default.addObserver(
-            forName: .icuThemeDidChange,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            self?.applyTheme()
-        }
-    }
-
-    private func subscribeToCopyChanges() {
-        copyObserver = NotificationCenter.default.addObserver(
-            forName: .icuCopyDidChange,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            self?.reloadPersistentStatusText()
-        }
-    }
-
-    private func reloadPersistentStatusText() {
-        let previousPersistentStatus = persistentStatusText
-        let nextPersistentStatus = DesktopPetCopy.statusText(for: currentWorkState)
-        persistentStatusText = nextPersistentStatus
-
-        if statusLabel.stringValue == previousPersistentStatus {
-            statusLabel.stringValue = nextPersistentStatus
-            updateToolTipForVisibleContent()
-        }
-    }
-
-    private func applyTheme() {
-        guard statusLabel != nil else {
-            return
-        }
-
-        let theme = ThemeManager.shared.currentTheme
-        ThemedComponents.styleStatusChip(statusLabel, theme: theme)
-        transientBubbleLabel.font = ThemedComponents.statusFont(theme)
-        transientBubbleLabel.textColor = ThemedComponents.color(theme.tokens.colors.textPrimaryHex, fallback: .labelColor)
-        transientBubbleContainer.layer?.backgroundColor = ThemedComponents.color(
-            theme.tokens.colors.overlayHex,
-            fallback: .windowBackgroundColor
-        ).withAlphaComponent(0.96).cgColor
-        transientBubbleContainer.layer?.cornerRadius = 6
-        transientBubbleContainer.layer?.borderWidth = 1
-        transientBubbleContainer.layer?.borderColor = ThemedComponents.color(
-            theme.tokens.colors.borderHex,
-            fallback: .separatorColor
-        ).cgColor
-        transientBubbleContainer.layer?.masksToBounds = true
-        transientBubbleTail.layer?.backgroundColor = transientBubbleContainer.layer?.backgroundColor
-        transientBubbleTail.layer?.borderWidth = 1
-        transientBubbleTail.layer?.borderColor = transientBubbleContainer.layer?.borderColor
-        transientBubbleTail.layer?.cornerRadius = 1
-        transientBubbleTail.layer?.setAffineTransform(CGAffineTransform(rotationAngle: .pi / 4))
-        layoutTransientBubble()
-        reminderCardView.applyTheme(theme)
-        layoutReminderCard()
-        updateToolTipForVisibleContent()
-    }
-
-    private func updateToolTipForVisibleContent() {
-        if !reminderCardView.isHidden, let activeReminderTooltip {
-            toolTip = activeReminderTooltip
-            return
-        }
-
-        if !transientBubbleContainer.isHidden {
-            toolTip = transientBubbleLabel.stringValue
-            return
-        }
-
-        toolTip = persistentStatusText
-    }
-
-    private var shouldScheduleAnimationTimer: Bool {
-        animationPlayer.shouldAnimate || currentAnimationFamily.count > 1
-    }
-}
-
-// MARK: - NSImage alpha 采样扩展
-
-extension NSImage {
-    /// 采样图片指定坐标的 alpha 值（0.0–1.0），坐标系为图片像素坐标（左下角原点）
-    func alphaValue(at point: NSPoint) -> CGFloat? {
-        guard let cgImage = cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
-
-        let width = cgImage.width
-        let height = cgImage.height
-        let px = Int(point.x)
-        let py = Int(point.y)
-
-        guard px >= 0, px < width, py >= 0, py < height else { return nil }
-
-        // 仅采样 1×1 像素
-        guard let context = CGContext(
-            data: nil,
-            width: 1, height: 1,
-            bitsPerComponent: 8,
-            bytesPerRow: 4,
-            space: CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ) else { return nil }
-
-        // 将目标像素平移到 context 原点
-        context.translateBy(x: CGFloat(-px), y: CGFloat(-py))
-        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
-
-        guard let data = context.data else { return nil }
-        let pixel = data.load(fromByteOffset: 3, as: UInt8.self)  // alpha channel
-        return CGFloat(pixel) / 255.0
-    }
 }

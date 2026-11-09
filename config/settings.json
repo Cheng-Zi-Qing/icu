@@ -1,37 +1,17 @@
 {
-  "ai" : {
-    "image_models" : [
-
-    ],
-    "local_api" : {
-      "enabled" : true,
-      "model" : "qwen3.5:35b",
-      "url" : "http:\/\/localhost:11434"
-    },
-    "mode" : "local",
-    "remote_models" : [
-
-    ]
+  "edge_snap": {
+    "auto_hide_delay": 2000,
+    "enabled": true,
+    "peek_width": 40,
+    "snap_distance": 20
   },
-  "avatar" : {
-    "current_id" : "capybara",
-    "custom_avatars" : [
-
-    ]
+  "timers": {
+    "eye_interval": 1200,
+    "stretch_interval": 2700
   },
-  "edge_snap" : {
-    "auto_hide_delay" : 2000,
-    "enabled" : true,
-    "peek_width" : 10,
-    "snap_distance" : 20
-  },
-  "timers" : {
-    "eye_interval" : 1200,
-    "stretch_interval" : 2700
-  },
-  "user" : {
-    "body_weight" : 90,
-    "cup_volume" : 350,
-    "work_hours" : 8
+  "user": {
+    "body_weight": 90,
+    "cup_volume": 350,
+    "work_hours": 8
   }
 }

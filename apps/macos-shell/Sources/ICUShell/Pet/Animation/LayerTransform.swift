@@ -2,7 +2,7 @@ import AppKit
 import QuartzCore
 
 /// 单层动画输出的 transform 描述
-struct LayerTransform {
+struct LayerTransform: Equatable {
     var scaleX: CGFloat = 1.0
     var scaleY: CGFloat = 1.0
     var rotateZ: CGFloat = 0.0       // 度数

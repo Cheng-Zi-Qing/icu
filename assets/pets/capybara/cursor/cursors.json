@@ -1,0 +1,27 @@
+{
+  "pixelSize": 16,
+  "pointSize": 24,
+  "cursors": {
+    "grab": {
+      "file": "grab.png",
+      "hotSpot": [
+        9,
+        9
+      ]
+    },
+    "grabbing": {
+      "file": "grabbing.png",
+      "hotSpot": [
+        8,
+        9
+      ]
+    },
+    "pat": {
+      "file": "pat.png",
+      "hotSpot": [
+        7,
+        8
+      ]
+    }
+  }
+}

@@ -34,16 +34,8 @@ struct AppPaths {
         rootURL.appendingPathComponent("assets", isDirectory: true)
     }
 
-    var builderSessionsDirectory: URL {
-        rootURL.appendingPathComponent("builder_sessions", isDirectory: true)
-    }
-
     var logsDirectory: URL {
         rootURL.appendingPathComponent("logs", isDirectory: true)
-    }
-
-    var themesDirectory: URL {
-        stateDirectory.appendingPathComponent("themes", isDirectory: true)
     }
 
     var currentStateFile: URL {
@@ -55,9 +47,7 @@ struct AppPaths {
             rootURL,
             configDirectory,
             stateDirectory,
-            themesDirectory,
             assetsDirectory,
-            builderSessionsDirectory,
             logsDirectory,
         ]
 

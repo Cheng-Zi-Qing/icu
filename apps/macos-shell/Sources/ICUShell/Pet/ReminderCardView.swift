@@ -1,237 +1,234 @@
 import AppKit
 
-// MARK: - 圆形倒计时进度环
-
-private final class CountdownRingView: NSView {
-    var progress: CGFloat = 1.0 { didSet { needsDisplay = true } }
-    var ringColor: NSColor = NSColor.systemGreen
-
-    override func draw(_ dirtyRect: NSRect) {
-        guard let ctx = NSGraphicsContext.current?.cgContext else { return }
-        let cx = bounds.midX, cy = bounds.midY
-        let r = min(bounds.width, bounds.height) / 2 - 2
-
-        // 轨道
-        ctx.setStrokeColor(NSColor.white.withAlphaComponent(0.15).cgColor)
-        ctx.setLineWidth(3)
-        ctx.addArc(center: CGPoint(x: cx, y: cy), radius: r,
-                   startAngle: 0, endAngle: .pi * 2, clockwise: false)
-        ctx.strokePath()
-
-        // 进度弧（从12点钟开始顺时针）
-        ctx.setStrokeColor(ringColor.cgColor)
-        ctx.setLineWidth(3)
-        ctx.setLineCap(.round)
-        let start = CGFloat.pi / 2
-        let end = start - .pi * 2 * progress
-        ctx.addArc(center: CGPoint(x: cx, y: cy), radius: r,
-                   startAngle: start, endAngle: end, clockwise: true)
-        ctx.strokePath()
-    }
-}
-
-// MARK: - ReminderCardView
-
+/// 桌宠头顶的像素提醒卡：图标 + 随机俏皮话，一行说明（第几杯 / 还剩几秒）右边是「我就不」，
+/// 底下「我喝了」「等会儿」两个按钮。护眼提醒多一条 10 格的像素进度条，倒计时走完自动算完成
 final class ReminderCardView: NSView {
-    private let messageLabel = NSTextField(labelWithString: "")
-    private let hintLabel = NSTextField(labelWithString: "")          // 推荐时间提示
-    private let countdownLabel = NSTextField(labelWithString: "")     // 倒计时数字
-    private let ringView = CountdownRingView(frame: .zero)            // 进度环
-    private let completeButton = NSButton(title: "", target: nil, action: nil)
-    private let snoozeButton = NSButton(title: "", target: nil, action: nil)
-    private let skipButton = NSButton(title: "", target: nil, action: nil)
+    private enum Metrics {
+        static let tailHeight: CGFloat = 6
+        static let padding: CGFloat = 6
+        static let textInset: CGFloat = 8
+        static let headerHeight: CGFloat = 18
+        static let detailTop: CGFloat = 26
+        static let detailHeight: CGFloat = 18
+        static let barTop: CGFloat = 48
+        static let barHeight: CGFloat = 10
+        static let buttonHeight: CGFloat = 22
+        static let buttonGap: CGFloat = 4
+        static let skipWidth: CGFloat = 44
+        static let segmentGap: CGFloat = 2
+    }
 
+    /// 最高的那种卡（护眼，带进度条）有多高；窗口按它留位置
+    static let maximumHeight = height(showsCountdown: true)
+
+    static func height(showsCountdown: Bool) -> CGFloat {
+        buttonsTop(showsCountdown: showsCountdown) + Metrics.buttonHeight + Metrics.padding + Metrics.tailHeight
+    }
+
+    private static func buttonsTop(showsCountdown: Bool) -> CGFloat {
+        showsCountdown
+            ? Metrics.barTop + Metrics.barHeight + Metrics.buttonGap
+            : Metrics.detailTop + Metrics.detailHeight + Metrics.buttonGap
+    }
+
+    private let completeButton = PixelButton(identifier: "desktopPet.reminderCard.complete")
+    private let snoozeButton = PixelButton(identifier: "desktopPet.reminderCard.snooze")
+    private let skipButton = PixelButton(identifier: "desktopPet.reminderCard.skip")
+
+    private(set) var content: ReminderCardContent?
+    private var remaining: TimeInterval = 0
     private var countdownTimer: Timer?
-    private var countdownTotal: TimeInterval = 0
-    private var countdownRemaining: TimeInterval = 0
-    private var currentType: HealthReminderType = .eyeCare
 
     var onAction: ((HealthReminderOutcome) -> Void)? {
         didSet { updateActionAvailability() }
     }
+
+    override var isFlipped: Bool { true }
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         setup()
     }
 
+    @available(*, unavailable)
     required init?(coder: NSCoder) {
-        super.init(coder: coder)
-        setup()
+        fatalError("init(coder:) has not been implemented")
     }
 
-    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
-        true
+    deinit { countdownTimer?.invalidate() }
+
+    // MARK: - 内容
+
+    var preferredHeight: CGFloat {
+        Self.height(showsCountdown: content?.showsCountdown ?? true)
     }
+
+    var detailText: String { content?.detail(remaining: remaining) ?? "" }
+
+    var remainingSegments: Int { content?.remainingSegments(remaining: remaining) ?? 0 }
 
     func configure(
         with payload: ReminderPresentationPayload,
-        onAction: ((HealthReminderOutcome) -> Void)? = nil
+        cups: CupProgress? = nil,
+        onAction: ((HealthReminderOutcome) -> Void)? = nil,
+        pick: (Int) -> Int = { Int.random(in: 0..<$0) }
     ) {
-        messageLabel.stringValue = payload.text
-        completeButton.title = DesktopPetCopy.reminderCompleteActionTitle()
-        snoozeButton.title = DesktopPetCopy.reminderSnoozeActionTitle()
-        skipButton.title = DesktopPetCopy.reminderSkipActionTitle()
+        let content = ReminderCardContent(payload: payload, cups: cups, pick: pick)
+        self.content = content
+        completeButton.title = content.completeTitle
+        snoozeButton.title = content.snoozeTitle
+        skipButton.title = content.skipTitle
         self.onAction = onAction
-        currentType = payload.type
+        remaining = content.restSeconds
+        content.showsCountdown ? startCountdown() : stopCountdown()
+        refresh()
+    }
 
-        switch payload.type {
-        case .eyeCare:
-            hintLabel.stringValue = "👀 看向 6 米外，保持 20 秒"
-            ringView.ringColor = NSColor.systemCyan
-            startCountdown(seconds: 20)
-        case .hydration:
-            hintLabel.stringValue = "💧 小口慢饮，别一次灌"
-            ringView.ringColor = NSColor.systemBlue
+    /// 倒计时往前走（计时器每秒调一次；测试里直接调）。走完只算一次完成
+    func advanceCountdown(by seconds: TimeInterval) {
+        guard remaining > 0, content?.showsCountdown == true else { return }
+        remaining = max(0, remaining - seconds)
+        refresh()
+        if remaining <= 0 {
             stopCountdown()
-            ringView.isHidden = true
-            countdownLabel.isHidden = true
+            onAction?(.completed)
         }
     }
 
-    func applyTheme(_ theme: ThemeDefinition) {
-        wantsLayer = true
-        layer?.backgroundColor = ThemedComponents.color(
-            theme.tokens.colors.overlayHex,
-            fallback: .windowBackgroundColor
-        ).withAlphaComponent(0.98).cgColor
-        layer?.cornerRadius = 8
-        layer?.borderWidth = 1
-        layer?.borderColor = ThemedComponents.color(theme.tokens.colors.borderHex, fallback: .separatorColor).cgColor
+    // MARK: - 布局与绘制
 
-        messageLabel.textColor = ThemedComponents.color(theme.tokens.colors.textPrimaryHex, fallback: .labelColor)
-        messageLabel.font = ThemedComponents.statusFont(theme)
-        hintLabel.textColor = ThemedComponents.color(theme.tokens.colors.textSecondaryHex, fallback: .secondaryLabelColor)
-        hintLabel.font = NSFont.systemFont(ofSize: 10, weight: .regular)
-        countdownLabel.textColor = ThemedComponents.color(theme.tokens.colors.textPrimaryHex, fallback: .labelColor)
-        countdownLabel.font = NSFont.monospacedDigitSystemFont(ofSize: 18, weight: .semibold)
+    override func layout() {
+        super.layout()
+        let width = bounds.width
+        let inner = width - Metrics.textInset * 2
+        let buttonWidth = ((inner - Metrics.buttonGap) / 2 / PixelPaint.unit).rounded(.down) * PixelPaint.unit
+        let top = Self.buttonsTop(showsCountdown: content?.showsCountdown ?? true)
+        completeButton.frame = NSRect(x: Metrics.textInset, y: top, width: buttonWidth, height: Metrics.buttonHeight)
+        snoozeButton.frame = NSRect(
+            x: width - Metrics.textInset - buttonWidth, y: top, width: buttonWidth, height: Metrics.buttonHeight
+        )
+        skipButton.frame = NSRect(
+            x: width - Metrics.padding - Metrics.skipWidth, y: Metrics.detailTop,
+            width: Metrics.skipWidth, height: Metrics.detailHeight
+        )
+    }
 
-        let buttonTextColor = ThemedComponents.color(theme.tokens.colors.textPrimaryHex, fallback: .labelColor)
-        let buttonFillColor = ThemedComponents.color(theme.tokens.colors.inputBackgroundHex, fallback: .controlBackgroundColor)
-        let buttonBorderColor = ThemedComponents.color(theme.tokens.colors.borderHex, fallback: .separatorColor)
-        for button in [completeButton, snoozeButton, skipButton] {
-            button.contentTintColor = buttonTextColor
-            button.wantsLayer = true
-            button.isBordered = false
-            button.layer?.backgroundColor = buttonFillColor.withAlphaComponent(0.5).cgColor
-            button.layer?.borderWidth = 1
-            button.layer?.borderColor = buttonBorderColor.cgColor
-            button.layer?.cornerRadius = 6
-            button.alphaValue = button.isEnabled ? 1 : 0.65
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        needsLayout = true
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        guard let content else { return }
+        let plate = NSRect(x: 0, y: 0, width: bounds.width, height: bounds.height - Metrics.tailHeight)
+        PixelPaint.plate(plate, PixelPalette.paper, corner: 2)
+        drawTail(below: plate)
+
+        let icon: PixelIcon = content.symbol == .drop ? .drop : .eye
+        let iconSize = PixelPaint.iconSize(icon)
+        let headerY = Metrics.padding
+        PixelPaint.draw(icon, centeredIn: NSRect(x: Metrics.textInset, y: headerY, width: iconSize.width, height: Metrics.headerHeight))
+        let titleX = Metrics.textInset + iconSize.width + 4
+        PixelPaint.text(
+            content.title,
+            in: NSRect(x: titleX, y: headerY, width: bounds.width - Metrics.textInset - titleX, height: Metrics.headerHeight)
+        )
+        PixelPaint.text(
+            detailText,
+            in: NSRect(x: Metrics.textInset, y: Metrics.detailTop, width: skipButton.frame.minX - Metrics.textInset, height: Metrics.detailHeight),
+            color: PixelPalette.shade
+        )
+        if content.showsCountdown {
+            drawProgressBar()
         }
     }
+
+    /// 底边正中往下的小尖角，指向桌宠
+    private func drawTail(below plate: NSRect) {
+        let unit = PixelPaint.unit
+        for row in 0..<4 {
+            let half = CGFloat(4 - row) * unit
+            let y = plate.maxY - unit + CGFloat(row) * unit
+            PixelPaint.fill(NSRect(x: bounds.midX - half, y: y, width: half * 2, height: unit), PixelPalette.outline)
+            if half > unit {
+                PixelPaint.fill(NSRect(x: bounds.midX - half + unit, y: y, width: half * 2 - unit * 2, height: unit), PixelPalette.paper)
+            }
+        }
+    }
+
+    private func drawProgressBar() {
+        let bar = NSRect(x: Metrics.textInset, y: Metrics.barTop, width: bounds.width - Metrics.textInset * 2, height: Metrics.barHeight)
+        PixelPaint.stepped(bar, corner: 1, PixelPalette.outline)
+        let inner = bar.insetBy(dx: PixelPaint.unit, dy: PixelPaint.unit)
+        let count = ReminderCardContent.progressSegments
+        let gaps = Metrics.segmentGap * CGFloat(count - 1)
+        let segment = (((inner.width - gaps) / CGFloat(count)) / PixelPaint.unit).rounded(.down) * PixelPaint.unit
+        let used = segment * CGFloat(count) + gaps
+        let startX = inner.minX + ((inner.width - used) / 2 / PixelPaint.unit).rounded(.down) * PixelPaint.unit
+        let lit = remainingSegments
+        for index in 0..<count {
+            let x = startX + CGFloat(index) * (segment + Metrics.segmentGap)
+            let color = index < lit ? PixelPalette.water : PixelPalette.paper3
+            PixelPaint.fill(NSRect(x: x, y: inner.minY, width: segment, height: inner.height), color)
+        }
+    }
+
+    // MARK: - 点击
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    /// 按钮优先；卡片其余部分吃掉点击，不让它掉到桌面上
+    func interactiveHitView(at point: NSPoint) -> NSView? {
+        guard !isHidden, alphaValue > 0.001 else { return nil }
+        for button in [completeButton, snoozeButton, skipButton] where !button.isHidden {
+            if button.bounds.contains(convert(point, to: button)) { return button }
+        }
+        return bounds.contains(point) ? self : nil
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        interactiveHitView(at: convert(point, from: superview))
+    }
+
+    override func mouseDown(with event: NSEvent) {}
+    override func mouseDragged(with event: NSEvent) {}
+
+    // MARK: - 私有
 
     private func setup() {
         wantsLayer = true
-
-        // 主文案
-        messageLabel.identifier = NSUserInterfaceItemIdentifier("desktopPet.reminderCard.message")
-        messageLabel.alignment = .center
-        messageLabel.lineBreakMode = .byWordWrapping
-        messageLabel.maximumNumberOfLines = 2
-        messageLabel.translatesAutoresizingMaskIntoConstraints = false
-
-        // 推荐时间提示
-        hintLabel.identifier = NSUserInterfaceItemIdentifier("desktopPet.reminderCard.hint")
-        hintLabel.alignment = .center
-        hintLabel.lineBreakMode = .byWordWrapping
-        hintLabel.maximumNumberOfLines = 1
-        hintLabel.translatesAutoresizingMaskIntoConstraints = false
-
-        // 倒计时数字
-        countdownLabel.identifier = NSUserInterfaceItemIdentifier("desktopPet.reminderCard.countdown")
-        countdownLabel.alignment = .center
-        countdownLabel.isHidden = true
-        countdownLabel.translatesAutoresizingMaskIntoConstraints = false
-
-        // 进度环
-        ringView.identifier = NSUserInterfaceItemIdentifier("desktopPet.reminderCard.ring")
-        ringView.isHidden = true
-        ringView.translatesAutoresizingMaskIntoConstraints = false
-
-        // 按钮
-        completeButton.identifier = NSUserInterfaceItemIdentifier("desktopPet.reminderCard.complete")
-        completeButton.target = self
-        completeButton.action = #selector(handleCompleteAction)
-        completeButton.translatesAutoresizingMaskIntoConstraints = false
-
-        snoozeButton.identifier = NSUserInterfaceItemIdentifier("desktopPet.reminderCard.snooze")
-        snoozeButton.target = self
-        snoozeButton.action = #selector(handleSnoozeAction)
-        snoozeButton.translatesAutoresizingMaskIntoConstraints = false
-
-        skipButton.identifier = NSUserInterfaceItemIdentifier("desktopPet.reminderCard.skip")
-        skipButton.target = self
-        skipButton.action = #selector(handleSkipAction)
-        skipButton.translatesAutoresizingMaskIntoConstraints = false
-
-        addSubview(messageLabel)
-        addSubview(hintLabel)
-        addSubview(ringView)
-        addSubview(countdownLabel)
-        addSubview(completeButton)
-        addSubview(snoozeButton)
-        addSubview(skipButton)
-
-        NSLayoutConstraint.activate([
-            // 主文案
-            messageLabel.topAnchor.constraint(equalTo: topAnchor, constant: 10),
-            messageLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
-            messageLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
-
-            // 推荐时间提示
-            hintLabel.topAnchor.constraint(equalTo: messageLabel.bottomAnchor, constant: 4),
-            hintLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
-            hintLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
-
-            // 进度环 (居中，36×36)
-            ringView.topAnchor.constraint(equalTo: hintLabel.bottomAnchor, constant: 6),
-            ringView.centerXAnchor.constraint(equalTo: centerXAnchor),
-            ringView.widthAnchor.constraint(equalToConstant: 36),
-            ringView.heightAnchor.constraint(equalToConstant: 36),
-
-            // 倒计时数字 (叠在进度环中心)
-            countdownLabel.centerXAnchor.constraint(equalTo: ringView.centerXAnchor),
-            countdownLabel.centerYAnchor.constraint(equalTo: ringView.centerYAnchor),
-
-            // 按钮
-            completeButton.topAnchor.constraint(equalTo: ringView.bottomAnchor, constant: 6),
-            completeButton.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
-            completeButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
-
-            snoozeButton.topAnchor.constraint(equalTo: completeButton.bottomAnchor, constant: 4),
-            snoozeButton.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
-            snoozeButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
-
-            skipButton.topAnchor.constraint(equalTo: snoozeButton.bottomAnchor, constant: 4),
-            skipButton.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
-            skipButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
-            skipButton.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8),
-        ])
-
+        completeButton.fillColor = PixelPalette.yellow
+        snoozeButton.fillColor = PixelPalette.paper2
+        skipButton.isFlat = true
+        skipButton.textAlignment = 0.5
+        skipButton.textColor = PixelPalette.shade
+        for (button, action) in [
+            (completeButton, #selector(handleCompleteAction)),
+            (snoozeButton, #selector(handleSnoozeAction)),
+            (skipButton, #selector(handleSkipAction)),
+        ] {
+            button.target = self
+            button.action = action
+            addSubview(button)
+        }
+        setAccessibilityElement(true)
+        setAccessibilityRole(.group)
         updateActionAvailability()
     }
 
-    // MARK: - 倒计时
+    private func refresh() {
+        setAccessibilityLabel(content.map { "\($0.title)，\(detailText)" })
+        needsLayout = true
+        needsDisplay = true
+    }
 
-    private func startCountdown(seconds: TimeInterval) {
+    private func startCountdown() {
         stopCountdown()
-        countdownTotal = seconds
-        countdownRemaining = seconds
-        ringView.isHidden = false
-        countdownLabel.isHidden = false
-        updateCountdownDisplay()
-
-        countdownTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            guard let self else { return }
-            self.countdownRemaining -= 1
-            self.updateCountdownDisplay()
-            if self.countdownRemaining <= 0 {
-                self.stopCountdown()
-                self.onAction?(.completed)
-            }
+        let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
+            self?.advanceCountdown(by: 1)
         }
-        RunLoop.main.add(countdownTimer!, forMode: .common)
+        countdownTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
     }
 
     private func stopCountdown() {
@@ -239,38 +236,19 @@ final class ReminderCardView: NSView {
         countdownTimer = nil
     }
 
-    private func updateCountdownDisplay() {
-        let secs = max(0, Int(countdownRemaining))
-        countdownLabel.stringValue = "\(secs)"
-        ringView.progress = countdownTotal > 0 ? CGFloat(countdownRemaining / countdownTotal) : 0
-    }
-
-    // MARK: - 其余
-
     private func updateActionAvailability() {
         let isEnabled = onAction != nil
         for button in [completeButton, snoozeButton, skipButton] {
             button.isEnabled = isEnabled
-            button.alphaValue = isEnabled ? 1 : 0.65
         }
     }
 
-    func interactiveHitView(at point: NSPoint) -> NSView? {
-        guard !isHidden, alphaValue > 0.001 else { return nil }
-        for button in [completeButton, snoozeButton, skipButton] {
-            let buttonPoint = convert(point, to: button)
-            if button.bounds.contains(buttonPoint) { return button }
-        }
-        return bounds.contains(point) ? self : nil
+    @objc private func handleCompleteAction() { finish(.completed) }
+    @objc private func handleSnoozeAction() { finish(.snoozed) }
+    @objc private func handleSkipAction() { finish(.skipped) }
+
+    private func finish(_ outcome: HealthReminderOutcome) {
+        stopCountdown()
+        onAction?(outcome)
     }
-
-    override func hitTest(_ point: NSPoint) -> NSView? { interactiveHitView(at: point) }
-    override func mouseDown(with event: NSEvent) {}
-    override func mouseDragged(with event: NSEvent) {}
-
-    @objc private func handleCompleteAction() { stopCountdown(); onAction?(.completed) }
-    @objc private func handleSnoozeAction()   { stopCountdown(); onAction?(.snoozed) }
-    @objc private func handleSkipAction()     { stopCountdown(); onAction?(.skipped) }
-
-    deinit { stopCountdown() }
 }

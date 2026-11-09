@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>水豚造型编辑器</title>
+<style>
+  :root {
+    --bg: #F6F4F0; --panel: #FFFFFF; --ink: #2B2420; --muted: #7A706A; --line: #E2DCD4;
+    --accent: #B0714A; --accent-ink: #FFFFFF; --select: #E8F6FC; --stage: #EDE8E1; --danger: #C4453C; --ok: #3E8E4E;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #1C1917; --panel: #26221F; --ink: #EDE6DF; --muted: #A39890; --line: #3A342F; --select: #173847; --stage: #302A26; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 13px/1.45 -apple-system, "PingFang SC", sans-serif; }
+  header { display: flex; gap: 8px; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--panel); position: sticky; top: 0; z-index: 2; flex-wrap: wrap; }
+  header h1 { font-size: 15px; margin: 0 12px 0 0; }
+  button, select, input[type=number], input[type=text] { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; }
+  button { cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  button:disabled { opacity: .45; cursor: default; }
+  #status { margin-left: auto; color: var(--muted); }
+  #status.error { color: var(--danger); }
+  #status.ok { color: var(--ok); }
+  main { display: grid; grid-template-columns: 240px minmax(0, 1fr) 330px; gap: 12px; padding: 12px; align-items: start; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+  .panel h2 { font-size: 12px; font-weight: 600; color: var(--muted); margin: 4px 0 8px; letter-spacing: .02em; }
+  .tabs { display: grid; gap: 4px; margin-bottom: 10px; }
+  .tabs button { text-align: left; }
+  .tabs button.active, .parts li.active { background: var(--select); border-color: #00A8E0; }
+  .parts { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 3px; max-height: 46vh; overflow: auto; }
+  .parts li { border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; cursor: pointer; display: flex; gap: 6px; align-items: center; }
+  .swatch { width: 12px; height: 12px; border-radius: 3px; border: 1px solid rgba(0,0,0,.25); flex: none; }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 6px 0; }
+  .hint { color: var(--muted); font-size: 12px; margin: 6px 0; }
+  .stage-wrap { overflow: auto; background: var(--stage); border-radius: 8px; padding: 12px; }
+  #stage { display: block; cursor: crosshair; background: repeating-conic-gradient(rgba(128,128,128,.10) 0 25%, transparent 0 50%) 0 0 / 16px 16px; }
+  .field { display: grid; grid-template-columns: 86px 1fr 64px; gap: 6px; align-items: center; margin: 4px 0; }
+  .field input[type=range] { width: 100%; }
+  .field input[type=number] { width: 64px; padding: 2px 4px; }
+  .previews { display: grid; gap: 10px; }
+  .preview canvas { display: block; background: var(--stage); border-radius: 6px; }
+  .preview .cap { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+  .edge-pair { display: flex; gap: 8px; }
+  textarea { width: 100%; min-height: 140px; font: 11px/1.4 ui-monospace, Menlo, monospace; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; }
+  details summary { cursor: pointer; color: var(--muted); margin: 8px 0 4px; }
+  @media (max-width: 1100px) { main { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>🍊 水豚造型编辑器</h1>
+  <button id="undo" title="⌘Z">撤销</button>
+  <button id="redo" title="⇧⌘Z">重做</button>
+  <button id="reset">恢复默认造型</button>
+  <button id="export">导出 JSON</button>
+  <button id="save" class="primary" title="⌘S">保存并生成素材</button>
+  <span id="status">加载中…</span>
+</header>
+<main>
+  <aside class="panel">
+    <h2>姿势</h2>
+    <div class="tabs" id="tabs"></div>
+    <h2 id="parts-title">部件（下面的盖住上面的）</h2>
+    <ul class="parts" id="parts"></ul>
+    <div class="row">
+      <button id="part-up" title="往后画（更靠后）">↑</button>
+      <button id="part-down" title="往前画（盖住别的）">↓</button>
+      <button id="part-dup">复制</button>
+      <button id="part-del">删除</button>
+      <button id="part-add">+ 椭圆</button>
+    </div>
+    <p class="hint">点画布选部件，拖动挪位置；方向键微调 0.5 像素（⇧ 1 像素）。头在所有姿势里共用，改「头（共用）」会同时改所有姿势。</p>
+  </aside>
+
+  <section class="panel">
+    <div class="row">
+      <label>放大 <select id="zoom"><option>10</option><option>12</option><option selected>16</option><option>20</option></select></label>
+      <label><input type="checkbox" id="opt-lines" checked> 像素格</label>
+      <span id="coords" class="hint" style="margin-left:auto"></span>
+    </div>
+    <div class="stage-wrap"><canvas id="stage"></canvas></div>
+    <div class="row" id="frame-opts">
+      <strong>帧状态</strong>
+      <label><input type="checkbox" data-opt="blink"> 眨眼</label>
+      <label><input type="checkbox" data-opt="inhale"> 吸气</label>
+      <label><input type="checkbox" data-opt="earTwitch"> 动耳朵</label>
+      <label><input type="checkbox" data-opt="chew"> 嚼草</label>
+      <label><input type="checkbox" data-opt="reach"> 扒拉</label>
+      <label>表情 <select data-opt="face"><option value="">普通</option><option value="squeeze">被拎（眯眼）</option><option value="dizzy">晕</option></select></label>
+      <label>摇摆 <input type="range" data-opt="tilt" min="-2" max="2" step="1" value="0"></label>
+    </div>
+    <h2>参考照片</h2>
+    <div class="row">
+      <select id="ref-select"><option value="">（不显示）</option></select>
+      <label><input type="file" id="ref-file" accept="image/*" hidden><button id="ref-open">打开本地图片…</button></label>
+      <label><input type="checkbox" id="ref-flip"> 左右翻转</label>
+      <label><input type="checkbox" id="ref-front"> 盖在像素上</label>
+      <label><input type="checkbox" id="ref-drag"> 拖动参考图</label>
+    </div>
+    <div id="ref-fields"></div>
+  </section>
+
+  <aside class="panel">
+    <h2 id="inspector-title">属性</h2>
+    <div id="inspector"></div>
+    <h2>姿势设置</h2>
+    <div id="pose-settings"></div>
+    <h2>实际大小预览（App 里是 4 倍）</h2>
+    <div class="previews">
+      <div class="preview"><div class="cap">待机（呼吸 / 动耳朵 / 眨眼）</div><canvas id="pv-idle"></canvas></div>
+      <div class="preview"><div class="cap">被拎起摇晃</div><canvas id="pv-hold"></canvas></div>
+      <div class="preview"><div class="cap">贴边探头（左边 / 右边屏幕边）</div><div class="edge-pair"><canvas id="pv-edge-left"></canvas><canvas id="pv-edge-right"></canvas></div></div>
+    </div>
+    <details>
+      <summary>高级：直接改当前姿势 JSON</summary>
+      <textarea id="json"></textarea>
+      <div class="row"><button id="json-apply">应用 JSON</button></div>
+    </details>
+  </aside>
+</main>
+<script type="module" src="editor.js"></script>
+</body>
+</html>

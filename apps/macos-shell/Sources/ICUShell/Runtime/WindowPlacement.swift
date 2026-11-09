@@ -33,6 +33,16 @@ enum WindowPlacement {
         )
     }
 
+    /// 拖拽时把窗口限制在可见区域内（不钻进 Dock、不顶到菜单栏）
+    static func clampedOrigin(_ origin: CGPoint, windowSize: CGSize, visibleFrame: CGRect) -> CGPoint {
+        let maxX = max(visibleFrame.minX, visibleFrame.maxX - windowSize.width)
+        let maxY = max(visibleFrame.minY, visibleFrame.maxY - windowSize.height)
+        return CGPoint(
+            x: min(max(origin.x, visibleFrame.minX), maxX),
+            y: min(max(origin.y, visibleFrame.minY), maxY)
+        )
+    }
+
     static func resolveInitialOrigin(
         saved: SavedWindowPlacement?,
         visibleFrame: CGRect,
@@ -43,19 +53,21 @@ enum WindowPlacement {
             return defaultOrigin(visibleFrame: visibleFrame, windowSize: windowSize, margin: margin)
         }
 
-        let rightEdge = visibleFrame.origin.x + visibleFrame.size.width
-        let topEdge = visibleFrame.origin.y + visibleFrame.size.height
-        let savedOrigin = saved.origin
-        let isFullyVisible =
-            savedOrigin.x >= visibleFrame.origin.x &&
-            savedOrigin.y >= visibleFrame.origin.y &&
-            savedOrigin.x + windowSize.width <= rightEdge &&
-            savedOrigin.y + windowSize.height <= topEdge
+        // 贴边时窗口的透明留白会伸出屏幕，只要大部分还在屏幕里就沿用
+        let savedFrame = CGRect(origin: saved.origin, size: windowSize)
+        let visiblePart = savedFrame.intersection(visibleFrame)
+        let windowArea = windowSize.width * windowSize.height
+        let isMostlyVisible = !visiblePart.isNull
+            && windowArea > 0
+            && (visiblePart.width * visiblePart.height) / windowArea >= minimumVisibleFraction
 
-        guard isFullyVisible else {
+        guard isMostlyVisible else {
             return defaultOrigin(visibleFrame: visibleFrame, windowSize: windowSize, margin: margin)
         }
 
-        return savedOrigin
+        return saved.origin
     }
+
+    /// 恢复上次位置时，窗口至少要有这么多面积在屏幕内
+    static let minimumVisibleFraction: CGFloat = 0.6
 }

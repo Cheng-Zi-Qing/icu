@@ -1,71 +1,54 @@
 #!/usr/bin/env bash
+# 旧 Python 后端、AI 生成、形象创建向导都已删除：确认文件不在、Swift 里也没有残留引用。
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SWIFT_SOURCES="$ROOT_DIR/apps/macos-shell/Sources/ICUShell"
 
 fail() {
   echo "[test_python_cleanup] FAIL: $*" >&2
   exit 1
 }
 
-assert_missing_file() {
+assert_missing() {
   local path="$1"
-  if [[ -e "$ROOT_DIR/$path" ]]; then
-    fail "expected removed file to be absent: $path"
-  fi
+  [[ ! -e "$ROOT_DIR/$path" ]] || fail "expected removed path to be absent: $path"
 }
 
-assert_file_lacks() {
-  local path="$1"
-  local pattern="$2"
-  if rg -n "$pattern" "$ROOT_DIR/$path" >/dev/null 2>&1; then
-    fail "expected $path to not contain pattern: $pattern"
-  fi
-}
-
-assert_tree_lacks() {
+assert_sources_lack() {
   local pattern="$1"
-  shift
-  if rg -n "$pattern" "$@" >/dev/null 2>&1; then
-    fail "expected tree to not contain pattern: $pattern"
+  if grep -rqE "$pattern" "$SWIFT_SOURCES"; then
+    fail "Swift sources still reference: $pattern"
   fi
 }
 
-removed_files=(
-  "run_pet.py"
-  "generate_raw.py"
-  "generate_avatars_sdk.py"
-  "process_images.py"
-  "builder/asset_packer.py"
-  "builder/builder.py"
-  "builder/vision_slicer.py"
-  "src/ai_config_dialog.py"
-  "src/ai_config_dialog.py.bak"
-  "src/ai_config_dialog_old.py.bak"
-  "src/avatar_manager.py"
-  "src/avatar_selector.py"
-  "src/avatar_wizard.py"
-  "src/bubble_label.py"
-  "src/daily_report.py"
-  "src/model_config_dialog.py"
-  "src/pet_main.py"
-  "src/pet_widget.py"
-  "src/user_config_dialog.py"
-  "src/weekly_report.py"
-  "tests/test_pet.py"
+removed_paths=(
+  "src"
+  "tests"
+  "builder"
+  "data"
+  "requirements.txt"
+  "requirements-dev.txt"
+  "test_bubble.py"
+  "tools/avatar_builder_bridge.py"
+  "tools/test_avatar_builder_bridge.sh"
+  "tools/test_avatar_builder_bridge_app_support.sh"
+  "tools/test_avatar_builder_bridge_chat_timeout.sh"
+  "tools/test_avatar_builder_bridge_repo_token.sh"
+  "tools/test_avatar_builder_bridge_timeout.sh"
+  "apps/macos-shell/Sources/ICUShell/Generation"
+  "apps/macos-shell/Sources/ICUShell/Avatar"
+  "apps/macos-shell/Sources/ICUShell/Health/HealthReportWindowController.swift"
+  "apps/macos-shell/Sources/ICUShell/Copy/CopyOverrideStore.swift"
 )
 
-for path in "${removed_files[@]}"; do
-  assert_missing_file "$path"
+for path in "${removed_paths[@]}"; do
+  assert_missing "$path"
 done
 
-assert_file_lacks "requirements.txt" '^requests'
-assert_file_lacks "requirements.txt" '^huggingface-hub'
-assert_file_lacks "requirements.txt" '^Pillow'
-assert_file_lacks "requirements.txt" '^rembg'
-assert_file_lacks "requirements.txt" '^opencv-python'
-assert_file_lacks "src/ollama_client.py" '^import requests$'
-
-assert_tree_lacks 'PySide6' "$ROOT_DIR/src" "$ROOT_DIR/tests"
+assert_sources_lack 'Generation(Settings|Coordinator|Config|HTTP|Capability)'
+assert_sources_lack 'Avatar(Coordinator|Selector|Wizard|BuilderBridge|Catalog|AssetStore)'
+assert_sources_lack 'HealthReportWindowController'
+assert_sources_lack 'avatar_builder_bridge'
 
 echo "[test_python_cleanup] PASS"

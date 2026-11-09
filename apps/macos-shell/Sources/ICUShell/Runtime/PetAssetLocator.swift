@@ -19,18 +19,45 @@ struct PetAssetLocator {
         resolveAnimation(for: petID, preferredAction: preferredAction)?.frameURLs.first
     }
 
-    func resolveAnimation(for petID: String, preferredAction: String?) -> PetAnimationDescriptor? {
-        resolveAnimationFamily(for: petID, preferredAction: preferredAction)?.first
+    func resolveAnimation(for petID: String, preferredAction: String?, outfit: String? = nil) -> PetAnimationDescriptor? {
+        resolveAnimationFamily(for: petID, preferredAction: preferredAction, outfit: outfit)?.first
     }
 
-    func resolveAnimationFamily(for petID: String, preferredAction: String?) -> [PetAnimationDescriptor]? {
+    /// 待机等状态动画。`outfit` 是换装（衣柜里戴的头顶装扮）：先找 `<pet>/outfits/<outfit>/` 里的帧，
+    /// 动画参数（fps、默认变体）仍读宠物目录的 config.json
+    func resolveAnimationFamily(for petID: String, preferredAction: String?, outfit: String? = nil) -> [PetAnimationDescriptor]? {
         for petDirectory in candidatePetDirectories(for: petID) {
-            if let animations = resolveAnimationFamily(in: petDirectory, preferredAction: preferredAction) {
-                return animations
+            let metadata = loadAnimationMetadata(in: petDirectory)
+            for framesRoot in frameRoots(in: petDirectory, outfit: outfit) {
+                if let animations = resolveAnimationFamily(in: framesRoot, metadata: metadata, preferredAction: preferredAction) {
+                    return animations
+                }
             }
         }
 
         return nil
+    }
+
+    /// 姿势帧目录 `<pet>/<subdirectory>`（drag 拖拽、edge 贴边探头、react / sleep / idle_act 动作片段），
+    /// 按与待机动画相同的优先级查找；换装时先找换装目录，没有的（比如光标）退回默认
+    func resolvePoseSpriteDirectory(for petID: String, subdirectory: String = "drag", outfit: String? = nil) -> URL? {
+        candidatePetDirectories(for: petID)
+            .flatMap { frameRoots(in: $0, outfit: outfit) }
+            .map { $0.appendingPathComponent(subdirectory, isDirectory: true) }
+            .first(where: isDirectory(at:))
+    }
+
+    /// 换装目录在前、默认目录在后。换装名只认小写字母、数字和下划线，免得配置里写出 `../` 跑出 outfits/
+    private func frameRoots(in petDirectory: URL, outfit: String?) -> [URL] {
+        guard let outfit, Self.isSafeOutfitName(outfit) else { return [petDirectory] }
+        let outfitDirectory = petDirectory
+            .appendingPathComponent("outfits", isDirectory: true)
+            .appendingPathComponent(outfit, isDirectory: true)
+        return [outfitDirectory, petDirectory]
+    }
+
+    static func isSafeOutfitName(_ name: String) -> Bool {
+        !name.isEmpty && name.unicodeScalars.allSatisfy { CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyz0123456789_").contains($0) }
     }
 
     private func candidatePetDirectories(for petID: String) -> [URL] {
@@ -58,10 +85,9 @@ struct PetAssetLocator {
 
     private func resolveAnimationFamily(
         in petDirectory: URL,
+        metadata: [String: PetAnimationStateMetadata],
         preferredAction: String?
     ) -> [PetAnimationDescriptor]? {
-        let metadata = loadAnimationMetadata(in: petDirectory)
-
         for stateID in resolutionStateIDs(for: preferredAction) {
             if let animations = resolveStateAnimations(
                 in: petDirectory,
@@ -312,22 +338,14 @@ struct PetAssetLocator {
             .appendingPathComponent("config", isDirectory: true)
             .appendingPathComponent("copy", isDirectory: true)
             .appendingPathComponent("base.json", isDirectory: false)
-        let bridgeScript = url
-            .appendingPathComponent("tools", isDirectory: true)
-            .appendingPathComponent("avatar_builder_bridge.py", isDirectory: false)
         let shellPackage = url
             .appendingPathComponent("apps", isDirectory: true)
             .appendingPathComponent("macos-shell", isDirectory: true)
             .appendingPathComponent("Package.swift", isDirectory: false)
 
+        // 开发时是仓库根（有 Package.swift）；打包后是 .app 里的 Resources/repo（有文案表）
         return fileManager.fileExists(atPath: assetsDirectory.path)
-            && (
-                fileManager.fileExists(atPath: shellPackage.path)
-                    || (
-                        fileManager.fileExists(atPath: baseCopy.path)
-                            && fileManager.fileExists(atPath: bridgeScript.path)
-                    )
-            )
+            && (fileManager.fileExists(atPath: shellPackage.path) || fileManager.fileExists(atPath: baseCopy.path))
     }
 }
 

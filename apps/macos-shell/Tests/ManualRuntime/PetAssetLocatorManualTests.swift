@@ -47,12 +47,6 @@ func testPetAssetLocatorAcceptsBundledRuntimeRootWithoutSwiftPackage() throws {
             .appendingPathComponent("base.json", isDirectory: false),
         contents: "{}"
     )
-    try writeFixtureFile(
-        at: root
-            .appendingPathComponent("tools", isDirectory: true)
-            .appendingPathComponent("avatar_builder_bridge.py", isDirectory: false),
-        contents: "#!/usr/bin/env python3"
-    )
 
     let inferred = PetAssetLocator.inferredRepoRoot(
         environment: ["ICU_REPO_ROOT": root.path],
@@ -309,4 +303,43 @@ func testPetAssetLocatorFallsBackAnimationStateOrderThenBaseImage() throws {
         standardizedFileURLs(baseFallback?.frameURLs ?? []) == standardizedFileURLs([base]),
         "base fallback should use base.png as single frame"
     )
+}
+
+/// 换装：戴草帽时帧从 `outfits/straw_hat/` 里找，那里没有的（光标）退回默认目录；动画参数仍读默认目录的 config.json
+func testPetAssetLocatorUsesOutfitFramesAndFallsBackPerDirectory() throws {
+    let root = try makeTemporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+
+    let petRoot = root.appendingPathComponent("assets/pets/capybara", isDirectory: true)
+    let outfitRoot = petRoot.appendingPathComponent("outfits/straw_hat", isDirectory: true)
+    let baseIdle = petRoot.appendingPathComponent("idle/main/0.png")
+    let hatIdle = outfitRoot.appendingPathComponent("idle/main/0.png")
+    try writeFixtureFile(at: baseIdle, contents: "orange")
+    try writeFixtureFile(at: hatIdle, contents: "hat")
+    try writeFixtureFile(at: petRoot.appendingPathComponent("edge/peek_0.png"))
+    try writeFixtureFile(at: outfitRoot.appendingPathComponent("edge/peek_0.png"))
+    try writeFixtureFile(at: petRoot.appendingPathComponent("cursor/pat.png"))
+    try writeFixtureFile(
+        at: petRoot.appendingPathComponent("config.json"),
+        contents: #"{"id": "capybara", "animations": {"idle": {"fps": 6}}}"#
+    )
+
+    let locator = PetAssetLocator(repoRootURL: root)
+    let hat = locator.resolveAnimation(for: "capybara", preferredAction: "idle", outfit: "straw_hat")
+    try expect(
+        standardizedFileURLs(hat?.frameURLs ?? []) == standardizedFileURLs([hatIdle]),
+        "the straw hat idle frames come from outfits/straw_hat (got \(hat?.frameURLs ?? []))"
+    )
+    try expect(hat?.framesPerSecond == 6, "animation settings still come from the pet's config.json")
+
+    let plain = locator.resolveAnimation(for: "capybara", preferredAction: "idle", outfit: nil)
+    try expect(standardizedFileURLs(plain?.frameURLs ?? []) == standardizedFileURLs([baseIdle]), "no outfit uses the base frames")
+
+    let edge = locator.resolvePoseSpriteDirectory(for: "capybara", subdirectory: "edge", outfit: "straw_hat")
+    try expect(edge?.standardizedFileURL == outfitRoot.appendingPathComponent("edge").standardizedFileURL, "outfit edge frames win")
+    let cursor = locator.resolvePoseSpriteDirectory(for: "capybara", subdirectory: "cursor", outfit: "straw_hat")
+    try expect(cursor?.standardizedFileURL == petRoot.appendingPathComponent("cursor").standardizedFileURL, "shared cursors fall back to the base")
+
+    let sneaky = locator.resolvePoseSpriteDirectory(for: "capybara", subdirectory: "edge", outfit: "../../etc")
+    try expect(sneaky?.standardizedFileURL == petRoot.appendingPathComponent("edge").standardizedFileURL, "outfit names cannot climb out of outfits/")
 }

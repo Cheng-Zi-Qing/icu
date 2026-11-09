@@ -10,12 +10,21 @@ let package = Package(
         .executable(
             name: "ICUShell",
             targets: ["ICUShell"]
-        )
+        ),
+        // Claude Code 钩子：把会话状态写成文件给桌宠读
+        .executable(
+            name: "icu-hook",
+            targets: ["ICUHook"]
+        ),
     ],
     targets: [
         .executableTarget(
             name: "ICUShell",
             path: "Sources/ICUShell"
+        ),
+        .executableTarget(
+            name: "ICUHook",
+            path: "Sources/ICUHook"
         ),
         .testTarget(
             name: "ICUShellTests",

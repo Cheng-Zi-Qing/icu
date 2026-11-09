@@ -34,8 +34,6 @@ assert_exists "$binary"
 [[ -x "$binary" ]] || fail "expected executable binary at $binary"
 assert_exists "$resource_root/assets/pets/capybara/base.png"
 assert_exists "$resource_root/config/copy/base.json"
-assert_exists "$resource_root/tools/avatar_builder_bridge.py"
-assert_exists "$resource_root/builder/prompt_optimizer.py"
 
 info_contents="$(cat "$info_plist")"
 assert_contains "$info_contents" "<string>ICUShell</string>"

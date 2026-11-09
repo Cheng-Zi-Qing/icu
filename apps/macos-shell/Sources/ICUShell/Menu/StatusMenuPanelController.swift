@@ -17,20 +17,20 @@ final class StatusMenuPanelController {
         }
     }
 
-    func toggle(from button: NSStatusBarButton, model: StatusItemMenuModel) {
+    func toggle(from button: NSStatusBarButton, model: StatusItemMenuModel, summary: MenuTodaySummary? = nil) {
         if isPresented {
             dismiss()
             return
         }
 
-        present(from: button, model: model)
+        present(from: button, model: model, summary: summary)
     }
 
     func dismiss() {
         floatingPanelController.dismiss()
     }
 
-    private func present(from button: NSStatusBarButton, model: StatusItemMenuModel) {
+    private func present(from button: NSStatusBarButton, model: StatusItemMenuModel, summary: MenuTodaySummary?) {
         guard let window = button.window else {
             return
         }
@@ -47,7 +47,7 @@ final class StatusMenuPanelController {
             )
         }
 
-        let panel = ThemedMenuPanel(sections: sections) { [weak self] id in
+        let panel = ThemedMenuPanel(sections: sections, summary: summary) { [weak self] id in
             guard
                 let self,
                 let action = StatusItemMenuAction(rawValue: id)
@@ -61,7 +61,7 @@ final class StatusMenuPanelController {
 
         let buttonFrameInWindow = button.convert(button.bounds, to: nil)
         let buttonFrameInScreen = window.convertToScreen(buttonFrameInWindow)
-        let size = ThemedMenuPanel.preferredSize(for: sections)
+        let size = ThemedMenuPanel.preferredSize(for: sections, hasSummary: summary != nil)
         let frame = NSRect(
             x: buttonFrameInScreen.midX - (size.width / 2),
             y: buttonFrameInScreen.minY - size.height - 6,

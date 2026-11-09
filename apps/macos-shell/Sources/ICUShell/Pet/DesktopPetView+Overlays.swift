@@ -1,0 +1,224 @@
+import AppKit
+
+/// 桌宠周围的浮层布局（状态标签、气泡、提醒卡片）与主题 / 文案刷新
+extension DesktopPetView {
+    var petCanvasRect: NSRect {
+        NSRect(
+            x: 0,
+            y: 0,
+            width: bounds.width,
+            height: min(LayoutMetrics.petCanvasHeight, bounds.height)
+        )
+    }
+
+    /// 形象 + 头顶留白的上沿；气泡和提醒卡片从这里往上排
+    var petStageTop: CGFloat {
+        min(LayoutMetrics.petStageHeight, bounds.height)
+    }
+
+    var usesExpandedReminderLayout: Bool {
+        bounds.height >= Self.reminderExpandedContentSize.height - 1
+    }
+
+    var usesExpandedTransientBubbleLayout: Bool {
+        bounds.height >= Self.transientBubbleExpandedContentSize.height - 1
+            && bounds.height < Self.reminderExpandedContentSize.height - 1
+    }
+
+    var currentOverlayLayoutMode: OverlayLayoutMode {
+        if !reminderCardView.isHidden {
+            return .reminderCard
+        }
+        if !transientBubbleContainer.isHidden {
+            return .transientBubble
+        }
+        return .compact
+    }
+
+    func notifyOverlayLayoutModeChanged() {
+        onOverlayLayoutModeChanged?(currentOverlayLayoutMode)
+    }
+
+    func layoutPetChrome() {
+        guard imageView != nil, statusLabel != nil else {
+            return
+        }
+        imageView.frame = petCanvasRect
+        layoutStatusChip()
+    }
+
+    /// 状态小胶囊：贴着文字的宽度，居中在身体下方，不超出窗口
+    func layoutStatusChip() {
+        guard statusLabel != nil else { return }
+        if let themeFont = statusChipThemeFont {
+            statusLabel.font = StatusChipCell.displayFont(for: statusLabel.stringValue, themeFont: themeFont)
+        }
+        let petRect = petCanvasRect
+        let margin = LayoutMetrics.statusChipMargin
+        let maxWidth = max(0, petRect.width - margin * 2)
+        let size = (statusLabel.cell as? StatusChipCell)?.fittingChipSize(maxWidth: maxWidth)
+            ?? NSSize(width: maxWidth, height: 18)
+        let centerX = (petBodyRect ?? petRect).midX
+        let x = min(max(centerX - size.width / 2, petRect.minX + margin), petRect.maxX - margin - size.width)
+        statusLabel.frame = NSRect(x: x.rounded(), y: margin, width: size.width, height: size.height)
+        statusLabel.wantsLayer = true
+        statusLabel.layer?.cornerRadius = size.height / 2
+    }
+
+    func layoutTransientBubble() {
+        guard transientBubbleContainer != nil, transientBubbleLabel != nil else {
+            return
+        }
+
+        let petRect = petCanvasRect
+        let maxBubbleWidth = max(72, petRect.width - 20)
+        let horizontalPadding: CGFloat = 10
+        let verticalPadding: CGFloat = 7
+        let maxTextSize = NSSize(width: maxBubbleWidth - (horizontalPadding * 2), height: 52)
+        let font = transientBubbleLabel.font ?? NSFont.monospacedSystemFont(ofSize: 11, weight: .medium)
+        let textRect = NSString(string: transientBubbleLabel.stringValue).boundingRect(
+            with: maxTextSize,
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: [.font: font]
+        )
+        let bubbleWidth = min(maxBubbleWidth, ceil(textRect.width) + (horizontalPadding * 2))
+        let bubbleHeight = max(28, min(LayoutMetrics.transientBubbleMaxHeight, ceil(textRect.height) + (verticalPadding * 2)))
+        let bubbleX = max(6, min(petRect.midX - (bubbleWidth / 2), petRect.width - bubbleWidth - 6))
+        let bubbleY: CGFloat
+        if usesExpandedTransientBubbleLayout {
+            bubbleY = petStageTop + LayoutMetrics.transientBubbleGap + LayoutMetrics.transientBubbleTailSize
+        } else {
+            bubbleY = max(petRect.maxY - bubbleHeight - 12, 28)
+        }
+
+        transientBubbleContainer.frame = NSRect(
+            x: bubbleX,
+            y: bubbleY,
+            width: bubbleWidth,
+            height: bubbleHeight
+        )
+        transientBubbleLabel.frame = transientBubbleContainer.bounds.insetBy(dx: horizontalPadding, dy: verticalPadding)
+        let tailY: CGFloat
+        if usesExpandedTransientBubbleLayout {
+            tailY = petStageTop + LayoutMetrics.transientBubbleGap
+        } else {
+            tailY = transientBubbleContainer.frame.minY - 6
+        }
+        transientBubbleTail.frame = NSRect(
+            x: transientBubbleContainer.frame.midX - 4,
+            y: tailY,
+            width: 8,
+            height: 8
+        )
+    }
+
+    func hideTransientBubble(notifyLayoutChange: Bool = true) {
+        transientBubbleContainer.isHidden = true
+        transientBubbleTail.isHidden = true
+        if notifyLayoutChange {
+            notifyOverlayLayoutModeChanged()
+        }
+        updateToolTipForVisibleContent()
+    }
+
+    func layoutReminderCard() {
+        // 窗口只有 128 宽：卡片几乎贴满，左右各留 2pt
+        let width = min(bounds.width - 4, 200)
+        let height = reminderCardView.preferredHeight
+        let y: CGFloat
+        if usesExpandedReminderLayout {
+            y = petStageTop + LayoutMetrics.reminderGap
+        } else {
+            y = max(26, bounds.height - height - 8)
+        }
+        reminderCardView.frame = NSRect(
+            x: (bounds.width - width) / 2,
+            y: y,
+            width: width,
+            height: height
+        )
+    }
+
+    func subscribeToThemeChanges() {
+        themeObserver = NotificationCenter.default.addObserver(
+            forName: .icuThemeDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.applyTheme()
+        }
+    }
+
+    func subscribeToCopyChanges() {
+        copyObserver = NotificationCenter.default.addObserver(
+            forName: .icuCopyDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.reloadPersistentStatusText()
+        }
+    }
+
+    func reloadPersistentStatusText() {
+        let previousPersistentStatus = persistentStatusText
+        let nextPersistentStatus = DesktopPetCopy.statusText(for: currentWorkState)
+        persistentStatusText = nextPersistentStatus
+
+        if statusLabel.stringValue == previousPersistentStatus {
+            statusLabel.stringValue = nextPersistentStatus
+            layoutStatusChip()
+            updateToolTipForVisibleContent()
+        }
+    }
+
+    func applyTheme() {
+        guard statusLabel != nil else {
+            return
+        }
+
+        let theme = ThemeManager.shared.currentTheme
+        ThemedComponents.styleStatusChip(statusLabel, theme: theme)
+        statusChipThemeFont = statusLabel.font
+        // 底色交给圆角 layer 画，整颗胶囊都是底色（文字框自己画只会填文字那一小块）
+        statusLabel.wantsLayer = true
+        statusLabel.layer?.backgroundColor = statusLabel.backgroundColor?.cgColor
+        statusLabel.drawsBackground = false
+        layoutStatusChip()
+        transientBubbleLabel.font = ThemedComponents.statusFont(theme)
+        transientBubbleLabel.textColor = ThemedComponents.color(theme.tokens.colors.textPrimaryHex, fallback: .labelColor)
+        transientBubbleContainer.layer?.backgroundColor = ThemedComponents.color(
+            theme.tokens.colors.overlayHex,
+            fallback: .windowBackgroundColor
+        ).withAlphaComponent(0.96).cgColor
+        transientBubbleContainer.layer?.cornerRadius = 6
+        transientBubbleContainer.layer?.borderWidth = 1
+        transientBubbleContainer.layer?.borderColor = ThemedComponents.color(
+            theme.tokens.colors.borderHex,
+            fallback: .separatorColor
+        ).cgColor
+        transientBubbleContainer.layer?.masksToBounds = true
+        transientBubbleTail.layer?.backgroundColor = transientBubbleContainer.layer?.backgroundColor
+        transientBubbleTail.layer?.borderWidth = 1
+        transientBubbleTail.layer?.borderColor = transientBubbleContainer.layer?.borderColor
+        transientBubbleTail.layer?.cornerRadius = 1
+        transientBubbleTail.layer?.setAffineTransform(CGAffineTransform(rotationAngle: .pi / 4))
+        layoutTransientBubble()
+        layoutReminderCard()
+        updateToolTipForVisibleContent()
+    }
+
+    func updateToolTipForVisibleContent() {
+        let next: String?
+        if !reminderCardView.isHidden, let activeReminderTooltip {
+            next = activeReminderTooltip
+        } else if !transientBubbleContainer.isHidden {
+            next = transientBubbleLabel.stringValue
+        } else {
+            next = persistentStatusText
+        }
+        // 每次赋值 AppKit 都会重建提示区域、重新算光标，没变就不动
+        if toolTip != next {
+            toolTip = next
+        }
+    }
+}

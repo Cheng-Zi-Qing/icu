@@ -1,18 +1,21 @@
 import AppKit
 
+@MainActor
 class AppDelegate: NSObject, NSApplicationDelegate {
     private var petWindowController: DesktopPetWindowController?
-    private var healthReportWindowController: HealthReportWindowController?
     private var statusItem: NSStatusItem?
     private var appPaths: AppPaths?
     private var stateStore: StateStore?
     private var workSessionController: WorkSessionController?
     private var reminderScheduler: ReminderScheduler?
-    private var avatarCoordinator: AvatarCoordinator?
-    private var generationSettingsStore: GenerationSettingsStore?
     private var themeManager: ThemeManager?
-    private var generationCoordinator: GenerationCoordinator?
     private var statusMenuController: StatusMenuPanelController?
+    private var settingsStore: AppSettingsStore?
+    private var settingsWindowController: SettingsWindowController?
+    private var wardrobe: WardrobeCoordinator?
+    private var agentMonitor: AgentStatusMonitor?
+    private var claudeInstaller: ClaudeHookInstaller?
+    private var healthTracker: HealthSessionTracker?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupStatusBarMenu()
@@ -32,66 +35,37 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let healthTracker = HealthSessionTracker(store: healthMetricsStore)
             setenv("ICU_APP_SUPPORT_ROOT", paths.rootURL.path, 1)
             TextCatalog.installShared(try TextCatalog.live(appPaths: paths, repoRootURL: assetLocator.repoRootURL))
-            let generationSettingsStore = GenerationSettingsStore(
-                appPaths: paths,
-                repoRootURL: assetLocator.repoRootURL
-            )
-            let themeManager = try ThemeManager(appPaths: paths, settingsStore: generationSettingsStore)
+            let themeManager = ThemeManager()
             ThemeManager.installShared(themeManager)
-            let generationService = ThemeGenerationService(
-                settingsStore: generationSettingsStore,
-                themeManager: themeManager
+            let settingsStore = AppSettingsStore(appPaths: paths, repoRootURL: assetLocator.repoRootURL)
+            PixelFont.register(assetsDirectory: assetLocator.repoRootURL?.appendingPathComponent("assets", isDirectory: true))
+            let petID = ProcessInfo.processInfo.environment["ICU_PET_ID"] ?? "capybara"
+            self.settingsStore = settingsStore
+            self.healthTracker = healthTracker
+            let wardrobe = WardrobeCoordinator(
+                catalogURL: assetLocator.repoRootURL?.appendingPathComponent("config/wardrobe.json", isDirectory: false),
+                store: WardrobeStore(appPaths: paths),
+                makeArt: { WardrobeArt.live(locator: assetLocator, petID: petID, catalog: $0) },
+                onOutfitChanged: { [weak self] outfit in
+                    self?.petWindowController?.setOutfit(outfit)
+                }
             )
-            let speechGenerationService = SpeechGenerationService(
-                settingsStore: generationSettingsStore
-            )
-            let copyOverrideStore = CopyOverrideStore(
-                appPaths: paths,
-                repoRootURL: assetLocator.repoRootURL
-            )
-            let generationCoordinator = GenerationCoordinator(
-                settingsStore: generationSettingsStore,
-                themeManager: themeManager,
-                generationService: generationService,
-                speechGenerationService: speechGenerationService,
-                copyOverrideStore: copyOverrideStore
-            )
-            let avatarSettingsStore = AvatarSettingsStore(
-                appPaths: paths,
-                repoRootURL: assetLocator.repoRootURL
-            )
-            let avatarCatalog = AvatarCatalog(
-                repoRootURL: assetLocator.repoRootURL,
-                appAssetsRootURL: paths.assetsDirectory
-            )
-            let avatarAssetStore = AvatarAssetStore(repoRootURL: assetLocator.repoRootURL)
-            let bridgeScriptURL = (assetLocator.repoRootURL
-                ?? URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true))
-                .appendingPathComponent("tools", isDirectory: true)
-                .appendingPathComponent("avatar_builder_bridge.py", isDirectory: false)
-            let avatarBridge = AvatarBuilderBridge(scriptURL: bridgeScriptURL)
-            let avatarCoordinator = AvatarCoordinator(
-                settingsStore: avatarSettingsStore,
-                catalog: avatarCatalog,
-                assetStore: avatarAssetStore,
-                bridge: avatarBridge,
-                generationCoordinator: generationCoordinator
-            )
-            let petID = avatarCoordinator.currentAvatarID(
-                fallback: ProcessInfo.processInfo.environment["ICU_PET_ID"] ?? "capybara"
-            )
-            let scheduler = ReminderScheduler { [weak self] payload in
+            self.wardrobe = wardrobe
+            let hydrationPlan = HydrationPlan(profile: settingsStore.loadHealthProfile())
+            let timers = settingsStore.loadReminderTimerSettings()
+            let scheduler = ReminderScheduler(
+                eyeInterval: timers.eyeInterval,
+                hydrationInterval: hydrationPlan.interval
+            ) { [weak self] payload in
                 self?.petWindowController?.presentReminder(payload: payload)
             }
+            scheduler.updateIntervals(eye: timers.eyeInterval, hydration: hydrationPlan.interval, eyeRest: timers.eyeRestSeconds)
 
             self.appPaths = paths
             self.stateStore = store
             self.workSessionController = sessionController
             self.reminderScheduler = scheduler
-            self.avatarCoordinator = avatarCoordinator
-            self.generationSettingsStore = generationSettingsStore
             self.themeManager = themeManager
-            self.generationCoordinator = generationCoordinator
             self.statusMenuController = StatusMenuPanelController { [weak self] action in
                 self?.handleStatusMenuAction(action)
             }
@@ -100,24 +74,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 workSessionController: sessionController,
                 reminderScheduler: scheduler,
                 healthTracker: healthTracker,
-                healthReportPresenter: { [weak self] todaySummary, weekSummary in
-                    self?.presentHealthReportWindow(todaySummary: todaySummary, weekSummary: weekSummary)
-                },
                 assetLocator: assetLocator,
                 petID: petID,
-                onChangeAvatarRequested: { [weak self] in
-                    self?.avatarCoordinator?.presentAvatarPicker()
-                },
-                onOpenGenerationConfigRequested: { [weak self] in
-                    _ = self?.generationCoordinator?.openGenerationConfig()
-                },
                 onQuitRequested: { [weak self] in
                     self?.quit()
+                },
+                edgeSnapSettings: settingsStore.loadEdgeSnapSettings(),
+                onOpenSettingsRequested: { [weak self] in
+                    self?.openSettings()
+                },
+                onOpenWardrobeRequested: { [weak self] in
+                    self?.wardrobe?.open()
+                },
+                todaySummaryProvider: { [weak self] in
+                    self?.todaySummary()
                 }
             )
-            avatarCoordinator.onCurrentAvatarChanged = { [weak self] avatarID in
-                self?.petWindowController?.setPetID(avatarID)
-            }
+            petWindowController?.setOutfit(wardrobe.outfitID)
+            configureClaudeCode(paths: paths)
             petWindowController?.showWindow(nil)
         } catch {
             NSLog("[ICUShell] failed to bootstrap runtime: \(error.localizedDescription)")
@@ -127,7 +101,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         reminderScheduler?.stop()
-        healthReportWindowController?.close()
         petWindowController?.close()
     }
 
@@ -144,16 +117,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         petWindowController?.showWindow(nil)
     }
 
-    @objc private func changeAvatar() {
-        avatarCoordinator?.presentAvatarPicker()
-    }
-
     @objc private func toggleStatusPanel() {
         guard let button = statusItem?.button else {
             return
         }
 
-        statusMenuController?.toggle(from: button, model: StatusItemMenuModel())
+        statusMenuController?.toggle(from: button, model: StatusItemMenuModel(claudeConnection: claudeConnection()), summary: todaySummary())
     }
 
     @objc private func quit() {
@@ -164,22 +133,112 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         switch action {
         case .showPet:
             showPet()
-        case .changeAvatar:
-            changeAvatar()
-        case .openGenerationConfig:
-            _ = generationCoordinator?.openGenerationConfig()
-        case .openHealthReport:
-            showPet()
-            petWindowController?.presentHealthReport()
+        case .openWardrobe:
+            wardrobe?.open()
+        case .openSettings:
+            openSettings()
+        case .connectClaude:
+            setClaudeConnected(true)
+        case .disconnectClaude:
+            setClaudeConnected(false)
         case .quitApp:
             quit()
         }
     }
 
-    private func presentHealthReportWindow(todaySummary: HealthDaySummary, weekSummary: HealthWeekSummary) {
-        healthReportWindowController?.close()
-        let controller = HealthReportWindowController(todaySummary: todaySummary, weekSummary: weekSummary)
-        healthReportWindowController = controller
-        controller.showWindow(nil)
+    // MARK: - Claude Code
+
+    /// 读 icu-hook 写下的会话状态，交给桌宠表现；菜单里能接入 / 断开
+    private func configureClaudeCode(paths: AppPaths) {
+        let installer = ClaudeHookInstaller.live(appPaths: paths)
+        claudeInstaller = installer
+        refreshInstalledHook(installer)
+        let monitor = AgentStatusMonitor(reader: AgentDirectoryReader(appPaths: paths))
+        monitor.onChange = { [weak self] summary in
+            self?.petWindowController?.setAgentSummary(summary)
+        }
+        agentMonitor = monitor
+        petWindowController?.setAgentSummary(monitor.summary)
+        petWindowController?.claudeConnection = { [weak self] in self?.claudeConnection() }
+        petWindowController?.onClaudeConnectionChange = { [weak self] connect in self?.setClaudeConnected(connect) }
+    }
+
+    /// 已经接上的话，换成这个版本 app 自带的 icu-hook（比如新版开始记工具名）
+    private func refreshInstalledHook(_ installer: ClaudeHookInstaller) {
+        guard let binary = ClaudeHookInstaller.bundledHookBinary else { return }
+        do {
+            if try installer.refreshHookBinary(from: binary) {
+                NSLog("[ICUShell] Updated the installed icu-hook to the bundled version")
+            }
+        } catch {
+            NSLog("[ICUShell] Could not update the installed icu-hook: \(error.localizedDescription)")
+        }
+    }
+
+    /// nil：没法接（找不到 icu-hook，也没装过），菜单里不显示
+    private func claudeConnection() -> Bool? {
+        guard let claudeInstaller else { return nil }
+        if claudeInstaller.isInstalled { return true }
+        let binary = ClaudeHookInstaller.bundledHookBinary
+        return binary.map { FileManager.default.isExecutableFile(atPath: $0.path) } == true ? false : nil
+    }
+
+    private func setClaudeConnected(_ connect: Bool) {
+        guard let claudeInstaller else { return }
+        do {
+            if connect {
+                guard let binary = ClaudeHookInstaller.bundledHookBinary else { throw ClaudeHookInstallerError.missingHookBinary }
+                try claudeInstaller.install(hookBinary: binary, now: .now)
+                petWindowController?.showMessage("接上 Claude Code 了，新开的会话就能看到")
+            } else {
+                try claudeInstaller.uninstall(now: .now)
+                petWindowController?.showMessage("和 Claude Code 断开了")
+            }
+            agentMonitor?.reload()
+        } catch let error as ClaudeHookInstallerError {
+            petWindowController?.showMessage(error.userMessage, duration: 4)
+        } catch {
+            NSLog("[ICUShell] Claude Code hook \(connect ? "install" : "uninstall") failed: \(error.localizedDescription)")
+            petWindowController?.showMessage("没弄成，稍后再试试", duration: 4)
+        }
+    }
+
+    // MARK: - 设置
+
+    private func openSettings() {
+        if let settingsWindowController {
+            settingsWindowController.present()
+            return
+        }
+        guard let settingsStore else { return }
+        let form = SettingsForm(profile: settingsStore.loadHealthProfile(), timers: settingsStore.loadReminderTimerSettings())
+        let controller = SettingsWindowController(form: form, decoration: wardrobe?.decoration) { [weak self] form in
+            try self?.applySettings(form)
+        }
+        settingsWindowController = controller
+        controller.present()
+    }
+
+    /// 存进 settings.json，并让正在计时的提醒按新间隔重新计时
+    private func applySettings(_ form: SettingsForm) throws {
+        try settingsStore?.saveHealthProfile(form.profile)
+        try settingsStore?.saveReminderTimerSettings(form.timers)
+        reminderScheduler?.updateIntervals(
+            eye: form.timers.eyeInterval,
+            hydration: form.hydrationPlan.interval,
+            eyeRest: form.timers.eyeRestSeconds
+        )
+    }
+
+    /// 菜单顶上的今日小结；读不到统计时不显示
+    private func todaySummary() -> MenuTodaySummary? {
+        guard let healthTracker, let settingsStore else { return nil }
+        do {
+            let day = try healthTracker.todayReport(at: .now)
+            return MenuTodaySummary(day: day, cupsGoal: HydrationPlan(profile: settingsStore.loadHealthProfile()).cups)
+        } catch {
+            NSLog("[ICUShell] failed to read today's health summary: \(error.localizedDescription)")
+            return nil
+        }
     }
 }

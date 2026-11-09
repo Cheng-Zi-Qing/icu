@@ -34,6 +34,8 @@ set -euo pipefail
 echo "ICUShell stub"
 EOF
 chmod +x "$stub_binary"
+printf '#!/usr/bin/env bash\nexit 0\n' >"$temp_dir/icu-hook"
+chmod +x "$temp_dir/icu-hook"
 
 if [[ ! -f "$PACKAGER" ]]; then
   fail "missing packager script: $PACKAGER"
@@ -60,11 +62,12 @@ assert_contains "$output" "[package_macos_shell] Packaging app bundle..."
 assert_contains "$output" "$app_path"
 assert_exists "$app_path"
 assert_exists "$macos_binary"
+assert_exists "$app_path/Contents/MacOS/icu-hook"
 assert_exists "$info_plist"
 assert_exists "$resource_root/assets/pets/capybara/base.png"
 assert_exists "$resource_root/config/copy/base.json"
-assert_exists "$resource_root/tools/avatar_builder_bridge.py"
-assert_exists "$resource_root/builder/prompt_optimizer.py"
+assert_exists "$resource_root/config/wardrobe.json"
+assert_exists "$resource_root/assets/pets/capybara/outfits/straw_hat/idle/main/0.png"
 
 check_output="$(bash "$CHECKER" "$app_path")"
 assert_contains "$check_output" "[check_macos_app_bundle] PASS"

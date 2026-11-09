@@ -96,11 +96,10 @@ EOF
 }
 
 copy_runtime_resources() {
-  mkdir -p "$RESOURCE_REPO_DIR/config" "$RESOURCE_REPO_DIR/tools"
+  mkdir -p "$RESOURCE_REPO_DIR/config"
   cp -R "$ROOT_DIR/assets" "$RESOURCE_REPO_DIR/assets"
-  cp -R "$ROOT_DIR/builder" "$RESOURCE_REPO_DIR/builder"
   cp -R "$ROOT_DIR/config/copy" "$RESOURCE_REPO_DIR/config/copy"
-  cp "$ROOT_DIR/tools/avatar_builder_bridge.py" "$RESOURCE_REPO_DIR/tools/avatar_builder_bridge.py"
+  cp "$ROOT_DIR/config/wardrobe.json" "$RESOURCE_REPO_DIR/config/wardrobe.json"
 }
 
 sign_bundle_if_needed() {
@@ -136,6 +135,12 @@ main() {
 
   cp "$binary_path" "$MACOS_DIR/ICUShell"
   chmod +x "$MACOS_DIR/ICUShell"
+  # Claude Code 钩子：和 ICUShell 一起构建，放在同一个目录
+  local hook_path
+  hook_path="$(dirname "$binary_path")/icu-hook"
+  [[ -f "$hook_path" ]] || fail "unable to locate icu-hook next to $binary_path"
+  cp "$hook_path" "$MACOS_DIR/icu-hook"
+  chmod +x "$MACOS_DIR/icu-hook"
   write_info_plist
   copy_runtime_resources
   sign_bundle_if_needed
