@@ -230,6 +230,80 @@
         11,
         11
       ]
+    },
+    "wait": {
+      "frames": [
+        "wait_0.png",
+        "wait_1.png"
+      ],
+      "order": [
+        0,
+        0,
+        1,
+        1,
+        0,
+        0,
+        1,
+        1,
+        0,
+        0,
+        1,
+        1
+      ]
+    },
+    "done": {
+      "frames": [
+        "done_0.png",
+        "done_1.png",
+        "done_2.png",
+        "done_3.png",
+        "done_4.png"
+      ],
+      "order": [
+        0,
+        1,
+        1,
+        1,
+        2,
+        3,
+        3,
+        4,
+        4,
+        4,
+        4,
+        4
+      ],
+      "fps": 8,
+      "once": true,
+      "hop": {
+        "atBeat": 1,
+        "pixels": 3,
+        "beats": 3
+      }
+    },
+    "fail": {
+      "frames": [
+        "fail_0.png",
+        "fail_1.png",
+        "fail_2.png",
+        "fail_3.png"
+      ],
+      "order": [
+        0,
+        1,
+        2,
+        2,
+        2,
+        2,
+        3,
+        2,
+        2,
+        2,
+        2,
+        2
+      ],
+      "fps": 4,
+      "once": true
     }
   }
 }
