@@ -335,6 +335,11 @@ export function allFrames(model, { headwear = HEADWEAR[0] } = {}) {
   for (const frame of [0, 1]) {
     frames.push([`drag/land_${frame}.png`, pose('sit', { blink: frame === 0, chewPhase: 0, dust: frame })]);
   }
+  // 甩晕后落地：坐姿 + 晕眩脸。拎起那套 dizzy_* 用的是 hold 姿势，身体是悬空下垂的，
+  // 放到地上会像挂着，所以落地单独一套坐姿帧
+  for (const twinkle of [0, 1]) {
+    frames.push([`drag/dizzy_grounded_${twinkle}.png`, pose('sit', { face: 'dizzy', twinkle })]);
+  }
   pettedOptions().forEach((o, i) => frames.push([`react/petted_${i}.png`, pose('sit', o)]));
   frames.push(['sleep/doze_0.png', pose('sit', { blink: true, nod: true, chewPhase: 0 })]);
   napOptions().forEach((o, i) => frames.push([`sleep/nap_${i}.png`, pose('sit', o)]));
