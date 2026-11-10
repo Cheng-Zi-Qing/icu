@@ -32,6 +32,10 @@ private let sampleFullDayReport = HealthDaySummary(
     breakCount: 1
 )
 
+private func reportContent(_ day: HealthDaySummary, lifetime: HealthLifetimeSummary? = nil) -> TodayReportContent {
+    TodayReportContent(day: day, lifetime: lifetime, cupsGoal: 6, workHours: 8, isOnDuty: false)
+}
+
 private let sampleEmptyDayReport = HealthDaySummary(
     date: Date(),
     eyeReminder: .empty,
@@ -148,8 +152,11 @@ func testContextMenuPanelControllerPresentsTodayReportAboveThePetWindow() throws
     let controller = ContextMenuPanelController { action in
         receivedActions.append(action)
     }
-    controller.todayReportProvider = { sampleFullDayReport }
-    controller.cupsGoalProvider = { 6 }
+    controller.todayReportProvider = { reportContent(sampleFullDayReport) }
+    // 桌宠在屏幕右下角：报告放到它左边
+    let visible = NSScreen.main?.visibleFrame ?? .zero
+    let pet = NSRect(x: visible.maxX - 140, y: visible.minY + 20, width: 120, height: 100)
+    controller.petFrameProvider = { pet }
 
     guard let event = NSEvent.mouseEvent(
         with: .rightMouseDown,
@@ -187,13 +194,13 @@ func testContextMenuPanelControllerPresentsTodayReportAboveThePetWindow() throws
     }
 
     let frame = panelWindow.frame
-    try expect(abs(frame.midX - window.frame.midX) < 0.5, "the report hangs centered above the pet window (got \(frame))")
-    try expect(abs(frame.minY - (window.frame.maxY + 12)) < 0.5, "the report sits just above the pet window (got \(frame))")
+    try expect(abs(frame.maxX - (pet.minX - ReportPanelPlacement.gap)) < 0.5, "the report sits beside the pet, toward the screen center (got \(frame))")
+    try expect(visible.contains(frame), "the report stays on screen (got \(frame))")
     try expect(
-        frame.size == MenuTodayReportView.preferredSize(for: sampleFullDayReport, cupsGoal: 6),
+        frame.size == MenuTodayReportView.preferredSize(for: reportContent(sampleFullDayReport)),
         "the report panel is as big as the report view wants (got \(frame))"
     )
-    try expect(!frame.intersects(window.frame), "the report does not cover the pet window (got \(frame))")
+    try expect(!frame.intersects(pet), "the report does not cover the pet (got \(frame))")
 
     controller.dismiss()
     try expect(controller.isPresented == false, "dismiss should close the today report panel")
@@ -216,7 +223,7 @@ func testContextMenuPanelControllerSaysSoWhenTodayHasNoRecords() throws {
     }
 
     // 读不到统计、和今天一条记录都没有，都算「没东西可看」
-    for report: HealthDaySummary? in [nil, sampleEmptyDayReport] {
+    for report: TodayReportContent? in [nil, reportContent(sampleEmptyDayReport)] {
         var emptyReportCalls = 0
         let controller = ContextMenuPanelController { _ in }
         controller.todayReportProvider = { report }
@@ -356,29 +363,31 @@ func testFloatingPanelControllerDismissesOnOutsideClickEvent() throws {
 }
 
 func testMenuTodayReportViewReadsOutEveryNumber() throws {
-    let view = MenuTodayReportView(report: sampleFullDayReport, cupsGoal: 6)
-    try expect(view.frame.size == MenuTodayReportView.preferredSize(for: sampleFullDayReport, cupsGoal: 6), "the report view sizes itself to its preferred size")
+    let content = reportContent(sampleFullDayReport, lifetime: HealthLifetimeSummary(workedDayCount: 3, onDutyDuration: 20 * 3600))
+    let view = MenuTodayReportView(content: content)
+    try expect(view.frame.size == MenuTodayReportView.preferredSize(for: content), "the report view sizes itself to its preferred size")
 
     let label = view.accessibilityLabel() ?? ""
-    try expect(label.contains("3:20"), "the report reads the work time (got \(label))")
+    try expect(label.contains("上班 4:00"), "on duty counts work and focus (got \(label))")
     try expect(label.contains("2 次 · 0:40"), "the report reads the focus sessions (got \(label))")
-    try expect(label.contains("1 次"), "the report reads the breaks (got \(label))")
     try expect(label.contains("4/5 次"), "the report reads the eye reminders against what was shown (got \(label))")
     try expect(label.contains("3/6 杯"), "the report reads the cups against the goal (got \(label))")
+    try expect(label.contains("累计 3 天 · 20:00"), "the report reads the lifetime total (got \(label))")
+    try expect(label.contains(content.advice[0].text), "the report reads its conclusion (got \(label))")
 }
 
 func testMenuTodayReportViewHidesRowsWithoutData() throws {
-    let label = MenuTodayReportView(report: sampleEmptyDayReport, cupsGoal: 6).accessibilityLabel() ?? ""
+    let empty = reportContent(sampleEmptyDayReport)
+    let label = MenuTodayReportView(content: empty).accessibilityLabel() ?? ""
     try expect(!label.contains("专注"), "no focus row without focus sessions (got \(label))")
     try expect(!label.contains("休息"), "no break row without breaks (got \(label))")
     try expect(!label.contains("护眼"), "no eye row without reminders (got \(label))")
-    try expect(label.contains("工作 0:00"), "work is always shown (got \(label))")
+    try expect(label.contains("上班 0:00"), "time on duty is always shown (got \(label))")
     try expect(label.contains("0/6 杯"), "hydration is always shown against the goal (got \(label))")
 
-    let emptySize = MenuTodayReportView.preferredSize(for: sampleEmptyDayReport, cupsGoal: 6)
-    let fullSize = MenuTodayReportView.preferredSize(for: sampleFullDayReport, cupsGoal: 6)
-    try expect(emptySize.width == 200, "the report panel is as wide as the menu panel (got \(emptySize))")
-    try expect(fullSize.height == emptySize.height + 3 * 22, "each hidden row takes one row of height off the panel (got \(emptySize.height) vs \(fullSize.height))")
+    let emptySize = MenuTodayReportView.preferredSize(for: empty)
+    let withLifetime = MenuTodayReportView.preferredSize(for: reportContent(sampleEmptyDayReport, lifetime: HealthLifetimeSummary(workedDayCount: 1, onDutyDuration: 60)))
+    try expect(withLifetime.height == emptySize.height + 10 + 22, "the lifetime footer adds a separator and a row (got \(emptySize.height) vs \(withLifetime.height))")
 }
 
 func testStatusMenuPanelControllerPresentsTodayReportUnderTheButton() throws {
@@ -396,7 +405,7 @@ func testStatusMenuPanelControllerPresentsTodayReportUnderTheButton() throws {
     window.makeKeyAndOrderFront(nil)
 
     let controller = StatusMenuPanelController { _ in }
-    controller.presentTodayReport(from: button, report: sampleFullDayReport, cupsGoal: 6)
+    controller.presentTodayReport(from: button, content: reportContent(sampleFullDayReport))
 
     try expect(controller.isPresented, "presenting the today report should open a floating panel")
 
@@ -409,7 +418,10 @@ func testStatusMenuPanelControllerPresentsTodayReportUnderTheButton() throws {
     }
     let buttonFrameInScreen = window.convertToScreen(button.convert(button.bounds, to: nil))
     let frame = panelWindow.frame
-    try expect(abs(frame.midX - buttonFrameInScreen.midX) < 0.5, "the report hangs centered under the status bar button (got \(frame))")
+    let visible = (window.screen ?? NSScreen.main)?.visibleFrame ?? .zero
+    if buttonFrameInScreen.maxX - frame.width >= visible.minX {
+        try expect(abs(frame.maxX - buttonFrameInScreen.maxX) < 0.5, "the report hangs under the button, right edges aligned (got \(frame))")
+    }
     try expect(
         NSScreen.screens.contains { $0.visibleFrame.contains(frame) },
         "the report panel is clamped inside the visible screen area (got \(frame))"

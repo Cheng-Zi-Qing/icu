@@ -11,7 +11,8 @@ struct MenuTodaySummary: Equatable {
         cupsDone = day.hydrationReminder.completed
         self.cupsGoal = cupsGoal
         eyeBreaks = day.eyeReminder.completed
-        workSeconds = day.workDuration
+        // 上班到下班一共多久（含专注和休息），和今日报告的「上班」一致
+        workSeconds = day.onDutyDuration
     }
 
     var cupsText: String { "\(cupsDone)/\(cupsGoal) 杯" }

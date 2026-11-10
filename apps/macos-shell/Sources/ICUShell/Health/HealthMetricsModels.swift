@@ -37,6 +37,18 @@ struct HealthDaySummary: Codable {
     var focusCount: Int
     var focusDuration: Int
     var breakCount: Int
+    /// 休息了多久（秒）
+    var breakDuration: Int = 0
+    /// 今天上了几次班（点了几次「开始工作」）
+    var shiftCount: Int = 0
+    /// 今天第一次上班、最后一次下班的时刻
+    var firstClockInAt: Date? = nil
+    var lastClockOutAt: Date? = nil
+
+    /// 上班到下班一共多久：普通工作 + 专注 + 休息，多段上下班累加
+    var onDutyDuration: Int {
+        workDuration + focusDuration + breakDuration
+    }
 
     var eyeReminderCompletionRate: Double {
         eyeReminder.completionRate
@@ -51,6 +63,8 @@ struct HealthDaySummary: Codable {
             || focusDuration > 0
             || focusCount > 0
             || breakCount > 0
+            || breakDuration > 0
+            || shiftCount > 0
             || eyeReminder.shown > 0
             || eyeReminder.completed > 0
             || eyeReminder.snoozed > 0
@@ -74,10 +88,23 @@ struct HealthWeekSummary: Codable {
     var focusDuration: Int
     var breakCount: Int
     var days: [HealthDaySummary]
+    var breakDuration: Int = 0
+
+    var onDutyDuration: Int {
+        workDuration + focusDuration + breakDuration
+    }
 
     var activeDayCount: Int {
         days.filter(\.hasActivity).count
     }
+}
+
+/// 本机上记下来的全部上班记录：上过班的天数、累计上班时长
+struct HealthLifetimeSummary: Equatable {
+    var workedDayCount: Int
+    var onDutyDuration: Int
+
+    static let empty = HealthLifetimeSummary(workedDayCount: 0, onDutyDuration: 0)
 }
 
 struct PersistedHealthReminder: Codable {

@@ -1,13 +1,15 @@
 import AppKit
 
-/// 「今日报告」浮层：今天工作 / 专注 / 休息 / 护眼 / 喝水，一行一项
+/// 「今日报告」浮层：顶上一两句结论（该补水了 / 眼睛该放松了），下面一行一项的数，底下本机累计
 final class MenuTodayReportView: NSView {
     private enum Layout {
-        static let panelWidth: CGFloat = 200
+        static let panelWidth: CGFloat = 232
         static let padding: CGFloat = 8
         static let titleHeight: CGFloat = 20
         static let separatorHeight: CGFloat = 10
         static let rowHeight: CGFloat = 22
+        static let adviceHeight: CGFloat = 24
+        static let adviceGap: CGFloat = 4
         static let shadow = 2
         /// 图标列：按最宽的图标（护眼）留宽，图标在这一列里居中
         static let iconColumnWidth: CGFloat = 22
@@ -18,28 +20,20 @@ final class MenuTodayReportView: NSView {
 
         static var labelX: CGFloat { padding + iconColumnWidth + iconGap }
         static var valueX: CGFloat { labelX + labelColumnWidth + valueGap }
-        /// 数值最多能占多宽：撑到这里就打住，面板不放宽
         static var valueWidth: CGFloat { panelWidth - padding - valueX }
     }
 
-    private struct Row {
-        let icon: PixelIcon?
-        let label: String
-        let value: String
-    }
-
-    private let rows: [Row]
+    let content: TodayReportContent
 
     override var isFlipped: Bool { true }
 
-    init(report: HealthDaySummary, cupsGoal: Int) {
-        let goal = max(0, cupsGoal)
-        rows = Self.rows(for: report, cupsGoal: goal)
-        super.init(frame: NSRect(origin: .zero, size: Self.preferredSize(rowCount: rows.count)))
+    init(content: TodayReportContent) {
+        self.content = content
+        super.init(frame: NSRect(origin: .zero, size: Self.preferredSize(for: content)))
         identifier = NSUserInterfaceItemIdentifier("menu-today-report")
         setAccessibilityElement(true)
         setAccessibilityRole(.staticText)
-        setAccessibilityLabel("今日报告：" + rows.map { "\($0.label) \($0.value)" }.joined(separator: "，"))
+        setAccessibilityLabel(content.accessibilityText)
     }
 
     @available(*, unavailable)
@@ -47,50 +41,12 @@ final class MenuTodayReportView: NSView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    static func preferredSize(for report: HealthDaySummary, cupsGoal: Int) -> NSSize {
-        preferredSize(rowCount: rows(for: report, cupsGoal: max(0, cupsGoal)).count)
-    }
-
-    private static func preferredSize(rowCount: Int) -> NSSize {
-        NSSize(
-            width: Layout.panelWidth,
-            height: 2 * Layout.padding + Layout.titleHeight + Layout.separatorHeight
-                + CGFloat(rowCount) * Layout.rowHeight + CGFloat(Layout.shadow) * PixelPaint.unit
-        )
-    }
-
-    /// 没数据的行不画：只有喝水一项永远在（目标杯数是定的）
-    private static func rows(for report: HealthDaySummary, cupsGoal: Int) -> [Row] {
-        var rows: [Row] = [Row(icon: .clock, label: "工作", value: workText(report.workDuration))]
-
-        if report.focusCount > 0 || report.focusDuration > 0 {
-            rows.append(Row(icon: nil, label: "专注", value: "\(report.focusCount) 次 · \(workText(report.focusDuration))"))
-        }
-        if report.breakCount > 0 {
-            rows.append(Row(icon: nil, label: "休息", value: "\(report.breakCount) 次"))
-        }
-        if report.eyeReminder.shown > 0 {
-            let eye = report.eyeReminder
-            rows.append(Row(icon: .eye, label: "护眼", value: countsText(completed: eye.completed, shown: eye.shown, unit: "次", completionRate: eye.completionRate)))
-        }
-        let cups = report.hydrationReminder.completed
-        rows.append(Row(icon: .drop, label: "喝水", value: countsText(completed: cups, shown: cupsGoal, unit: "杯")))
-        return rows
-    }
-
-    /// 「3:20」= 3 小时 20 分，跟菜单顶上的今日小结一个格式
-    private static func workText(_ seconds: Int) -> String {
-        let minutes = max(0, seconds) / 60
-        return String(format: "%d:%02d", minutes / 60, minutes % 60)
-    }
-
-    /// 「4/5 次」后面放得下完成率就带上，放不下就只留数字
-    private static func countsText(completed: Int, shown: Int, unit: String, completionRate: Double? = nil) -> String {
-        let numbers = "\(completed)/\(shown) \(unit)"
-        guard let completionRate else { return numbers }
-        let percent = "\(Int((completionRate * 100).rounded()))%"
-        guard PixelPaint.textSize("\(numbers) \(percent)").width <= Layout.valueWidth else { return numbers }
-        return "\(numbers) \(percent)"
+    static func preferredSize(for content: TodayReportContent) -> NSSize {
+        let adviceBlock = CGFloat(content.advice.count) * Layout.adviceHeight + Layout.adviceGap
+        let footer = content.footer == nil ? 0 : Layout.separatorHeight + Layout.rowHeight
+        let height = 2 * Layout.padding + Layout.titleHeight + adviceBlock + Layout.separatorHeight
+            + CGFloat(content.rows.count) * Layout.rowHeight + footer + CGFloat(Layout.shadow) * PixelPaint.unit
+        return NSSize(width: Layout.panelWidth, height: height)
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -107,20 +63,63 @@ final class MenuTodayReportView: NSView {
             color: PixelPalette.shade
         )
 
-        let separatorTop = Layout.padding + Layout.titleHeight
-        // 点状线落在整格上，不然会画出半个像素点
-        let separatorY = ((separatorTop + Layout.separatorHeight / 2) / PixelPaint.unit).rounded(.down) * PixelPaint.unit
-        PixelPaint.dottedLine(from: Layout.padding + 4, to: bounds.width - Layout.padding - 4, y: separatorY)
+        var y = Layout.padding + Layout.titleHeight
+        for advice in content.advice {
+            drawAdvice(advice, in: NSRect(x: Layout.padding, y: y, width: innerWidth, height: Layout.adviceHeight - 2))
+            y += Layout.adviceHeight
+        }
+        y += Layout.adviceGap
 
-        var y = separatorTop + Layout.separatorHeight
-        let row = NSRect(x: 0, y: 0, width: bounds.width, height: Layout.rowHeight)
-        for item in rows {
-            if let icon = item.icon {
-                PixelPaint.draw(icon, centeredIn: NSRect(x: Layout.padding, y: y, width: Layout.iconColumnWidth, height: row.height))
-            }
-            PixelPaint.text(item.label, in: NSRect(x: Layout.labelX, y: y, width: Layout.labelColumnWidth + 2, height: row.height))
-            PixelPaint.text(item.value, in: NSRect(x: Layout.valueX, y: y, width: Layout.valueWidth, height: row.height))
-            y += row.height
+        y = drawSeparator(at: y)
+        for row in content.rows {
+            drawRow(row, at: y)
+            y += Layout.rowHeight
+        }
+
+        if let footer = content.footer {
+            y = drawSeparator(at: y)
+            PixelPaint.text(footer, in: NSRect(x: Layout.padding, y: y, width: innerWidth, height: Layout.rowHeight), color: PixelPalette.shade)
+        }
+    }
+
+    /// 结论一句一块底色：该做的铺浅黄，做得好的铺浅绿
+    private func drawAdvice(_ advice: TodayAdvice, in rect: NSRect) {
+        let background = advice.tone == .act ? PixelPalette.wornCell : PixelPalette.summaryBackground
+        PixelPaint.stepped(rect, corner: 1, background)
+        PixelPaint.draw(Self.icon(for: advice.topic), centeredIn: NSRect(x: rect.minX, y: rect.minY, width: Layout.iconColumnWidth, height: rect.height))
+        PixelPaint.text(advice.text, in: NSRect(x: Layout.labelX, y: rect.minY, width: rect.maxX - Layout.labelX, height: rect.height))
+    }
+
+    private func drawRow(_ row: TodayReportContent.Row, at y: CGFloat) {
+        if let icon = Self.icon(for: row.kind) {
+            PixelPaint.draw(icon, centeredIn: NSRect(x: Layout.padding, y: y, width: Layout.iconColumnWidth, height: Layout.rowHeight))
+        }
+        PixelPaint.text(row.label, in: NSRect(x: Layout.labelX, y: y, width: Layout.labelColumnWidth + 2, height: Layout.rowHeight))
+        PixelPaint.text(row.value, in: NSRect(x: Layout.valueX, y: y, width: Layout.valueWidth, height: Layout.rowHeight))
+    }
+
+    /// 点状线落在整格上，不然会画出半个像素点；返回线下面内容的起点
+    private func drawSeparator(at top: CGFloat) -> CGFloat {
+        let lineY = ((top + Layout.separatorHeight / 2) / PixelPaint.unit).rounded(.down) * PixelPaint.unit
+        PixelPaint.dottedLine(from: Layout.padding + 4, to: bounds.width - Layout.padding - 4, y: lineY)
+        return top + Layout.separatorHeight
+    }
+
+    private static func icon(for topic: TodayAdvice.Topic) -> PixelIcon {
+        switch topic {
+        case .water: return .drop
+        case .eyes: return .eye
+        case .rest, .overtime: return .clock
+        case .allGood: return .check
+        }
+    }
+
+    private static func icon(for kind: TodayReportContent.RowKind) -> PixelIcon? {
+        switch kind {
+        case .onDuty: return .clock
+        case .eyes: return .eye
+        case .water: return .drop
+        case .span, .focus, .rest: return nil
         }
     }
 }

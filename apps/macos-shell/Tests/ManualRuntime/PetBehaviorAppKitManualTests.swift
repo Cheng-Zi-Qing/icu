@@ -361,7 +361,8 @@ func testDesktopPetViewTurnsAtOnceWithoutAFrontFrame() throws {
     try makeColorPNG(at: petRoot.appendingPathComponent("idle/main/0.png"), color: .brown)
     let view = DesktopPetView(
         frame: NSRect(origin: .zero, size: DesktopPetView.compactContentSize),
-        assetLocator: PetAssetLocator(appPaths: appPaths),
+        // 不看仓库里的素材：那里的水豚带着 turn/front.png
+        assetLocator: PetAssetLocator(appPaths: appPaths, repoRootURL: nil),
         petID: "capybara"
     )
     view.turn(toFacingRight: true)

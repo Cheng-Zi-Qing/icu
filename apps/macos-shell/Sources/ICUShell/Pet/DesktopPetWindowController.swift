@@ -51,8 +51,7 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
         onOpenSettingsRequested: @escaping () -> Void = {},
         onOpenWardrobeRequested: @escaping () -> Void = {},
         todaySummaryProvider: @escaping () -> MenuTodaySummary? = { nil },
-        todayReportProvider: @escaping () -> HealthDaySummary? = { nil },
-        cupsGoalProvider: @escaping () -> Int = { HydrationPlan(profile: HealthProfile.default).cups },
+        todayReportProvider: @escaping () -> TodayReportContent? = { nil },
         nowProvider: @escaping () -> Date = { .now }
     ) {
         self.onOpenSettingsRequested = onOpenSettingsRequested
@@ -130,7 +129,7 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
         // 「今日报告…」由 ContextMenuPanelController 从菜单里直接拦下弹面板，这里只喂数据；
         // 今天没记录就只让桌宠说一句（和菜单栏那条提示同一句话）
         contextMenuController.todayReportProvider = todayReportProvider
-        contextMenuController.cupsGoalProvider = cupsGoalProvider
+        contextMenuController.petFrameProvider = { [weak self] in self?.petBodyFrameOnScreen() }
         contextMenuController.onEmptyReport = { [weak self] in
             self?.petView.showTransientMessage("今天还没有记录")
         }

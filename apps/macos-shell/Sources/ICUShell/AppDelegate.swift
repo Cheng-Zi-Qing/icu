@@ -18,6 +18,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var healthTracker: HealthSessionTracker?
     private let fullscreenMonitor = FullscreenMonitor()
     private var usageRecorder: UsageRecorder?
+    private var dutyClock: Timer?
+    private var sleepObservers: [NSObjectProtocol] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupStatusBarMenu()
@@ -92,17 +94,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     self?.todaySummary()
                 },
                 todayReportProvider: { [weak self] in
-                    self?.todayDayReport()
-                },
-                cupsGoalProvider: { [weak self] in
-                    // AppDelegate 没了就用默认目标（和桌宠那边的默认值一致）
-                    self?.cupsGoal() ?? HydrationPlan(profile: HealthProfile.default).cups
+                    self?.todayReportContent()
                 }
             )
             petWindowController?.setOutfit(wardrobe.outfitID)
             configureClaudeCode(paths: paths)
             configureFullscreenQuiet()
             configureUsageRecording(paths: paths)
+            configureDutyClock()
             petWindowController?.showWindow(nil)
         } catch {
             NSLog("[ICUShell] failed to bootstrap runtime: \(error.localizedDescription)")
@@ -111,6 +110,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        dutyClock?.invalidate()
+        sleepObservers.forEach { NSWorkspace.shared.notificationCenter.removeObserver($0) }
+        // 还在上班就退出：当成下班，把最后一段记上
+        do {
+            try healthTracker?.endSession(at: .now)
+        } catch {
+            NSLog("[ICUShell] failed to settle the work day on quit: \(error.localizedDescription)")
+        }
         fullscreenMonitor.stop()
         reminderScheduler?.stop()
         petWindowController?.close()
@@ -143,16 +150,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// 「今日报告…」：今天一条记录都没有就只让桌宠说一句，不弹面板
     private func presentTodayReport() {
-        guard let button = statusItem?.button, let report = todayDayReport() else {
+        guard let button = statusItem?.button, let content = todayReportContent() else {
             return
         }
 
-        guard report.hasActivity else {
+        guard content.hasActivity else {
             petWindowController?.showMessage("今天还没有记录")
             return
         }
 
-        statusMenuController?.presentTodayReport(from: button, report: report, cupsGoal: cupsGoal())
+        statusMenuController?.presentTodayReport(from: button, content: content)
     }
 
     private func handleStatusMenuAction(_ action: StatusItemMenuAction) {
@@ -171,6 +178,43 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             setClaudeConnected(false)
         case .quitApp:
             quit()
+        }
+    }
+
+    // MARK: - 上班时长
+
+    /// 上班时长每分钟入一次账（报告里总是最新的，意外退出最多丢一分钟）；电脑睡着的时间不算上班
+    private func configureDutyClock() {
+        let timer = Timer(timeInterval: 60, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.checkpointDuty() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        dutyClock = timer
+
+        let center = NSWorkspace.shared.notificationCenter
+        sleepObservers = [
+            center.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.suspendDuty() }
+            },
+            center.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.healthTracker?.resume(at: .now) }
+            },
+        ]
+    }
+
+    private func checkpointDuty() {
+        do {
+            try healthTracker?.checkpoint(at: .now)
+        } catch {
+            NSLog("[ICUShell] failed to record work time: \(error.localizedDescription)")
+        }
+    }
+
+    private func suspendDuty() {
+        do {
+            try healthTracker?.suspend(at: .now)
+        } catch {
+            NSLog("[ICUShell] failed to record work time before sleep: \(error.localizedDescription)")
         }
     }
 
@@ -279,6 +323,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func todaySummary() -> MenuTodaySummary? {
         guard let day = todayDayReport() else { return nil }
         return MenuTodaySummary(day: day, cupsGoal: cupsGoal())
+    }
+
+    /// 今日报告：今天的数 + 结论 + 本机累计；读不到今天的统计就没有
+    private func todayReportContent() -> TodayReportContent? {
+        guard let healthTracker, let day = todayDayReport() else { return nil }
+        let lifetime: HealthLifetimeSummary?
+        do {
+            lifetime = try healthTracker.lifetimeReport(at: .now)
+        } catch {
+            NSLog("[ICUShell] failed to read lifetime work totals: \(error.localizedDescription)")
+            lifetime = nil
+        }
+        let profile = settingsStore?.loadHealthProfile() ?? .default
+        return TodayReportContent(
+            day: day,
+            lifetime: lifetime,
+            cupsGoal: HydrationPlan(profile: profile).cups,
+            workHours: profile.workHours,
+            isOnDuty: (workSessionController?.state ?? .idle) != .idle
+        )
     }
 
     private func todayDayReport() -> HealthDaySummary? {

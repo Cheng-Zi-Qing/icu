@@ -30,13 +30,16 @@ final class StatusMenuPanelController {
         floatingPanelController.dismiss()
     }
 
-    /// 「今日报告…」：像素风浮层，锚在状态栏按钮下方
-    func presentTodayReport(from button: NSStatusBarButton, report: HealthDaySummary, cupsGoal: Int) {
-        let contentView = MenuTodayReportView(report: report, cupsGoal: cupsGoal)
-        guard let frame = panelFrame(for: button, size: contentView.frame.size) else {
+    /// 「今日报告…」：像素风浮层，挂在状态栏按钮下面、右边和按钮对齐往左长（按钮在屏幕右上角，居中会顶到屏幕边）
+    func presentTodayReport(from button: NSStatusBarButton, content: TodayReportContent) {
+        guard let window = button.window else {
             return
         }
 
+        let contentView = MenuTodayReportView(content: content)
+        let buttonFrame = window.convertToScreen(button.convert(button.bounds, to: nil))
+        let visible = (window.screen ?? NSScreen.main)?.visibleFrame ?? buttonFrame.insetBy(dx: -2000, dy: -2000)
+        let frame = ReportPanelPlacement.frame(size: contentView.frame.size, below: buttonFrame, in: visible)
         floatingPanelController.present(contentView: contentView, frame: frame)
     }
 

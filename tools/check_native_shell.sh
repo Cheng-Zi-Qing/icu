@@ -20,6 +20,9 @@ swiftc \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Health/HealthMetricsModels.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Health/HealthMetricsStore.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Health/HealthSessionTracker.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Health/TodayAdvice.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Menu/TodayReportContent.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Menu/ReportPanelPlacement.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/PetAnimationModels.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/PetAssetLocator.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/DesktopPetCopy.swift" \
@@ -63,6 +66,7 @@ swiftc \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/WorkSessionManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/MenuModelManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/HealthMetricsManualTests.swift" \
+  "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/WorkdayReportManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/ReminderSchedulerManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/PetAssetLocatorManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/WindowPlacementManualTests.swift" \
@@ -108,6 +112,9 @@ swiftc -framework AppKit \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Health/HealthMetricsModels.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Health/HealthMetricsStore.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Health/HealthSessionTracker.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Health/TodayAdvice.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Menu/TodayReportContent.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Menu/ReportPanelPlacement.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/PetAnimationModels.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/PetAssetLocator.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/DesktopPetMenuModel.swift" \
