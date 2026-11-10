@@ -8,6 +8,7 @@ import { DEFAULT_MODEL, PALETTE } from './model.mjs';
 import { allFrames, birdVisitOptions, napOptions, pettedOptions, renderPose, resolvePose, yuzuWobbleOptions } from './render.mjs';
 import { Grid } from './raster.mjs';
 import { renderFrontPeek, renderFrontUpright } from './front-peek.mjs';
+import { EYE_LEFT } from './front-head.mjs';
 import { OUTFIT_HEADWEAR } from './headwear.mjs';
 import { CURSOR_POINT_SIZE, CURSOR_SIZE, cursorDefinitions, cursorManifest } from './cursors.mjs';
 import { validateModel } from './validate.mjs';
@@ -213,8 +214,21 @@ test('front peek shows the whole face: orange, both cheeks and both eyes', () =>
   const peek = renderFrontPeek({});
   assert.ok(inkCount(peek, 'orange') > 0, 'orange on the head');
   assert.ok(inkCount(peek, 'blush') >= 4, 'two blushing cheeks');
-  assert.equal(inkCount(peek, 'white') >= 3, true, 'two eye highlights plus the orange highlight');
+  // 眼睛和侧面一样半眯：眼皮（shade）压在眼线上面，两只都在
+  const upright = renderFrontUpright({});
+  const eyeRow = lidRow(upright);
+  assert.ok(eyeRow > 0, 'both eyes are there');
 });
+
+/** 两只眼睛的眼皮那一行（左右两只眼皮、下面一行是眼线）；找不到返回 -1 */
+function lidRow(grid) {
+  const right = 31 - EYE_LEFT - 1;
+  for (let y = 0; y < 31; y += 1) {
+    const lid = [EYE_LEFT, EYE_LEFT + 1, right, right + 1].every((x) => grid.get(x, y) === 'shade' && grid.get(x, y + 1) === 'outline');
+    if (lid) return y;
+  }
+  return -1;
+}
 
 test('front peek head top points into the screen (turned 90 degrees)', () => {
   const peek = renderFrontPeek({});
@@ -234,7 +248,7 @@ test('front peek head is about as big as the side head-turn frame', () => {
 });
 
 test('front peek blink closes the eyes and reach pokes out one pixel further', () => {
-  assert.ok(inkCount(renderFrontPeek({ blink: true }), 'white') < inkCount(renderFrontPeek({}), 'white'), 'no eye highlights while blinking');
+  assert.equal(lidRow(renderFrontUpright({ blink: true })), -1, 'eyes shut while blinking');
   assert.equal(leftmostColumn(renderFrontPeek({})) - leftmostColumn(renderFrontPeek({ reach: true })), 1);
 });
 

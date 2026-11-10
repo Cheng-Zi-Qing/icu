@@ -11,50 +11,22 @@ import { DEFAULT_MODEL } from './model.mjs';
 import { stateSceneDefinitions } from './state-scenes.mjs';
 import { chaseFrame, CHASE_BEATS } from './chase.mjs';
 import { HEADWEAR } from './headwear.mjs';
-import { frontHead, frontHeadwearAt, frontRow, rect, both, FRONT_SIZE as N } from './front-peek.mjs';
+import { frontFace, frontHead, frontHeadwearLayer, rect, FRONT_SIZE as N } from './front-head.mjs';
+import { renderFrontSit } from './front-sit.mjs';
 
-/** 场景里头整体往上抬多少格（贴边时下巴贴着画布底边，这里要给下面的道具腾地方） */
-const DY = -9;
+/** 场景里头中心那一行：头整体抬高，给下面的道具腾地方（道具挡住下巴，嘴和鼻头露在外面） */
+const HEAD_ROW = 15;
+/** 吃饭埋头时往下沉几格 */
+const DIP = 3;
 
 const ring = (x0, y0, x1, y1) => rect(x0, y0, x1, y1).filter(([x, y]) => x === x0 || x === x1 || y === y0 || y === y1);
 const layer = () => Grid.empty(N, N);
 
-// ---------------- 脸 ----------------
+// ---------------- 头 ----------------
 
-/**
- * eyes：open 睁眼（带高光）/ down 低头专注（没高光）/ closed 闭眼 / happy 眯眼笑（^ ^）
- * look：眼珠往左（-1）或往右（+1）挪一格
- */
-function face(grid, dy, { eyes = 'open', look = 0, mouth = 'calm', glasses = false, grass = false } = {}) {
-  const t = frontRow(-4, dy);
-  const m = frontRow(2, dy);
-  const lefts = [10 + look, 20 + look];
-  const eyePixels = lefts.flatMap((x) => {
-    switch (eyes) {
-      case 'closed': return rect(x, t + 1, x + 1, t + 1);
-      case 'happy': return [[x - 1, t + 1], [x, t], [x + 1, t], [x + 2, t + 1]];
-      default: return rect(x, t, x + 1, t + 1);
-    }
-  });
-  let g = grid.dots('outline', eyePixels);
-  if (eyes === 'open') g = g.dots('white', lefts.map((x) => [x, t]));
-  if (glasses) {
-    // 圆框：去掉四个角，用比描边浅的深棕，眼睛和高光还看得见
-    const rims = [10, 20].flatMap((x) => ring(x - 1, t - 1, x + 2, t + 2)
-      .filter(([px, py]) => !((px === x - 1 || px === x + 2) && (py === t - 1 || py === t + 2))));
-    g = g.dots('dark', [...rims, ...rect(13, t, 18, t)]);
-  }
-  g = g.dots('blush', both(rect(9, m - 1, 10, m - 1)));
-  g = mouth === 'open'
-    ? g.dots('outline', [[15, m - 1], [16, m - 1], [15, m], [16, m]]).dots('blush', [[15, m], [16, m]])
-    : g.dots('outline', [[15, m - 1], [16, m - 1], [14, m], [17, m]]);
-  // 嘴角叼着的草 / 菜叶
-  if (grass) g = g.dots('grass', [[17, m + 1], [18, m + 1], [19, m + 2], [20, m + 2], [21, m + 3]]).dots('leaf', [[19, m + 1], [20, m + 3]]);
-  return g;
-}
-
-function headAt(dy, faceOptions, headwear) {
-  return face(frontHead(dy), dy, faceOptions).overlaid(frontHeadwearAt(headwear, dy));
+/** 正面那颗头（和贴边、转身同一颗）带表情和头顶装扮；eyes 见 front-head.mjs 的 frontFace */
+function headAt(c, faceOptions, headwear) {
+  return frontFace(frontHead(c), c, faceOptions).overlaid(frontHeadwearLayer(headwear, c));
 }
 
 // ---------------- 爪子 ----------------
@@ -65,20 +37,6 @@ function paws(...anchors) {
   return anchors.reduce((g, a) => g.dots('body', pawShape(a)), layer()).outlined()
     .dots('light', anchors.map(([x, y]) => [x + 1, y + 1]))
     .dots('dark', anchors.flatMap(([x, y]) => [[x + 1, y + 3], [x + 3, y + 3]]));
-}
-
-/** 正面坐着的身子（在想、放小鸟这两个没有道具的场景） */
-function sittingBody() {
-  const inside = (cx, cy, rx, ry) => (x, y) => ((x + 0.5 - cx) / rx) ** 2 + ((y + 0.5 - cy) / ry) ** 2 <= 1;
-  const round = inside(15.5, 28, 11, 8.5);
-  const belly = inside(15.5, 28, 6, 4.6);
-  const body = layer().fill('body', (x, y) => y <= 30 && round(x, y)).outlined();
-  return body
-    .fill('light', belly, 'body')
-    // 两只后脚踩在底下，前爪收在肚子两边
-    .dots('shade', [...rect(8, 29, 11, 30), ...rect(20, 29, 23, 30)])
-    .dots('outline', [...rect(8, 31, 11, 31), ...rect(20, 31, 23, 31)])
-    .dots('shade', [...rect(9, 24, 10, 25), ...rect(21, 24, 22, 25)]);
 }
 
 // ---------------- 翻书（读文件） ----------------
@@ -111,7 +69,7 @@ function book({ lift = false, standing = false, falling = false } = {}) {
 
 function readingFrame({ look = -1, eyes = 'down', lift = false, standing = false, falling = false, headwear }) {
   const rightPaw = lift ? [22, 18] : [24, 19];
-  return headAt(DY, { eyes, look, glasses: true }, headwear)
+  return headAt(HEAD_ROW, { eyes, look, glasses: true }, headwear)
     .overlaid(book({ lift, standing, falling }))
     .overlaid(paws([3, 19], rightPaw));
 }
@@ -157,7 +115,7 @@ function writingFrame({ progress, thinking = false, eyes = 'down', headwear }) {
   const done = WRITING_STROKES[Math.max(0, Math.min(progress, WRITING_STROKES.length) - 1)] ?? [10, 23];
   const tip = [done[0] + 1, done[1]];
   const look = tip[0] < 14 ? -1 : tip[0] > 18 ? 1 : 0;
-  const base = headAt(DY, { eyes: thinking ? 'open' : eyes, look: thinking ? 1 : look, grass: !thinking }, headwear)
+  const base = headAt(HEAD_ROW, { eyes: thinking ? 'open' : eyes, look: thinking ? 1 : look, grass: !thinking }, headwear)
     .overlaid(notebook(progress))
     .overlaid(paws([2, 21]));
   // 想一想：用笔头点下巴
@@ -202,9 +160,9 @@ function bowl(level) {
   return g;
 }
 
-function eatingFrame({ level, dip = false, eyes = 'open', grass = false, headwear }) {
-  const dy = dip ? DY + 3 : DY;
-  return headAt(dy, { eyes, grass, mouth: dip ? 'calm' : 'calm' }, headwear)
+function eatingFrame({ level, dip = false, eyes = 'relaxed', grass = false, headwear }) {
+  const c = dip ? HEAD_ROW + DIP : HEAD_ROW;
+  return headAt(c, { eyes, grass, mouth: grass ? 'chew' : 'calm' }, headwear)
     .overlaid(bowl(level))
     .overlaid(paws([1, 21], [26, 21]));
 }
@@ -234,8 +192,10 @@ const BIRD_PATH = [null, [20, 5], [23, 3], [26, 2], [28, 1], null, null, [28, 1]
 function delegateFrame({ step, headwear }) {
   const spot = BIRD_PATH[step];
   const look = spot ? 1 : 0;
-  const eyes = step === BIRD_PATH.length - 1 ? 'happy' : 'open';
-  const scene = sittingBody().overlaid(headAt(DY, { eyes, look, grass: true }, headwear));
+  // 小鸟在飞就睁眼盯着，没鸟的时候和平时一样半眯
+  const eyes = step === BIRD_PATH.length - 1 ? 'happy' : spot ? 'open' : 'relaxed';
+  // 和转身那一下同一个正面坐姿，只是抬眼盯着飞走又飞回来的小鸟
+  const scene = renderFrontSit({ headwear, eyes, look });
   return spot ? scene.overlaid(bird(spot, step % 2 === 0)) : scene;
 }
 

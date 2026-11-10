@@ -6,6 +6,7 @@ import { DEFAULT_MODEL } from './model.mjs';
 import { allFrames, GENERATED_DIRECTORIES, renderPose, idleMainOptions } from './render.mjs';
 import { HEADWEAR } from './headwear.mjs';
 import { FRONT_EYE_ROW, renderFrontSit } from './front-sit.mjs';
+import { EYE_LEFT } from './front-head.mjs';
 
 const rowsWith = (grid, ink) => {
   const rows = new Set();
@@ -40,7 +41,7 @@ test('front and side views sit on the same floor and share the eye row', () => {
 test('the front face is relaxed and expressionless: half-lidded eyes, flat mouth, grass in its mouth', () => {
   const front = renderFrontSit({ headwear: 'orange' });
   // 半眯：眼皮（shade）压在眼睛上一行，没有高光
-  for (const x of [11, 12, 19, 20]) {
+  for (const x of [EYE_LEFT, EYE_LEFT + 1, 30 - EYE_LEFT, 31 - EYE_LEFT]) {
     assert.equal(front.get(x, FRONT_EYE_ROW), 'shade', `lid over the eye at x ${x}`);
     assert.equal(front.get(x, FRONT_EYE_ROW + 1), 'outline', `eye line at x ${x}`);
   }
@@ -49,7 +50,8 @@ test('the front face is relaxed and expressionless: half-lidded eyes, flat mouth
   }
   // 草从嘴里伸出去，越过左脸颊
   const grass = opaque({ width: 32, height: 32, get: (x, y) => (front.get(x, y) === 'grass' ? 'grass' : 'clear') });
-  assert.ok(grass.minX <= 4 && grass.maxX >= 14, `grass runs from the mouth past the cheek (x ${grass.minX}–${grass.maxX})`);
+  // 口鼻比脑袋窄一圈（11–20 列），草从嘴角越过口鼻边、垂到脸颊外侧
+  assert.ok(grass.minX <= 8 && grass.maxX >= 14, `grass runs from the mouth past the cheek (x ${grass.minX}–${grass.maxX})`);
 });
 
 test('the front face and body are symmetric apart from the grass', () => {
@@ -67,6 +69,21 @@ test('the front face and body are symmetric apart from the grass', () => {
 
 test('a closed-eye variant exists for blinking mid-turn', () => {
   const closed = renderFrontSit({ headwear: 'orange', eyes: 'closed' });
-  assert.notEqual(closed.get(11, FRONT_EYE_ROW), 'shade', 'no lid when the eyes are shut');
-  assert.equal(closed.get(11, FRONT_EYE_ROW + 1), 'outline');
+  assert.notEqual(closed.get(EYE_LEFT, FRONT_EYE_ROW), 'shade', 'no lid when the eyes are shut');
+  assert.equal(closed.get(EYE_LEFT, FRONT_EYE_ROW + 1), 'outline');
+});
+
+test('every front view uses the same head: turning, edge peek, title bar and work scenes match', async () => {
+  const { renderFrontUpright } = await import('./front-peek.mjs');
+  const { workSceneFrames } = await import('./front-work.mjs');
+  const muzzle = (grid) => {
+    const xs = []; const ys = [];
+    for (let y = 0; y < 32; y += 1) for (let x = 0; x < 32; x += 1) if (grid.get(x, y) === 'muzzle') { xs.push(x); ys.push(y); }
+    return { width: Math.max(...xs) - Math.min(...xs) + 1, height: Math.max(...ys) - Math.min(...ys) + 1 };
+  };
+  const reference = muzzle(renderFrontSit({}));
+  for (const [name, grid] of [['bar peek', renderFrontUpright({})], ['delegate', workSceneFrames('delegate')[0]], ['read', workSceneFrames('read')[6]]]) {
+    assert.equal(muzzle(grid).width, reference.width, `${name}: same muzzle width as the turning frame`);
+  }
+  assert.equal(muzzle(workSceneFrames('delegate')[0]).height, reference.height, 'the bird scene is the very same sitting pose');
 });
