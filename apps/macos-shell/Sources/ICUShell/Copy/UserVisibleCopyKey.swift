@@ -2,6 +2,7 @@ import Foundation
 
 enum UserVisibleCopyKey: String {
     case menuShowPet = "menu.show_pet"
+    case menuTodayReport = "menu.today_report"
     case menuQuitApp = "menu.quit_app"
     case menuStartWork = "menu.start_work"
     case menuEnterFocus = "menu.enter_focus"
@@ -20,6 +21,8 @@ extension UserVisibleCopyKey {
         switch self {
         case .menuShowPet:
             return "显示桌宠"
+        case .menuTodayReport:
+            return "今日报告…"
         case .menuQuitApp:
             return "退出"
         case .menuStartWork:

@@ -30,8 +30,18 @@ final class StatusMenuPanelController {
         floatingPanelController.dismiss()
     }
 
+    /// 「今日报告…」：像素风浮层，锚在状态栏按钮下方
+    func presentTodayReport(from button: NSStatusBarButton, report: HealthDaySummary, cupsGoal: Int) {
+        let contentView = MenuTodayReportView(report: report, cupsGoal: cupsGoal)
+        guard let frame = panelFrame(for: button, size: contentView.frame.size) else {
+            return
+        }
+
+        floatingPanelController.present(contentView: contentView, frame: frame)
+    }
+
     private func present(from button: NSStatusBarButton, model: StatusItemMenuModel, summary: MenuTodaySummary?) {
-        guard let window = button.window else {
+        guard button.window != nil else {
             return
         }
 
@@ -59,17 +69,27 @@ final class StatusMenuPanelController {
             self.onAction(action)
         }
 
+        guard let frame = panelFrame(for: button, size: ThemedMenuPanel.preferredSize(for: sections, hasSummary: summary != nil)) else {
+            return
+        }
+
+        floatingPanelController.present(contentView: panel, frame: frame)
+        currentPanel = panel
+    }
+
+    /// 面板锚到按钮下方 6pt，横向以按钮居中
+    private func panelFrame(for button: NSStatusBarButton, size: NSSize) -> NSRect? {
+        guard let window = button.window else {
+            return nil
+        }
+
         let buttonFrameInWindow = button.convert(button.bounds, to: nil)
         let buttonFrameInScreen = window.convertToScreen(buttonFrameInWindow)
-        let size = ThemedMenuPanel.preferredSize(for: sections, hasSummary: summary != nil)
-        let frame = NSRect(
+        return NSRect(
             x: buttonFrameInScreen.midX - (size.width / 2),
             y: buttonFrameInScreen.minY - size.height - 6,
             width: size.width,
             height: size.height
         )
-
-        floatingPanelController.present(contentView: panel, frame: frame)
-        currentPanel = panel
     }
 }

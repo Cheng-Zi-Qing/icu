@@ -127,6 +127,7 @@ struct StateStoreManualMain {
             try testIdleMenuShowsStartWork()
             try testWorkingMenuSectionsStayGroupedForThemedPanel()
             try testStatusItemMenuShowsPetAndQuit()
+            try testStatusItemMenuTitlesAreNotEmpty()
             try testMenuActionTitlesCanBeOverriddenByTextCatalog()
             try testWorkingMenuShowsFocusAndBreakActions()
             try testPausedStatesShowResumeAction()

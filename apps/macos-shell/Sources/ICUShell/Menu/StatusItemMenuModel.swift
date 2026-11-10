@@ -2,6 +2,7 @@ import Foundation
 
 enum StatusItemMenuAction: String, Equatable {
     case showPet
+    case showTodayReport
     case openWardrobe
     case openSettings
     case connectClaude
@@ -12,6 +13,8 @@ enum StatusItemMenuAction: String, Equatable {
         switch self {
         case .showPet:
             return TextCatalog.shared.text(.menuShowPet)
+        case .showTodayReport:
+            return TextCatalog.shared.text(.menuTodayReport)
         case .openWardrobe:
             return TextCatalog.shared.text(.menuOpenWardrobe)
         case .openSettings:
@@ -36,6 +39,6 @@ struct StatusItemMenuModel: Equatable {
 
     var sections: [[StatusItemMenuAction]] {
         let toggle: [StatusItemMenuAction] = claudeConnection.map { [$0 ? .disconnectClaude : .connectClaude] } ?? []
-        return [[.showPet], [.openWardrobe, .openSettings] + toggle, [.quitApp]]
+        return [[.showPet], [.showTodayReport, .openWardrobe, .openSettings] + toggle, [.quitApp]]
     }
 }

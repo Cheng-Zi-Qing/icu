@@ -39,6 +39,8 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
         onOpenSettingsRequested: @escaping () -> Void = {},
         onOpenWardrobeRequested: @escaping () -> Void = {},
         todaySummaryProvider: @escaping () -> MenuTodaySummary? = { nil },
+        todayReportProvider: @escaping () -> HealthDaySummary? = { nil },
+        cupsGoalProvider: @escaping () -> Int = { HydrationPlan(profile: HealthProfile.default).cups },
         nowProvider: @escaping () -> Date = { .now }
     ) {
         self.onOpenSettingsRequested = onOpenSettingsRequested
@@ -111,6 +113,14 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
         }
         window.contextMenuController = contextMenuController
         window.menuSummaryProvider = todaySummaryProvider
+
+        // 「今日报告…」由 ContextMenuPanelController 从菜单里直接拦下弹面板，这里只喂数据；
+        // 今天没记录就只让桌宠说一句（和菜单栏那条提示同一句话）
+        contextMenuController.todayReportProvider = todayReportProvider
+        contextMenuController.cupsGoalProvider = cupsGoalProvider
+        contextMenuController.onEmptyReport = { [weak self] in
+            self?.petView.showTransientMessage("今天还没有记录")
+        }
 
         applyCurrentStateToView(showBubble: true)
         persistCurrentWindowPlacement()
@@ -297,6 +307,10 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
                 return
             case .openWardrobe:
                 onOpenWardrobeRequested()
+                return
+            // 「今日报告…」在 ContextMenuPanelController 里就被拦下弹了报告面板，走不到这里；
+            // Swift 要求 switch 穷尽，只能在这里占个位
+            case .showTodayReport:
                 return
             case .connectClaude:
                 onClaudeConnectionChange(true)

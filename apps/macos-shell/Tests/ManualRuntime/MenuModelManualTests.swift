@@ -3,7 +3,7 @@ import Foundation
 func testIdleMenuShowsStartWork() throws {
     let model = DesktopPetMenuModel(state: .idle)
     try expect(
-        model.items == [.startWork, .openWardrobe, .openSettings, .closeWindow, .quitApp],
+        model.items == [.startWork, .showTodayReport, .openWardrobe, .openSettings, .closeWindow, .quitApp],
         "idle menu items should be flattened from themed sections"
     )
 }
@@ -11,18 +11,18 @@ func testIdleMenuShowsStartWork() throws {
 func testWorkingMenuShowsFocusAndBreakActions() throws {
     let model = DesktopPetMenuModel(state: .working)
     try expect(
-        model.items == [.enterFocus, .takeBreak, .stopWork, .openWardrobe, .openSettings, .closeWindow, .quitApp],
+        model.items == [.enterFocus, .takeBreak, .stopWork, .showTodayReport, .openWardrobe, .openSettings, .closeWindow, .quitApp],
         "working menu items should be flattened from themed sections"
     )
 }
 
 func testPausedStatesShowResumeAction() throws {
     try expect(
-        DesktopPetMenuModel(state: .focus).items == [.resumeWorking, .stopWork, .openWardrobe, .openSettings, .closeWindow, .quitApp],
+        DesktopPetMenuModel(state: .focus).items == [.resumeWorking, .stopWork, .showTodayReport, .openWardrobe, .openSettings, .closeWindow, .quitApp],
         "focus menu items should be flattened from themed sections"
     )
     try expect(
-        DesktopPetMenuModel(state: .breakState).items == [.resumeWorking, .stopWork, .openWardrobe, .openSettings, .closeWindow, .quitApp],
+        DesktopPetMenuModel(state: .breakState).items == [.resumeWorking, .stopWork, .showTodayReport, .openWardrobe, .openSettings, .closeWindow, .quitApp],
         "break menu items should be flattened from themed sections"
     )
 }
@@ -32,7 +32,7 @@ func testWorkingMenuSectionsStayGroupedForThemedPanel() throws {
     try expect(
         model.sections == [
             [.enterFocus, .takeBreak, .stopWork],
-            [.openWardrobe, .openSettings],
+            [.showTodayReport, .openWardrobe, .openSettings],
             [.closeWindow, .quitApp]
         ],
         "working menu sections should remain grouped for the themed context panel"
@@ -42,9 +42,15 @@ func testWorkingMenuSectionsStayGroupedForThemedPanel() throws {
 func testStatusItemMenuShowsPetAndQuit() throws {
     let model = StatusItemMenuModel()
     try expect(
-        model.sections == [[.showPet], [.openWardrobe, .openSettings], [.quitApp]],
-        "status item menu should keep show pet, wardrobe, settings and quit"
+        model.sections == [[.showPet], [.showTodayReport, .openWardrobe, .openSettings], [.quitApp]],
+        "status item menu should keep show pet, today report, wardrobe, settings and quit"
     )
+}
+
+func testStatusItemMenuTitlesAreNotEmpty() throws {
+    let actions: [StatusItemMenuAction] = [.showPet, .showTodayReport, .openWardrobe, .openSettings, .connectClaude, .disconnectClaude, .quitApp]
+    try expect(actions.allSatisfy { !$0.title.isEmpty }, "every status item menu entry should have a title")
+    try expect(StatusItemMenuAction.showTodayReport.title == "今日报告…", "the today report entry reads 今日报告…")
 }
 
 func testWardrobeMenuEntryIsCalledWardrobe() throws {
@@ -73,18 +79,19 @@ func testMenuActionTitlesCanBeOverriddenByTextCatalog() throws {
 func testClaudeMenuEntryFollowsTheConnection() throws {
     try expect(
         DesktopPetMenuModel(state: .idle, claudeConnection: false).sections
-            == [[.startWork], [.openWardrobe, .openSettings, .connectClaude], [.closeWindow, .quitApp]],
+            == [[.startWork], [.showTodayReport, .openWardrobe, .openSettings, .connectClaude], [.closeWindow, .quitApp]],
         "not connected: offer to connect Claude Code next to wardrobe and settings"
     )
     try expect(
-        DesktopPetMenuModel(state: .working, claudeConnection: true).sections[1] == [.openWardrobe, .openSettings, .disconnectClaude],
+        DesktopPetMenuModel(state: .working, claudeConnection: true).sections[1] == [.showTodayReport, .openWardrobe, .openSettings, .disconnectClaude],
         "connected: offer to disconnect"
     )
     try expect(
-        StatusItemMenuModel(claudeConnection: false).sections == [[.showPet], [.openWardrobe, .openSettings, .connectClaude], [.quitApp]],
+        StatusItemMenuModel(claudeConnection: false).sections == [[.showPet], [.showTodayReport, .openWardrobe, .openSettings, .connectClaude], [.quitApp]],
         "the menu bar menu offers it too"
     )
     try expect(StatusItemMenuModel(claudeConnection: true).sections[1].last == .disconnectClaude, "menu bar: disconnect when connected")
     try expect(DesktopPetMenuAction.connectClaude.title == "接入 Claude Code", "connect title")
+    try expect(DesktopPetMenuAction.showTodayReport.title == "今日报告…", "the pet menu offers the today report too")
     try expect(StatusItemMenuAction.disconnectClaude.title == "断开 Claude Code", "disconnect title")
 }
