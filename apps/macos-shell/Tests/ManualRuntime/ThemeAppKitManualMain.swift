@@ -118,6 +118,8 @@ struct ThemeAppKitManualMain {
             try testThemedMenuPanelRendersRowsAndSeparatorsFromSections()
             try testThemedMenuPanelShowsTodaySummaryHeader()
             try testContextMenuPanelControllerDispatchesSelectedActionAndDismissesPanel()
+            try testContextMenuPanelControllerPresentsTodayReportAboveThePetWindow()
+            try testContextMenuPanelControllerSaysSoWhenTodayHasNoRecords()
             try testFloatingPanelControllerDismissesOnEscape()
             try testFloatingPanelControllerDismissesOnApplicationDeactivate()
             try testFloatingPanelControllerRepeatedPresentOnlyDismissesExistingPanels()

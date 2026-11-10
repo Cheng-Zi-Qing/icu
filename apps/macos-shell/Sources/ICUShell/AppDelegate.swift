@@ -88,6 +88,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 },
                 todaySummaryProvider: { [weak self] in
                     self?.todaySummary()
+                },
+                todayReportProvider: { [weak self] in
+                    self?.todayDayReport()
+                },
+                cupsGoalProvider: { [weak self] in
+                    // AppDelegate 没了就用默认目标（和桌宠那边的默认值一致）
+                    self?.cupsGoal() ?? HydrationPlan(profile: HealthProfile.default).cups
                 }
             )
             petWindowController?.setOutfit(wardrobe.outfitID)

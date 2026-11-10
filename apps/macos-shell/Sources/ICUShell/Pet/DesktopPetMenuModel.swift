@@ -6,6 +6,7 @@ enum DesktopPetMenuAction: String, Equatable {
     case takeBreak
     case resumeWorking
     case stopWork
+    case showTodayReport
     case openWardrobe
     case openSettings
     case connectClaude
@@ -25,6 +26,8 @@ enum DesktopPetMenuAction: String, Equatable {
             return TextCatalog.shared.text(.menuResumeWorking)
         case .stopWork:
             return TextCatalog.shared.text(.menuStopWork)
+        case .showTodayReport:
+            return TextCatalog.shared.text(.menuTodayReport)
         case .openWardrobe:
             return TextCatalog.shared.text(.menuOpenWardrobe)
         case .openSettings:
@@ -52,7 +55,7 @@ struct DesktopPetMenuModel: Equatable {
     }
 
     var sections: [[DesktopPetMenuAction]] {
-        let tools: [DesktopPetMenuAction] = [.openWardrobe, .openSettings] + claudeToggle
+        let tools: [DesktopPetMenuAction] = [.showTodayReport, .openWardrobe, .openSettings] + claudeToggle
         switch state {
         case .idle:
             return [[.startWork], tools, [.closeWindow, .quitApp]]

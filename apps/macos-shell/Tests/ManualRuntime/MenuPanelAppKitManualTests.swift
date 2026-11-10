@@ -124,6 +124,144 @@ func testContextMenuPanelControllerDispatchesSelectedActionAndDismissesPanel() t
     try expect(controller.isPresented == false, "context menu controller should dismiss after selecting an action")
 }
 
+func testContextMenuPanelControllerPresentsTodayReportAboveThePetWindow() throws {
+    _ = NSApplication.shared
+
+    let window = NSWindow(
+        contentRect: NSRect(x: 0, y: 0, width: 240, height: 240),
+        styleMask: [.borderless],
+        backing: .buffered,
+        defer: false
+    )
+    window.contentView = NSView(frame: NSRect(x: 0, y: 0, width: 240, height: 240))
+    // 挪到屏幕中间：报告面板顶在窗口上面长高，靠边会被 FloatingPanelController 的 clamp 挪走
+    if let visibleFrame = NSScreen.main?.visibleFrame {
+        window.setFrameOrigin(NSPoint(x: visibleFrame.midX - 120, y: visibleFrame.midY - 120))
+    }
+    window.makeKeyAndOrderFront(nil)
+
+    guard let contentView = window.contentView else {
+        throw TestFailure(message: "window content view should exist")
+    }
+
+    var receivedActions: [DesktopPetMenuAction] = []
+    let controller = ContextMenuPanelController { action in
+        receivedActions.append(action)
+    }
+    controller.todayReportProvider = { sampleFullDayReport }
+    controller.cupsGoalProvider = { 6 }
+
+    guard let event = NSEvent.mouseEvent(
+        with: .rightMouseDown,
+        location: NSPoint(x: 120, y: 120),
+        modifierFlags: [],
+        timestamp: ProcessInfo.processInfo.systemUptime,
+        windowNumber: window.windowNumber,
+        context: nil,
+        eventNumber: 1,
+        clickCount: 1,
+        pressure: 1
+    ) else {
+        throw TestFailure(message: "failed to create right click event")
+    }
+
+    controller.present(
+        from: DesktopPetMenuModel(state: .idle),
+        event: event,
+        in: contentView
+    )
+
+    guard let panel = controller.currentPanel else {
+        throw TestFailure(message: "context menu controller should expose a panel after present")
+    }
+
+    try requirePixelButton(in: panel, title: "今日报告…").performClick(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+    try expect(receivedActions.isEmpty, "the today report is handled by the controller, not dispatched as a menu action")
+    try expect(controller.currentPanel == nil, "the menu panel is replaced by the report panel")
+
+    // 关掉的面板窗口也会留在 NSApp.windows 里，按内容认出刚才弹出来的那个
+    guard let panelWindow = reportPanelWindows().last else {
+        throw TestFailure(message: "the today report should open a floating panel window with the report view")
+    }
+
+    let frame = panelWindow.frame
+    try expect(abs(frame.midX - window.frame.midX) < 0.5, "the report hangs centered above the pet window (got \(frame))")
+    try expect(abs(frame.minY - (window.frame.maxY + 12)) < 0.5, "the report sits just above the pet window (got \(frame))")
+    try expect(
+        frame.size == MenuTodayReportView.preferredSize(for: sampleFullDayReport, cupsGoal: 6),
+        "the report panel is as big as the report view wants (got \(frame))"
+    )
+    try expect(!frame.intersects(window.frame), "the report does not cover the pet window (got \(frame))")
+
+    controller.dismiss()
+    try expect(controller.isPresented == false, "dismiss should close the today report panel")
+}
+
+func testContextMenuPanelControllerSaysSoWhenTodayHasNoRecords() throws {
+    _ = NSApplication.shared
+
+    let window = NSWindow(
+        contentRect: NSRect(x: 0, y: 0, width: 240, height: 240),
+        styleMask: [.borderless],
+        backing: .buffered,
+        defer: false
+    )
+    window.contentView = NSView(frame: NSRect(x: 0, y: 0, width: 240, height: 240))
+    window.makeKeyAndOrderFront(nil)
+
+    guard let contentView = window.contentView else {
+        throw TestFailure(message: "window content view should exist")
+    }
+
+    // 读不到统计、和今天一条记录都没有，都算「没东西可看」
+    for report: HealthDaySummary? in [nil, sampleEmptyDayReport] {
+        var emptyReportCalls = 0
+        let controller = ContextMenuPanelController { _ in }
+        controller.todayReportProvider = { report }
+        controller.onEmptyReport = { emptyReportCalls += 1 }
+        // 关掉的面板窗口也会留在 NSApp.windows 里，只能比前后数量
+        let reportPanelsBefore = reportPanelWindows().count
+
+        guard let event = NSEvent.mouseEvent(
+            with: .rightMouseDown,
+            location: NSPoint(x: 80, y: 80),
+            modifierFlags: [],
+            timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: window.windowNumber,
+            context: nil,
+            eventNumber: 1,
+            clickCount: 1,
+            pressure: 1
+        ) else {
+            throw TestFailure(message: "failed to create right click event")
+        }
+
+        controller.present(from: DesktopPetMenuModel(state: .idle), event: event, in: contentView)
+        guard let panel = controller.currentPanel else {
+            throw TestFailure(message: "context menu controller should expose a panel after present")
+        }
+
+        try requirePixelButton(in: panel, title: "今日报告…").performClick(nil)
+        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+        try expect(emptyReportCalls == 1, "a day without records should only make the pet say so (got \(emptyReportCalls))")
+        try expect(
+            reportPanelWindows().count == reportPanelsBefore,
+            "a day without records should not open the report panel (got \(reportPanelWindows().count) vs \(reportPanelsBefore))"
+        )
+        try expect(controller.isPresented == false, "the menu should close even when there is nothing to show")
+    }
+}
+
+/// 现在开着 / 关掉的面板窗口里，内容是哪一种（关掉的也会留在 NSApp.windows 里）
+private func reportPanelWindows() -> [MenuFloatingPanelWindow] {
+    NSApp.windows
+        .compactMap { $0 as? MenuFloatingPanelWindow }
+        .filter { $0.contentView is MenuTodayReportView }
+}
+
 func testFloatingPanelControllerDismissesOnEscape() throws {
     _ = NSApplication.shared
 
