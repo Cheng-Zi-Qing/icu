@@ -102,6 +102,7 @@ swiftc -framework AppKit \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/DesktopPetMenuModel.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Menu/ThemedMenuPanel.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Menu/MenuTodayHeaderView.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Menu/MenuTodayReportView.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Menu/FloatingPanelController.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Menu/ContextMenuPanelController.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Menu/StatusItemMenuModel.swift" \

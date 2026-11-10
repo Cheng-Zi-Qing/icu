@@ -122,6 +122,9 @@ struct ThemeAppKitManualMain {
             try testFloatingPanelControllerDismissesOnApplicationDeactivate()
             try testFloatingPanelControllerRepeatedPresentOnlyDismissesExistingPanels()
             try testFloatingPanelControllerDismissesOnOutsideClickEvent()
+            try testMenuTodayReportViewReadsOutEveryNumber()
+            try testMenuTodayReportViewHidesRowsWithoutData()
+            try testStatusMenuPanelControllerPresentsTodayReportUnderTheButton()
             print("ThemeAppKitManualTests: PASS")
         } catch {
             fputs("ThemeAppKitManualTests: FAIL - \(error)\n", stderr)

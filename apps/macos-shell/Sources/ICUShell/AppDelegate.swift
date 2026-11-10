@@ -129,10 +129,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSApplication.shared.terminate(nil)
     }
 
+    /// 「今日报告…」：今天一条记录都没有就只让桌宠说一句，不弹面板
+    private func presentTodayReport() {
+        guard let button = statusItem?.button, let report = todayDayReport() else {
+            return
+        }
+
+        guard report.hasActivity else {
+            petWindowController?.showMessage("今天还没有记录")
+            return
+        }
+
+        statusMenuController?.presentTodayReport(from: button, report: report, cupsGoal: cupsGoal())
+    }
+
     private func handleStatusMenuAction(_ action: StatusItemMenuAction) {
         switch action {
         case .showPet:
             showPet()
+        case .showTodayReport:
+            presentTodayReport()
         case .openWardrobe:
             wardrobe?.open()
         case .openSettings:
@@ -232,13 +248,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// 菜单顶上的今日小结；读不到统计时不显示
     private func todaySummary() -> MenuTodaySummary? {
-        guard let healthTracker, let settingsStore else { return nil }
+        guard let day = todayDayReport() else { return nil }
+        return MenuTodaySummary(day: day, cupsGoal: cupsGoal())
+    }
+
+    private func todayDayReport() -> HealthDaySummary? {
+        guard let healthTracker else { return nil }
         do {
-            let day = try healthTracker.todayReport(at: .now)
-            return MenuTodaySummary(day: day, cupsGoal: HydrationPlan(profile: settingsStore.loadHealthProfile()).cups)
+            return try healthTracker.todayReport(at: .now)
         } catch {
             NSLog("[ICUShell] failed to read today's health summary: \(error.localizedDescription)")
             return nil
         }
+    }
+
+    private func cupsGoal() -> Int {
+        guard let settingsStore else {
+            return HydrationPlan(profile: HealthProfile.default).cups
+        }
+        return HydrationPlan(profile: settingsStore.loadHealthProfile()).cups
     }
 }

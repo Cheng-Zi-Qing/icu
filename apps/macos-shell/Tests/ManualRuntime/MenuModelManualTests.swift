@@ -42,9 +42,15 @@ func testWorkingMenuSectionsStayGroupedForThemedPanel() throws {
 func testStatusItemMenuShowsPetAndQuit() throws {
     let model = StatusItemMenuModel()
     try expect(
-        model.sections == [[.showPet], [.openWardrobe, .openSettings], [.quitApp]],
-        "status item menu should keep show pet, wardrobe, settings and quit"
+        model.sections == [[.showPet], [.showTodayReport, .openWardrobe, .openSettings], [.quitApp]],
+        "status item menu should keep show pet, today report, wardrobe, settings and quit"
     )
+}
+
+func testStatusItemMenuTitlesAreNotEmpty() throws {
+    let actions: [StatusItemMenuAction] = [.showPet, .showTodayReport, .openWardrobe, .openSettings, .connectClaude, .disconnectClaude, .quitApp]
+    try expect(actions.allSatisfy { !$0.title.isEmpty }, "every status item menu entry should have a title")
+    try expect(StatusItemMenuAction.showTodayReport.title == "今日报告…", "the today report entry reads 今日报告…")
 }
 
 func testWardrobeMenuEntryIsCalledWardrobe() throws {
@@ -81,7 +87,7 @@ func testClaudeMenuEntryFollowsTheConnection() throws {
         "connected: offer to disconnect"
     )
     try expect(
-        StatusItemMenuModel(claudeConnection: false).sections == [[.showPet], [.openWardrobe, .openSettings, .connectClaude], [.quitApp]],
+        StatusItemMenuModel(claudeConnection: false).sections == [[.showPet], [.showTodayReport, .openWardrobe, .openSettings, .connectClaude], [.quitApp]],
         "the menu bar menu offers it too"
     )
     try expect(StatusItemMenuModel(claudeConnection: true).sections[1].last == .disconnectClaude, "menu bar: disconnect when connected")
