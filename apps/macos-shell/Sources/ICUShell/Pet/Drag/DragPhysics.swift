@@ -37,16 +37,17 @@ struct DragPhysicsConfig {
     var dizzyReversals = 4
     var dizzyWindow: TimeInterval = 1.0
     var dizzyDuration: TimeInterval = 1.5
-    /// 松手到完全站稳的总时长：前 fallDuration 是下落，剩下是落地压扁回弹
-    var landingDuration: TimeInterval = 0.7
+    /// 松手到完全站稳的总时长：前 fallDuration 是下落，剩下 0.4s 是落地压扁回弹
+    var landingDuration: TimeInterval = 0.82
     /// 拎着时身体离地抬高多少（pt）：松手后从这里落回地面，才有「下落」的视觉效果
-    var liftHeight: CGFloat = 28
-    /// 松手后下落多久；这段时间身体还是拎着的样子，落地那一刻才换成地上姿势
-    var fallDuration: TimeInterval = 0.3
+    var liftHeight: CGFloat = 56
+    /// 松手后下落多久；这段时间身体还是拎着的样子，落地那一刻才换成地上姿势。
+    /// 和高度一起按同样的重力算（高度 ∝ 时间²）：56pt 约 0.42s，不会变成慢动作
+    var fallDuration: TimeInterval = 0.42
     /// 甩晕后落地，还要在地上晕多久（从落地帧播完起算）
     var groundedDizzyDuration: TimeInterval = 0.8
-    /// 松手后多久必须完全复位
-    var settleDuration: TimeInterval = 0.8
+    /// 松手后多久必须完全复位（落地压扁回弹做完再留 0.1s）
+    var settleDuration: TimeInterval = 0.92
     /// 落地最大压扁量
     var landingSquashAmount: CGFloat = 0.18
 }

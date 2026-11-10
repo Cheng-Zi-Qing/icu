@@ -20,6 +20,13 @@ final class PetBehaviorCoordinator {
     var isAvailable: () -> Bool = { true }
 
     private(set) var activeClip: PetActionClip?
+    /// 你离开电脑了（和开始犯困用同一个时长）
+    private(set) var isUserAway = false
+    var onUserLeft: (() -> Void)?
+    /// 你回来了；桌宠睡着的话，等醒来那段放完才报
+    var onUserReturned: (() -> Void)?
+    /// 每次看过你多久没碰键盘鼠标（使用时长统计顺手用，不再另开计时器）
+    var onUserIdleChecked: ((TimeInterval) -> Void)?
 
     private let sprites: (PetActionClip) -> PetPoseSprites?
     private let userIdle: () -> TimeInterval
@@ -31,6 +38,8 @@ final class PetBehaviorCoordinator {
     private var napPhase = PetNapPhase.awake
     private var clipStartedAt: TimeInterval = 0
     private var nextIdleActionAt: TimeInterval = 0
+    /// 离开后动过键盘鼠标了，等醒来动画放完就算回来
+    private var userCameBack = false
     private var shownFrame: String?
     private var timer: Timer?
 
@@ -77,13 +86,35 @@ final class PetBehaviorCoordinator {
     func tick() {
         let time = now()
         let available = isAvailable()
-        let phase = PetNapSchedule.next(napPhase, userIdle: userIdle(), canNap: available, now: time)
+        let idle = userIdle()
+        let phase = PetNapSchedule.next(napPhase, userIdle: idle, canNap: available, now: time)
         if phase != napPhase {
             napPhase = phase
             applyNapPhase(phase)
         }
         showCurrentFrame()
+        updatePresence(userIdle: idle)
+        onUserIdleChecked?(idle)
         playIdleActionIfDue(available: available, at: time)
+    }
+
+    /// 离开 / 回来各报一次；回来时正在放醒来那段就等它放完
+    private func updatePresence(userIdle idle: TimeInterval) {
+        guard isUserAway else {
+            guard idle >= PetNapSchedule.napAfterIdle else { return }
+            isUserAway = true
+            userCameBack = false
+            onUserLeft?()
+            return
+        }
+        if idle < PetNapSchedule.userReturnedIdle {
+            userCameBack = true
+        }
+        guard userCameBack else { return }
+        if case .waking = napPhase { return }
+        isUserAway = false
+        userCameBack = false
+        onUserReturned?()
     }
 
     /// 醒着、闲着、到点了就随机做个小动作；到点时正忙就往后推

@@ -51,9 +51,9 @@ func testPetLiftWindowKeepsRoomForTheLiftedPet() throws {
     let config = DragPhysicsConfig()
     let room = CGRect(origin: .zero, size: PetLiftWindow.frame(around: liftCanvas).size)
     let canvasInRoom = liftCanvas.offsetBy(dx: PetLiftWindow.sideMargin, dy: PetLiftWindow.bottomMargin)
-    // 拎起窗口的头顶留白得装得下这截抬高，否则松手后脑袋被裁掉一截
+    // 拎起窗口的头顶留白得装得下这截抬高，再加 20pt 给转起来时翘起的画布角，否则松手后脑袋被裁掉一截
     try expect(
-        PetLiftWindow.topMargin >= config.liftHeight,
+        PetLiftWindow.topMargin >= config.liftHeight + 20,
         "the headroom above the canvas should fit the lift height (got \(PetLiftWindow.topMargin), need \(config.liftHeight))"
     )
     // 拎着和下落全程：摆角在松手瞬间还很大，但几十毫秒内就衰掉了，取衰完后的幅度查四角

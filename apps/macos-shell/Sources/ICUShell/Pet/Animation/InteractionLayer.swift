@@ -1,7 +1,7 @@
 import QuartzCore
 import AppKit
 
-/// 交互反馈层 — 点一下蹦一格、双击蹦两格。
+/// 交互反馈层 — 点一下蹦一格、双击蹦两格；场景也可以要求抛高几格。
 ///
 /// 像素桌宠（Shimeji、oneko、VPet 都是逐帧动画）的动作只按整像素走：
 /// 不缩放、不旋转、不做 3D 偏头——那些补间会把像素糊掉，偏头还会让身体盖住状态标签。
@@ -24,6 +24,12 @@ final class InteractionLayer {
 
     func handleDoubleClick(at time: CFTimeInterval) {
         hop = Hop(startTime: time, duration: 0.32, pixels: 2)
+    }
+
+    /// 场景里要求的起跳（干完了开心跳）：抛 `pixels` 个素材像素高，`duration` 秒落地
+    func hop(pixels: Int, duration: CFTimeInterval, at time: CFTimeInterval) {
+        guard pixels > 0, duration > 0 else { return }
+        hop = Hop(startTime: time, duration: duration, pixels: CGFloat(pixels))
     }
 
     func evaluate(at time: CFTimeInterval) -> LayerTransform {

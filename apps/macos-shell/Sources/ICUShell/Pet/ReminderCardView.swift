@@ -95,6 +95,12 @@ final class ReminderCardView: NSView {
         }
     }
 
+    /// 收起：停掉倒计时，不再报结果
+    func deactivate() {
+        stopCountdown()
+        onAction = nil
+    }
+
     // MARK: - 布局与绘制
 
     override func layout() {

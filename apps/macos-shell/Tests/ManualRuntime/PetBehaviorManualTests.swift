@@ -113,9 +113,25 @@ private func observe(
     }
 }
 
+/// 用户 2026-11-09：「豚鼠有时候左右会突然转换」。只理离得近、停得久的鼠标，转完一次歇好一阵
+func testGazeOnlyMindsACursorThatIsCloseAndLingers() throws {
+    try expect(PetGazeTracker.attentionRadius <= 240, "only a cursor right next to it counts (radius \(PetGazeTracker.attentionRadius))")
+    try expect(PetGazeTracker.dwell >= 1.2, "the cursor has to stay put a good second (dwell \(PetGazeTracker.dwell))")
+    try expect(PetGazeTracker.cooldown >= 4, "turns are seconds apart (cooldown \(PetGazeTracker.cooldown))")
+    try expect(PetGazeTracker.homeDwell > PetGazeTracker.dwell, "after the cursor leaves it lingers before turning back")
+
+    let nearby = CGPoint(x: gazeBody.maxX + 120, y: gazeBody.midY)
+    let polls = stride(from: 0.0, to: PetGazeTracker.dwell, by: 0.2).map { (nearby, $0) }
+    let (_, early) = observe(PetGazeTracker(), polls, facingRight: false)
+    try expect(early.isEmpty, "polled again and again, it still waits out the whole dwell (got \(early))")
+    let farther = CGPoint(x: gazeBody.midX + PetGazeTracker.attentionRadius + 20, y: gazeBody.midY)
+    let (_, ignored) = observe(PetGazeTracker(), [(farther, 0), (farther, 5)], facingRight: false)
+    try expect(ignored.isEmpty, "a cursor just outside the radius is ignored")
+}
+
 func testGazeTurnsTowardACursorThatStaysOnTheOtherSide() throws {
     let right = CGPoint(x: gazeBody.maxX + 120, y: gazeBody.midY)
-    let (_, quick) = observe(PetGazeTracker(), [(right, 0), (right, 0.2)], facingRight: false)
+    let (_, quick) = observe(PetGazeTracker(), [(right, 0), (right, PetGazeTracker.dwell - 0.2)], facingRight: false)
     try expect(quick.isEmpty, "a cursor just passing by should not make it turn yet")
 
     let (_, turns) = observe(PetGazeTracker(), [(right, 0), (right, 0.2), (right, PetGazeTracker.dwell)], facingRight: false)
@@ -160,12 +176,16 @@ func testGazeHomeFacingLooksTowardTheMiddleOfTheScreen() throws {
 
 func testGazeTurnsBackHomeOnceTheCursorWandersOff() throws {
     let far = CGPoint(x: gazeBody.maxX + PetGazeTracker.attentionRadius + 300, y: gazeBody.midY)
-    let samples = [(far, 0.0), (far, PetGazeTracker.cooldown), (far, PetGazeTracker.cooldown + PetGazeTracker.dwell)]
-    let (_, turns) = samples.reduce((PetGazeTracker(), [Bool]())) { state, sample in
-        let (next, turn) = state.0.observing(cursor: sample.0, body: gazeBody, facingRight: true, homeFacingRight: false, at: sample.1)
-        return (next, state.1 + (turn.map { [$0] } ?? []))
+    let goHome = { (samples: [(CGPoint, TimeInterval)]) -> [Bool] in
+        samples.reduce((PetGazeTracker(), [Bool]())) { state, sample in
+            let (next, turn) = state.0.observing(cursor: sample.0, body: gazeBody, facingRight: true, homeFacingRight: false, at: sample.1)
+            return (next, state.1 + (turn.map { [$0] } ?? []))
+        }.1
     }
-    try expect(turns == [false], "with the cursor gone it should turn back toward the middle of the screen (got \(turns))")
+    let soon = goHome([(far, 0.0), (far, PetGazeTracker.dwell)])
+    try expect(soon.isEmpty, "it does not spin back the moment the cursor leaves (got \(soon))")
+    let turns = goHome([(far, 0.0), (far, PetGazeTracker.dwell), (far, PetGazeTracker.homeDwell)])
+    try expect(turns == [false], "with the cursor gone a while it should turn back toward the middle of the screen (got \(turns))")
 
     let onBody = CGPoint(x: gazeBody.midX, y: gazeBody.midY)
     let (_, petting) = [(onBody, 0.0), (onBody, 2.0), (onBody, 3.0)].reduce((PetGazeTracker(), [Bool]())) { state, sample in

@@ -3,6 +3,7 @@ import { Grid, SIDES, canvasPixel, partMask } from './raster.mjs';
 import { renderFrontPeek, renderFrontUpright } from './front-peek.mjs';
 import { HEADWEAR, itemIcon, sideHeadwear } from './headwear.mjs';
 import { workFrames } from './front-work.mjs';
+import { renderFrontSit } from './front-sit.mjs';
 
 export const CANVAS_HEIGHT = 32;
 
@@ -26,7 +27,7 @@ const PATTERNS = {
 };
 
 const OVERLAYS = {
-  sweat: [[25, 4], [24, 5], [25, 5], [26, 5], [24, 6], [25, 6], [26, 6], [25, 7]],
+  sweat: [[25, 9], [24, 10], [25, 10], [26, 10], [24, 11], [25, 11], [26, 11], [25, 12]],
   stars: [
     [[8, 0], [7, 1], [8, 1], [9, 1], [8, 2], [25, 3]],
     [[25, 2], [24, 3], [25, 3], [26, 3], [25, 4], [8, 1]],
@@ -47,6 +48,10 @@ const STAMPS = {
     points: [[0, 0], [1, 0], [2, 0], [3, 0], [4, 0], [3, 1], [2, 2], [1, 3], [0, 4], [1, 4], [2, 4], [3, 4], [4, 4]],
   },
   bang: { ink: 'white', points: [[0, 0], [0, 1], [0, 2], [0, 4]] },
+  // 出错时头顶的问号（3×6）
+  question: { ink: 'white', points: [[0, 0], [1, 0], [2, 0], [0, 1], [2, 1], [2, 2], [1, 3], [1, 5]] },
+  // 干完了冒的小星星（十字）
+  sparkle: { ink: 'star', points: [[1, 0], [0, 1], [1, 1], [2, 1], [1, 2]] },
 };
 
 /** 摸头时爱心从背上冒出来往上飘（左上角坐标） */
@@ -66,6 +71,19 @@ const ZZZ_PATH = [
 ];
 
 const BANG_AT = [24, 1];
+/** 问号先冒在背上方低一格，再升到位 */
+// 下面这几个记号都放在背的右上方：草帽的帽檐比橙子往右伸得远，太靠左会压在帽檐上
+const QUESTION_PATH = [
+  { stamp: 'question', at: [28, 5] },
+  { stamp: 'question', at: [28, 3] },
+];
+/** 在等你：背上方一闪一闪的「!」 */
+const ALERT_AT = [27, 3];
+/** 干完了：两颗小星星一前一后亮 */
+const SPARKLE_PATH = [
+  [{ stamp: 'sparkle', at: [25, 8] }],
+  [{ stamp: 'sparkle', at: [25, 8] }, { stamp: 'sparkle', at: [28, 3] }],
+];
 
 // 小鸟（脸朝左，和水豚同向）：按颜色分组的像素，左上角为原点
 const BIRD_SHAPES = {
@@ -190,7 +208,8 @@ function headwearLayer(width, transform, anchorMark, kind) {
  *   tilt(-2...2), twinkle(0|1), dust(0|1), reach, props(柚子 + 草，默认跟姿势走),
  *   nod(打盹低头一格), heart(HEART_PATH 下标), zzz(ZZZ_PATH 下标), bang(醒来的感叹号),
  *   eyes('up' 抬眼), yuzuShift(头顶装扮左右偏几格), bird({ pose: 'sit'|'wingsUp'|'wingsDown', at: [x, y] }),
- *   headwear(头顶戴什么，见 headwear.mjs；默认橙子)
+ *   headwear(头顶戴什么，见 headwear.mjs；默认橙子), yuzuLift(头顶装扮比头高出几格),
+ *   alert(在等你的「!」), question(QUESTION_PATH 下标，出错时的问号), sparkle(SPARKLE_PATH 下标，干完了的小星星)
  */
 export function renderPose(model, name, opts = {}) {
   const pose = model.poses[name];
@@ -235,7 +254,7 @@ function renderBase(model, pose, opts) {
     const grass = canvasPixel(head, model.head.marks.grass.x, model.head.marks.grass.y);
     grid = grid
       .dots('grass', offsetPoints(grass, PATTERNS.grass[opts.chewPhase === 1 ? 1 : 0]))
-      .overlaid(headwearLayer(width, head, { ...model.head.marks.yuzu, x: model.head.marks.yuzu.x + (opts.yuzuShift ?? 0) }, opts.headwear));
+      .overlaid(headwearLayer(width, head, { ...model.head.marks.yuzu, x: model.head.marks.yuzu.x + (opts.yuzuShift ?? 0), y: model.head.marks.yuzu.y - (opts.yuzuLift ?? 0) }, opts.headwear));
   }
   if (opts.face === 'squeeze') grid = grid.dots('sweat', OVERLAYS.sweat);
   if (opts.face === 'dizzy') grid = grid.dots('star', OVERLAYS.stars[opts.twinkle ? 1 : 0]);
@@ -244,6 +263,9 @@ function renderBase(model, pose, opts) {
     opts.heart != null ? HEART_PATH[opts.heart] : null,
     opts.zzz != null ? ZZZ_PATH[opts.zzz] : null,
     opts.bang ? { stamp: 'bang', at: BANG_AT } : null,
+    opts.alert ? { stamp: 'bang', at: ALERT_AT } : null,
+    opts.question != null ? QUESTION_PATH[opts.question] : null,
+    ...(opts.sparkle != null ? SPARKLE_PATH[opts.sparkle] : []),
   ].filter(Boolean);
   const stamped = stamps.reduce((g, stamp) => g.overlaid(stampLayer(width, stamp)), grid);
   return opts.bird ? stamped.overlaid(birdLayer(width, opts.bird)) : stamped;
@@ -353,6 +375,8 @@ export function allFrames(model, { headwear = HEADWEAR[0] } = {}) {
   frames.push(['edge/peek_3.png', front({ flinch: true })]);
   frames.push(['edge/turn_0.png', pose('peek', {})]);
   frames.push(['edge/turn_1.png', pose('peek', { blink: true })]);
+  // 转身那一下先正脸对着你（侧面 → 正面 → 另一侧）
+  frames.push(['turn/front.png', renderFrontSit({ headwear })]);
   // 设置 / 衣柜窗口标题栏上趴着的那只（正面，爪子压在画布底边）
   frames.push(['ui/bar_peek.png', renderFrontUpright({ headwear })]);
   for (const kind of HEADWEAR) frames.push([`ui/item_${kind}.png`, itemIcon(kind)]);
@@ -362,4 +386,4 @@ export function allFrames(model, { headwear = HEADWEAR[0] } = {}) {
 }
 
 /** 素材里按帧重新生成的目录（写之前清空，避免旧帧残留） */
-export const GENERATED_DIRECTORIES = ['idle/main', 'idle/chew', 'drag', 'edge', 'react', 'sleep', 'idle_act', 'ui', 'work'];
+export const GENERATED_DIRECTORIES = ['idle/main', 'idle/chew', 'drag', 'edge', 'react', 'sleep', 'idle_act', 'ui', 'work', 'turn'];

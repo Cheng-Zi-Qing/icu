@@ -8,6 +8,7 @@
 // 每个场景是几张关键帧 + 一个播放顺序（关键帧下标，按 fps 走），写进 work/scenes.json 给 App 读。
 import { Grid } from './raster.mjs';
 import { DEFAULT_MODEL } from './model.mjs';
+import { stateSceneDefinitions } from './state-scenes.mjs';
 import { chaseFrame, CHASE_BEATS } from './chase.mjs';
 import { HEADWEAR } from './headwear.mjs';
 import { frontHead, frontHeadwearAt, frontRow, rect, both, FRONT_SIZE as N } from './front-peek.mjs';
@@ -259,6 +260,8 @@ const SCENE_DEFINITIONS = {
   },
   // 在想事情（还没调用工具）没有专门的场景：保持平时侧身坐着嚼草（用户 2026-11-08 定，正面干坐着太丑）
   delegate: { render: delegateFrame, keys: DELEGATE_KEYS, order: DELEGATE_ORDER },
+  // 在等你 / 干完了 / 出错了：侧身坐姿的三段状态动作（见 state-scenes.mjs）
+  ...stateSceneDefinitions(),
 };
 
 export const WORK_SCENES = Object.keys(SCENE_DEFINITIONS);
@@ -272,9 +275,16 @@ export function workSceneFrames(name, headwear = HEADWEAR[0], model = DEFAULT_MO
 
 /** work/scenes.json：每个场景的帧率和播放顺序（关键帧下标） */
 export function workSceneManifest() {
-  const scenes = Object.fromEntries(Object.entries(SCENE_DEFINITIONS).map(([name, { keys, order, fps, motion }]) => [
+  const scenes = Object.fromEntries(Object.entries(SCENE_DEFINITIONS).map(([name, { keys, order, fps, motion, once, hop }]) => [
     name,
-    { frames: keys.map((_, i) => `${name}_${i}.png`), order, ...(fps ? { fps } : {}), ...(motion ? { motion } : {}) },
+    {
+      frames: keys.map((_, i) => `${name}_${i}.png`),
+      order,
+      ...(fps ? { fps } : {}),
+      ...(motion ? { motion } : {}),
+      ...(once ? { once } : {}),
+      ...(hop ? { hop } : {}),
+    },
   ]));
   return { fps: WORK_FPS, scenes };
 }

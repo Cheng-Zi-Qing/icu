@@ -24,6 +24,18 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
     /// 搜索时追着球跑来跑去（见 PetChaseRunner）
     private var chaseRunner: PetChaseRunner?
     var isChasing: Bool { chaseRunner?.isRunning == true }
+    /// 追球或往回跑时窗口位置是临时的，不存
+    private var isChaseMovingWindow: Bool { isChasing || chaseRunner?.isReturning == true }
+    /// 正在追的那个场景：往回跑的路上接着放它的跑步帧
+    private var chasedActivity: AgentActivity?
+    /// 打扰分级：在等你 > 健康提醒 > 干完了 / 出错了；你不在、全屏时压着（见 PetAttentionCoordinator）
+    private let attention = PetAttentionCoordinator()
+    /// 点了「知道了」的那个会话；它还在等时不再弹卡片，不等了就清掉
+    private var dismissedWait: String?
+    /// 每秒报一次你多久没碰键盘鼠标（使用时长统计）
+    var onUserIdleChecked: ((TimeInterval) -> Void)?
+    /// 「跳过去」：把那个终端叫到前台
+    var activateApp: (String) -> Void = DesktopPetWindowController.activateApplication
     private lazy var contextMenuController = ContextMenuPanelController { [weak self] action in
         self?.handleMenuAction(action)
     }
@@ -93,6 +105,7 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
         window.delegate = self
         configureEdgeDock(window: window, settings: edgeSnapSettings)
         configureGaze(window: window)
+        configureAttention()
         petView.onPetDragEnded = { [weak self] in
             self?.persistCurrentWindowPlacement()
             self?.edgeDock?.dragEnded()
@@ -148,7 +161,7 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
         let gaze = PetGazeController(
             bodyFrameOnScreen: { [weak self] in self?.petBodyFrameOnScreen() },
             isFacingRight: { [weak petView] in petView?.isFacingRight ?? false },
-            onTurn: { [weak petView] facingRight in petView?.setFacingRight(facingRight) }
+            onTurn: { [weak petView] facingRight in petView?.turn(toFacingRight: facingRight) }
         )
         gaze.canTurn = { [weak self] in
             guard let self, self.petView.canTurnTowardCursor else { return false }
@@ -178,8 +191,9 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
             self?.persistWindowPlacement(origin)
         }
         petView.onPetDragStarted = { [weak self, weak edgeDock] in
-            // 被拎起来就不追了，留在手里
+            // 被拎起来就不追了，留在手里（往回跑的路上被拎起来，跑步帧也停）
             self?.chaseRunner?.stop(returnHome: false)
+            if let self { self.petView.setScene(self.attention.stage.scene(work: self.sceneHold.shown)) }
             edgeDock?.dragStarted()
         }
         petView.onPointerEntered = { [weak edgeDock] in edgeDock?.pointerEntered() }
@@ -198,7 +212,32 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
 
+    /// 提醒到点：交给打扰分级决定现在弹、等会儿弹还是跳过
     func presentReminder(payload: ReminderPresentationPayload) {
+        attention.reminderDue(payload)
+    }
+
+    /// 全屏（看视频、演示）时除了「在等你」都先压着
+    func setFullscreen(_ fullscreen: Bool) {
+        attention.fullscreenChanged(fullscreen)
+    }
+
+    private func configureAttention() {
+        attention.onReminderReady = { [weak self] payload in self?.showReminder(payload) }
+        attention.onReminderWithdrawn = { [weak self] in self?.petView.dismissReminderCard() }
+        attention.onDigest = { [weak self] message in
+            // 卡片上已经写着谁在等你了，不再冒一句盖住它
+            guard let self, !self.petView.isShowingWaitCard else { return }
+            self.petView.showTransientMessage(message, duration: PetAttentionCoordinator.digestDuration)
+        }
+        attention.onStageChanged = { [weak self] in self?.applyAgentScene() }
+        petView.onSceneFinished = { [weak self] scene in self?.attention.sceneFinished(scene) }
+        petView.behavior.onUserLeft = { [weak self] in self?.attention.userLeft() }
+        petView.behavior.onUserReturned = { [weak self] in self?.attention.userReturned() }
+        petView.behavior.onUserIdleChecked = { [weak self] idle in self?.onUserIdleChecked?(idle) }
+    }
+
+    private func showReminder(_ payload: ReminderPresentationPayload) {
         let now = nowProvider()
         do {
             try healthTracker.recordReminderShown(payload, at: now)
@@ -225,7 +264,7 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
         // 拖拽中每个事件都会移动窗口，等松手（onPetDragEnded）再落盘；
         // 吸边 / 藏边动画的中间位置也不保存（贴好后由 onDockedOriginSettled 保存）
         // 追球时跑来跑去的位置也不保存（停下会回原位）
-        guard !petView.isDraggingPet, edgeDock?.isManagingWindowPosition != true, !isChasing else { return }
+        guard !petView.isDraggingPet, edgeDock?.isManagingWindowPosition != true, !isChaseMovingWindow else { return }
         persistCurrentWindowPlacement()
     }
 
@@ -237,7 +276,47 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
     func setAgentSummary(_ summary: AgentSummary) {
         guard summary != agentSummary else { return }
         agentSummary = summary
-        applyAgentScene()
+        // 先让打扰分级收起被盖过的提醒卡、挑好场景，再挂在等你的卡片
+        attention.agentChanged(summary)
+        updateWaitCard()
+    }
+
+    /// 在等你：头顶挂卡片（谁在等、等什么、跳过去）；点了「知道了」这一次就不再挂
+    private func updateWaitCard() {
+        if agentSummary.kind != .waiting {
+            dismissedWait = nil
+        }
+        guard let content = AgentWaitCardContent(summary: agentSummary), let key = waitKey, key != dismissedWait else {
+            petView.hideWaitCard()
+            return
+        }
+        petView.showWaitCard(content, onJump: { [weak self] bundleID in
+            self?.activateApp(bundleID)
+            self?.dismissedWait = key
+            self?.petView.hideWaitCard()
+        }, onDismiss: { [weak self] in
+            self?.dismissedWait = key
+            self?.petView.hideWaitCard()
+        })
+    }
+
+    /// 按会话认：同一次等待里还会来补充通知（PermissionRequest 之后的 permission_prompt），记录时间会变
+    private var waitKey: String? {
+        agentSummary.lead?.id ?? (agentSummary.kind == .waiting ? "waiting" : nil)
+    }
+
+    /// 先请那个 App 自己到前台；系统不让（ICU 不在前台时可能被拒）就经 LaunchServices 打开它
+    static func activateApplication(bundleID: String) {
+        if NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first?.activate() == true { return }
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else {
+            NSLog("[ICUShell] could not find \(bundleID) to jump to")
+            return
+        }
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        NSWorkspace.shared.openApplication(at: url, configuration: configuration) { _, error in
+            if let error { NSLog("[ICUShell] could not open \(bundleID): \(error.localizedDescription)") }
+        }
     }
 
     /// 按 Agent 正在干的活换小场景；刚换过不到 3 秒就等够了再换
@@ -246,30 +325,39 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
         sceneRecheck = nil
         let (hold, recheckAfter) = sceneHold.updated(desired: agentSummary.activity, at: ProcessInfo.processInfo.systemUptime)
         sceneHold = hold
-        petView.setWorkActivity(hold.shown)
+        updateChase()
+        // 不追了但还在往回跑：接着放跑步帧，到家再换
+        if chaseRunner?.isReturning == true, let chasedActivity {
+            petView.setScene(.work(chasedActivity))
+        } else {
+            petView.setScene(attention.stage.scene(work: hold.shown))
+        }
         // 字跟着画面换（画面要停够 3 秒，字也一样）；字没变时 setStatusText 什么都不做
         petView.setStatusText(statusText(for: workSessionController.state))
-        updateChase()
         guard let recheckAfter else { return }
         let recheck = DispatchWorkItem { [weak self] in self?.applyAgentScene() }
         sceneRecheck = recheck
         DispatchQueue.main.asyncAfter(deadline: .now() + recheckAfter, execute: recheck)
     }
 
-    /// 正在演追球（搜索）就让窗口跑起来；贴在边上、藏起来、被拎着时不跑。停下回原位、朝回屏幕中间
+    /// 正在演追球（搜索）就让窗口跑起来；贴在边上、藏起来、被拎着时不跑。停下小跑回原位，到家再朝回屏幕中间
     private func updateChase() {
-        let chasing = sceneHold.shown.map { petView.workPlayer.scenes?.chases($0) == true } ?? false
+        let chasing = sceneHold.shown.map { petView.workPlayer.scenes?.chases(.work($0)) == true } ?? false
         let free = edgeDock.map { $0.dock == .none && !$0.isHidden } ?? true
         let shouldRun = chasing && free && !petView.isDraggingPet
         guard shouldRun != isChasing, let window else { return }
         if shouldRun {
             let runner = chaseRunner ?? PetChaseRunner(window: window)
             runner.onFacingChanged = { [weak petView] facingRight in petView?.setFacingRight(facingRight) }
+            runner.onReturnedHome = { [weak self] in
+                self?.faceHome()
+                self?.applyAgentScene()
+            }
             chaseRunner = runner
+            chasedActivity = sceneHold.shown
             runner.start()
         } else {
             chaseRunner?.stop()
-            faceHome()
         }
     }
 
@@ -340,6 +428,7 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
         let now = nowProvider()
         petView.dismissReminderCard()
         applyCurrentStateToView(showBubble: false)
+        defer { attention.reminderClosed(payload.id) }
 
         do {
             try healthTracker.recordReminderOutcome(for: payload, outcome: outcome, at: now)

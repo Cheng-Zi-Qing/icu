@@ -22,11 +22,11 @@ func testPetWorkScenesFollowTheManifestOrderAndLoop() throws {
     guard let scenes = PetWorkScenes(directory: directory, canvasPointSize: NSSize(width: 128, height: 128)) else {
         throw TestFailure(message: "work scenes should load")
     }
-    let names = [0.0, 0.25, 0.5, 0.75].map { scenes.frameName(for: .read, after: $0) }
+    let names = [0.0, 0.25, 0.5, 0.75].map { scenes.frameName(for: .work(.read), after: $0) }
     try expect(names == ["read_0.png", "read_0.png", "read_1.png", "read_0.png"], "plays the order at 4 fps and loops (got \(names))")
-    try expect(scenes.image(for: .read, after: 0) != nil, "frames load as images")
-    try expect(scenes.frameName(for: .eat, after: 0.25) == nil, "an order index past the key frames is skipped rather than crashing")
-    try expect(scenes.frameName(for: .write, after: 0) == nil, "a scene this pet does not have plays nothing")
+    try expect(scenes.image(for: .work(.read), after: 0) != nil, "frames load as images")
+    try expect(scenes.frameName(for: .work(.eat), after: 0.25) == nil, "an order index past the key frames is skipped rather than crashing")
+    try expect(scenes.frameName(for: .work(.write), after: 0) == nil, "a scene this pet does not have plays nothing")
     try expect(PetWorkScenes(directory: directory.appendingPathComponent("missing"), canvasPointSize: NSSize(width: 128, height: 128)) == nil, "no manifest, no scenes")
 }
 
@@ -40,7 +40,7 @@ func testPetWorkScenePlayerStaysQuietForASceneWithoutFrames() throws {
     var reports: [Bool] = []
     player.onImageChanged = { reports.append($0 != nil) }
 
-    player.play(.think)
+    player.play(.work(.think))
     clock = 1
     player.tick()
     player.tick()
@@ -107,9 +107,9 @@ func testPetWorkScenesReadPerSceneSpeedAndMotion() throws {
     guard let scenes = PetWorkScenes(directory: directory, canvasPointSize: NSSize(width: 128, height: 128)) else {
         throw TestFailure(message: "work scenes should load")
     }
-    try expect(scenes.framesPerSecond(for: .search) == 8 && scenes.framesPerSecond(for: .read) == 4, "a scene can run faster than the default")
-    try expect(scenes.frameName(for: .search, after: 0.125) == "search_1.png", "…and its frames follow its own speed")
-    try expect(scenes.chases(.search) && !scenes.chases(.read), "only the chase scene moves the window")
+    try expect(scenes.framesPerSecond(for: .work(.search)) == 8 && scenes.framesPerSecond(for: .work(.read)) == 4, "a scene can run faster than the default")
+    try expect(scenes.frameName(for: .work(.search), after: 0.125) == "search_1.png", "…and its frames follow its own speed")
+    try expect(scenes.chases(.work(.search)) && !scenes.chases(.work(.read)), "only the chase scene moves the window")
 }
 
 /// 追球：从原位先往左跑，跑到头掉头，来回跑；屏幕边上没地方就跑短一点
@@ -151,6 +151,53 @@ func testPetChaseRunnerMovesTheWindowAndBringsItHome() throws {
     try expect(window.frame.origin.x < 400 && window.frame.origin.y == 100, "runs sideways only (got \(window.frame.origin))")
     try expect(facing.last == false, "faces left while running left")
 
+    // 不追了：不是一下子跳回去，而是转身小跑回原位
+    var arrivals = 0
+    runner.onReturnedHome = { arrivals += 1 }
+    let stoppedAt = window.frame.origin.x
     runner.stop()
-    try expect(!runner.isRunning && window.frame.origin == CGPoint(x: 400, y: 100), "goes back to where it sat (got \(window.frame.origin))")
+    try expect(!runner.isRunning && runner.isReturning, "stopped chasing, now heading home")
+    try expect(window.frame.origin.x == stoppedAt, "no jump when it stops (got \(window.frame.origin.x), was \(stoppedAt))")
+    try expect(facing.last == true, "turns around to face home on its right")
+    let trip = PetChaseMotion.returnDuration(from: stoppedAt - 400)
+    clock += trip / 2
+    runner.tick()
+    try expect(window.frame.origin.x > stoppedAt && window.frame.origin.x < 400, "halfway back (got \(window.frame.origin.x))")
+    try expect(arrivals == 0, "not there yet")
+    clock += trip
+    runner.tick()
+    try expect(!runner.isReturning && window.frame.origin == CGPoint(x: 400, y: 100), "back where it sat (got \(window.frame.origin))")
+    try expect(arrivals == 1, "tells the controller once it is home (got \(arrivals))")
+}
+
+/// 往回跑的路上又开始搜：从当前位置接着追，不先跳回原位
+func testPetChaseRunnerResumesWhereItIsWhenSearchingAgain() throws {
+    let screen = CGRect(x: 0, y: 0, width: 1000, height: 800)
+    let window = NSWindow(contentRect: NSRect(x: 400, y: 100, width: 128, height: 128), styleMask: [.borderless], backing: .buffered, defer: true)
+    var clock: TimeInterval = 0
+    let runner = PetChaseRunner(window: window, visibleFrame: { _ in screen }, now: { clock }, startsTimer: false)
+    runner.start()
+    clock = 0.5
+    runner.tick()
+    runner.stop()
+    clock += 0.2
+    runner.tick()
+    let here = window.frame.origin.x
+    runner.start()
+    try expect(runner.isRunning && !runner.isReturning, "chasing again")
+    try expect(abs(window.frame.origin.x - here) <= 1, "picks up from where it is (got \(window.frame.origin.x), was \(here))")
+
+    // 被拎起来：哪儿也不去
+    runner.stop(returnHome: false)
+    try expect(!runner.isRunning && !runner.isReturning, "picked up: stays in the hand")
+}
+
+/// 一个来回里，「往左跑、离原位 offset」是第几秒：往回跑的路上接着追时用
+func testPetChaseMotionFindsWhereToResume() throws {
+    let motion = PetChaseMotion(leftRoom: 60, rightRoom: 60)
+    for offset: CGFloat in [-40, -1, 0, 1, 40] {
+        let position = motion.position(after: motion.elapsed(resumingAt: offset))
+        try expect(abs(position.offset - offset) < 0.01 && !position.movingRight, "resume at \(offset) heading left (got \(position))")
+    }
+    try expect(PetChaseMotion.returnDuration(from: -55) == 1, "55pt at 55pt/s is one second")
 }
