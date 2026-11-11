@@ -73,3 +73,33 @@ func testSettingsWindowOffersRecommendedEyeModes() throws {
     try expect(hourly.fillColor == PixelPalette.yellow && recommended.fillColor != PixelPalette.yellow, "the chosen mode is highlighted")
     try expect(controller.view.eyeModeExplanation.contains("5 分钟"), "the explanation follows the chosen mode")
 }
+
+@MainActor
+func testSettingsWindowOffersTheLanguageSwitchAndRetitlesOnReload() throws {
+    let original = TextCatalog.shared
+    defer { TextCatalog.installShared(original) }
+    TextCatalog.installShared(try TextCatalog.live(repoRootURL: inferredManualTestRepoRootURL(), language: .chinese))
+
+    var chosen: [AppLanguage] = []
+    let controller = SettingsWindowController(
+        form: makeForm(),
+        language: .chinese,
+        decoration: nil,
+        onSelectLanguage: { chosen.append($0) }
+    ) { _ in }
+
+    guard let chinese = controller.view.languageButtons[.chinese], let english = controller.view.languageButtons[.english] else {
+        throw TestFailure(message: "settings should offer one button per language")
+    }
+    try expect(chinese.title == "中文" && english.title == "English", "language names read in the current language")
+    try expect(chinese.fillColor == PixelPalette.yellow, "the current language is highlighted")
+    try expect(!english.frame.isEmpty && controller.view.bounds.contains(english.frame), "the language buttons fit in the panel")
+
+    english.performClick(nil)
+    try expect(chosen == [.english], "picking English tells the caller to save it")
+    try expect(controller.view.language == .english, "the view follows the chosen language")
+
+    TextCatalog.installShared(try TextCatalog.live(repoRootURL: inferredManualTestRepoRootURL(), language: .english))
+    controller.reloadCopy()
+    try expect(chinese.title == "Chinese", "in English the Chinese option is spelled in English")
+}

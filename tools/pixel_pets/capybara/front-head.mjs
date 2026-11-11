@@ -1,9 +1,11 @@
-// 正面的水豚头：贴边探头、标题栏、转身、干活场景都用这一颗，保证正面和侧面是同一只。
+// 正面的水豚头：贴边探头、标题栏、干活场景都用这一颗，保证正面和侧面是同一只。
+// 正脸只从道具后面或屏幕边探出来，不单独正面坐着（2026-11-11 用户：正面干坐着光秃秃的不可爱）。
 //
-// 跟侧面对齐的特征（2026-11-10 统一）：
+// 跟侧面对齐的特征（2026-11-10 统一，2026-11-11 用户觉得「还是不太像豚鼠」后改成面包脸）：
 // - 方方的大脑袋，耳朵是头顶两角的小圆疙瘩（竖在头顶就成了小熊）；
-// - 口鼻是一整块往下伸的宽方块，比脑袋窄一圈，鼻垫是口鼻顶上一道深色横条（侧面那颗大黑鼻头从正面看）；
-// - 眼睛长在脑袋两侧，平时半眯（上面一行眼皮、下面一行眼线），和侧面一样慢悠悠的；
+// - 腮帮下颌比脑壳还宽一点，整张脸像一块面包；口鼻是钝钝的一大块直着下来，不往外凸（凸出来、下巴收尖就是熊和狗）；
+// - 鼻头是一块圆圆的深色鼻垫，下沿两边是鼻孔；底下三瓣嘴「人」字；
+// - 小眼睛长在脑袋两侧偏上，平时半眯（上面一行眼皮、下面一行眼线），和侧面一样慢悠悠的；
 // - 腮红在脸颊上，头顶一道高光，配色全用侧面那套。
 // 坐标：画布 32×32，c 是头中心那一行；头横向以 15 | 16 两列为中线对称。
 import { Grid, partMask } from './raster.mjs';
@@ -27,24 +29,29 @@ const filled = (grid, part, onlyOver = null) => grid.fill(part.ink, partMask(par
 /** 相对头中心的各行（局部 y） */
 export const FRONT_ROWS = Object.freeze({ top: -8, eye: -3, nose: 2, cheek: 1, mouth: 5, chin: 7, hat: -8 });
 /** 左眼最左那一列（右眼镜像） */
-export const EYE_LEFT = 10;
+export const EYE_LEFT = 9;
 
-/** 头的剪影（没描边）：脑壳 + 脸颊 + 往下伸的口鼻 + 两个小耳朵 */
+/**
+ * 头的剪影（没描边）：上面的脑壳 + 下面更宽的腮帮和口鼻 + 两个小耳朵。
+ * 水豚正面是一块「面包」：腮帮下颌最宽、口鼻钝钝的一大块直着下来；上宽下窄、口鼻凸出一块就成了熊和狗
+ */
 export function frontHeadParts(c) {
   return [
-    ellipse('shade', CX - 6.9, c - 6.4, 1.7, 1.6),
-    ellipse('shade', CX + 6.9, c - 6.4, 1.7, 1.6),
-    roundBox('body', CX, c - 2, 15, 11, 4),
-    roundBox('body', CX, c + 3.6, 10.2, 6.6, 2.6),
+    ellipse('shade', CX - 7.2, c - 6.6, 1.6, 1.5),
+    ellipse('shade', CX + 7.2, c - 6.6, 1.6, 1.5),
+    roundBox('body', CX, c - 2.5, 16, 10, 4),
+    roundBox('body', CX, c + 3.5, 18, 9, 3.4),
   ];
 }
 
-/** 已经描好边的剪影上，画口鼻的深色块、鼻垫、耳朵里和头顶高光 */
+/** 已经描好边的剪影上，画口鼻的深色块、宽鼻头和两个鼻孔、耳朵里和头顶高光 */
 export function frontHeadDetails(grid, c) {
   const nose = c + FRONT_ROWS.nose;
-  return filled(grid, roundBox('muzzle', CX, c + 3.6, 8.2, 5.4, 2.2), 'body')
-    .dots('dark', [...rect(13, nose, 18, nose), ...rect(14, nose + 1, 17, nose + 1)])
-    .dots('outline', [[14, nose], [17, nose]])
+  // 鼻头：一块圆圆的深色鼻垫，下沿两边是鼻孔
+  // 口鼻深色那块到下巴上面一行为止：贴边探头时下巴缩在屏幕边后面，深色块还是整块露着
+  return filled(grid, roundBox('muzzle', CX, c + 3.6, 12, 6, 2.4), 'body')
+    .dots('dark', [...rect(14, nose, 17, nose), ...rect(13, nose + 1, 18, nose + 1)])
+    .dots('outline', [[13, nose + 1], [18, nose + 1]])
     .dots('dark', both([[9, c - 7]]))
     .dots('light', rect(13, c - 6, 18, c - 6));
 }
@@ -98,12 +105,13 @@ export function frontFace(grid, c, { eyes = 'relaxed', look = 0, mouth = 'calm',
   }
   const cheek = c + FRONT_ROWS.cheek;
   const m = c + FRONT_ROWS.mouth;
-  g = g.dots('blush', both(rect(9, cheek, 10, cheek)));
+  g = g.dots('blush', both(rect(8, cheek, 9, cheek)));
   g = mouth === 'open'
     ? g.dots('outline', rect(15, m, 16, m + 1)).dots('blush', [[15, m + 1], [16, m + 1]])
     : mouth === 'chew'
       ? g.dots('dark', [[14, m], [15, m + 1], [16, m + 1], [17, m]])
-      : g.dots('dark', rect(15, m, 16, m));
+      // 平时：三瓣嘴「人」字，人中从鼻头底下分开
+      : g.dots('dark', [[15, m - 1], [16, m - 1], [14, m], [17, m]]);
   // 叼着的草：从嘴角越过左脸颊往下垂（和侧面一样往脸前那边垂）
   if (grass) {
     g = g.dots('grass', [...rect(10, m, 14, m), [9, m + 1], [8, m + 2]])

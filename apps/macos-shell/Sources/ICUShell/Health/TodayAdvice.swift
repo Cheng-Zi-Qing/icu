@@ -7,6 +7,8 @@ struct TodayAdvice: Equatable {
         case eyes
         case rest
         case overtime
+        /// 提醒总是「等会儿」
+        case snoozing
         case allGood
     }
 
@@ -22,7 +24,11 @@ struct TodayAdvice: Equatable {
     let text: String
 
     /// 最多给几句：再多就没人看了
-    static let maxCount = 2
+    static let maxCount = 3
+    /// 「做得好」最多列几条
+    static let maxPraise = 2
+    /// 提醒推迟这么多次就说一句
+    static let snoozedOften = 3
 
     /// 上班多久以后才开始评（刚上班几分钟，什么都说不准）
     static let warmUp: TimeInterval = 30 * 60
@@ -46,20 +52,33 @@ struct TodayAdvice: Equatable {
             eyes(day: day, onDuty: onDuty),
             rest(day: day),
             overtime(onDuty: onDuty, plannedSeconds: plannedSeconds),
+            snoozing(day: day),
         ].compactMap { $0 }
         if !actions.isEmpty {
             return Array(actions.prefix(maxCount))
         }
 
-        let praise = [
-            day.hydrationReminder.completed >= cupsGoal && cupsGoal > 0
-                ? TodayAdvice(topic: .water, tone: .good, text: "喝水达标了") : nil,
-            day.eyeReminder.shown > 0 && day.eyeReminder.completionRate >= goodEyeRate
-                ? TodayAdvice(topic: .eyes, tone: .good, text: "护眼做得不错") : nil,
-        ].compactMap { $0 }
+        let praise = praise(day: day, cupsGoal: cupsGoal, workHours: workHours)
         return praise.isEmpty
-            ? [TodayAdvice(topic: .allGood, tone: .good, text: "状态不错，继续保持")]
-            : Array(praise.prefix(maxCount))
+            ? [TodayAdvice(topic: .allGood, tone: .good, text: TextCatalog.shared.text("advice.all_good"))]
+            : praise
+    }
+
+    /// 今天做得好的地方（有该做的事时也照样列出来，报告里单独一栏）
+    static func praise(day: HealthDaySummary, cupsGoal: Int, workHours: Double) -> [TodayAdvice] {
+        let onDuty = TimeInterval(day.onDutyDuration)
+        let plannedSeconds = max(1, workHours) * 3600
+        let busy = TimeInterval(day.workDuration + day.focusDuration)
+        func good(_ topic: Topic, _ key: String) -> TodayAdvice {
+            TodayAdvice(topic: topic, tone: .good, text: TextCatalog.shared.text(key))
+        }
+        let praise = [
+            day.hydrationReminder.completed >= cupsGoal && cupsGoal > 0 ? good(.water, "advice.water_done") : nil,
+            day.eyeReminder.shown > 0 && day.eyeReminder.completionRate >= goodEyeRate ? good(.eyes, "advice.eyes_done") : nil,
+            busy >= restStretch && day.breakCount >= Int(busy / restStretch) ? good(.rest, "advice.rest_done") : nil,
+            onDuty >= plannedSeconds * 0.75 && onDuty <= plannedSeconds + overtimeGrace ? good(.overtime, "advice.hours_done") : nil,
+        ].compactMap { $0 }
+        return Array(praise.prefix(maxPraise))
     }
 
     /// 按上班进度该喝几杯（上班一半就该喝一半），比这少就提醒
@@ -72,7 +91,7 @@ struct TodayAdvice: Equatable {
         guard onDuty >= warmUp else { return nil }
         let behind = expectedCups(cupsGoal: cupsGoal, onDuty: onDuty, plannedSeconds: plannedSeconds) - day.hydrationReminder.completed
         guard behind > 0 else { return nil }
-        return TodayAdvice(topic: .water, tone: .act, text: "该补水了，还差 \(behind) 杯")
+        return TodayAdvice(topic: .water, tone: .act, text: TextCatalog.shared.format("advice.water_behind", behind))
     }
 
     private static func eyes(day: HealthDaySummary, onDuty: TimeInterval) -> TodayAdvice? {
@@ -80,17 +99,23 @@ struct TodayAdvice: Equatable {
         let skippedMost = eye.shown >= 2 && eye.completionRate < lowEyeRate
         let neverRested = onDuty >= eyeStretch && eye.completed == 0
         guard skippedMost || neverRested else { return nil }
-        return TodayAdvice(topic: .eyes, tone: .act, text: "眼睛该放松了，看看远处")
+        return TodayAdvice(topic: .eyes, tone: .act, text: TextCatalog.shared.text("advice.eyes_rest"))
     }
 
     private static func rest(day: HealthDaySummary) -> TodayAdvice? {
         let busy = TimeInterval(day.workDuration + day.focusDuration)
         guard busy >= restStretch, day.breakCount == 0 else { return nil }
-        return TodayAdvice(topic: .rest, tone: .act, text: "还没休息过，起来走走")
+        return TodayAdvice(topic: .rest, tone: .act, text: TextCatalog.shared.text("advice.rest_break"))
+    }
+
+    private static func snoozing(day: HealthDaySummary) -> TodayAdvice? {
+        let snoozed = day.eyeReminder.snoozed + day.hydrationReminder.snoozed
+        guard snoozed >= snoozedOften else { return nil }
+        return TodayAdvice(topic: .snoozing, tone: .act, text: TextCatalog.shared.format("advice.snoozed_often", snoozed))
     }
 
     private static func overtime(onDuty: TimeInterval, plannedSeconds: TimeInterval) -> TodayAdvice? {
         guard onDuty > plannedSeconds + overtimeGrace else { return nil }
-        return TodayAdvice(topic: .overtime, tone: .act, text: "上班超时了，早点收工")
+        return TodayAdvice(topic: .overtime, tone: .act, text: TextCatalog.shared.text("advice.overtime"))
     }
 }

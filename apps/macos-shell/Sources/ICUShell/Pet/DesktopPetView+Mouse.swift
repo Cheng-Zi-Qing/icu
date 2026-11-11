@@ -6,12 +6,6 @@ extension DesktopPetView {
 
     /// 透明像素（alpha ≈ 0）不响应鼠标事件，点击可穿透到桌面
     override func hitTest(_ point: NSPoint) -> NSView? {
-        if !reminderCardView.isHidden {
-            let reminderPoint = convert(point, to: reminderCardView)
-            if reminderCardView.bounds.contains(reminderPoint) {
-                return reminderCardView.interactiveHitView(at: reminderPoint) ?? reminderCardView
-            }
-        }
         if !waitCardView.isHidden {
             let cardPoint = convert(point, to: waitCardView)
             if waitCardView.bounds.contains(cardPoint) {
@@ -126,7 +120,9 @@ extension DesktopPetView {
 
     override func mouseDown(with event: NSEvent) {
         isPressingPet = true
-        updateCursor(at: convert(event.locationInWindow, from: nil))
+        let point = convert(event.locationInWindow, from: nil)
+        pokePressPoint = point
+        updateCursor(at: point)
         animationEngine.handleMouseDown()
         if event.clickCount == 2 {
             animationEngine.handleDoubleClick()
@@ -139,8 +135,13 @@ extension DesktopPetView {
 
     override func mouseUp(with event: NSEvent) {
         isPressingPet = false
+        let pressPoint = pokePressPoint
+        pokePressPoint = nil
         if dragController.mouseUp() {
             onPetDragEnded?()
+        } else if let pressPoint {
+            // 点了没拖：戳了一下
+            handlePoke(at: pressPoint)
         }
         updateCursor(at: convert(event.locationInWindow, from: nil))
     }

@@ -7,7 +7,7 @@ import { FRONT_SIZE, both, frontFace, frontHead, frontHeadwearLayer, rect } from
 
 const N = FRONT_SIZE;
 
-// 正面那颗头在 front-head.mjs（和转身、干活场景同一颗）。画布第 ROW0 行是头中心：
+// 正面那颗头在 front-head.mjs（和干活场景同一颗）。画布第 ROW0 行是头中心：
 // 下巴缩在屏幕边后面一格，只露出半截口鼻，探出来的长度和侧身探头差不多
 const ROW0 = 25;
 

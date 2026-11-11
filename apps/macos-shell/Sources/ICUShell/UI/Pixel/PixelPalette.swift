@@ -21,6 +21,8 @@ enum PixelPalette {
     static let meadow = rgb(0xC6E0A8)
     /// 衣柜格子：穿着的那件铺浅黄
     static let wornCell = rgb(0xFCEBB0)
+    /// 今日报告评分偏低时的底色
+    static let reportTired = rgb(0xF8D9D2)
     static let white = NSColor.white
     static let shadow = rgb(0x2F1C12, alpha: 0.35)
     static let highlight = NSColor(white: 1, alpha: 0.45)

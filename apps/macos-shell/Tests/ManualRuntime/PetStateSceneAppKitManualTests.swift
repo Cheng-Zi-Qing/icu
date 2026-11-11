@@ -33,6 +33,7 @@ func testPetScenesNameTheManifestEntries() throws {
     try expect(PetScene.done.name == "done" && PetScene.failed.name == "fail", "done / failed map to `done` / `fail`")
     try expect(PetScene.work(.search).activity == .search && PetScene.waiting.activity == nil, "only work scenes carry an activity")
     try expect(PetScene.waiting.facesSideways && !PetScene.work(.read).facesSideways, "state scenes are side-on like idle, work scenes face the viewer")
+    try expect(PetScene.work(.delegate).facesSideways, "releasing the bird is side-on too (no bare front-facing sit)")
 }
 
 func testPetWorkScenesPlayOnceScenesToTheEndAndReadTheHop() throws {
@@ -154,10 +155,10 @@ func testPetWaitsWithACardThenCelebratesAndLetsTheReminderThrough() throws {
     controller.setAgentSummary(AgentSummary(kind: .waiting, count: 1, lead: waiting))
     try expect(view.scene == .waiting, "waiting: the waving loop (got \(String(describing: view.scene)))")
     try expect(view.isShowingWaitCard && view.waitCardView.content?.title == "icu 在等你", "a card says who waits")
-    try expect(controller.window?.frame.height == DesktopPetView.reminderExpandedContentSize.height, "the window grows to fit the card")
+    try expect(controller.window?.frame.height == DesktopPetView.cardExpandedContentSize.height, "the window grows to fit the card")
 
     controller.presentReminder(payload: ReminderPresentationPayload(id: UUID(), type: .hydration, text: "喝水"))
-    try expect(view.reminderCardView.isHidden, "a reminder waits behind the agent")
+    try expect(!controller.reminderStage.isShowing, "a reminder waits behind the agent")
 
     try expect(view.waitCardView.interactiveHitView(at: NSPoint(x: 20, y: 10)) === view.waitCardView, "the card body is clickable too")
     try testWaitCardTextFitsTheCard(view.waitCardView)
@@ -171,10 +172,10 @@ func testPetWaitsWithACardThenCelebratesAndLetsTheReminderThrough() throws {
 
     let done = AgentSession(record: ["v": 1, "session": "s1", "event": "Stop", "at": 2.0, "project": "icu"])
     controller.setAgentSummary(AgentSummary(kind: .done, count: 1, lead: done))
-    try expect(!view.reminderCardView.isHidden, "the held reminder comes out once nothing waits")
-    try expect(view.scene == nil, "the celebration waits behind the reminder card (L2 over L1)")
+    try expect(controller.reminderStage.isShowing, "the held reminder comes out once nothing waits")
+    try expect(view.scene == .remind(.hydration), "the pet drinks along; the celebration waits behind the reminder (L2 over L1)")
 
-    view.reminderCardView.onAction?(.completed)
+    controller.reminderStage.stageView?.onAction?(.completed)
     try expect(view.scene == .done, "after the card the pet celebrates (got \(String(describing: view.scene)))")
     view.workPlayer.finishForTesting()
     try expect(view.scene == nil, "and settles back to idle")

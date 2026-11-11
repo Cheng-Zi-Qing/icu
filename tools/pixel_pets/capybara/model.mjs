@@ -104,34 +104,41 @@ export const DEFAULT_MODEL = Object.freeze({
       ],
     },
     peek: {
-      // 贴边探头：和「趴着」整张逆时针转 90°（头朝上）的方向一致，
-      // 但只露出小柚子和半个脑袋，身体藏在屏幕边（画布右边）外
+      // 贴边转头（edge/turn_*）：坐姿的头逆时针转 90° 再上下翻（鼻子朝上、头顶朝屏幕里），
+      // 脖子和背直接用坐姿的后颈、背、胸口、肚子、屁股：坐姿侧面那条从后脑勺往后弯的背弧，
+      // 转过来就是从后脑勺往下、再弯进屏幕边的弧线（不是一根直线，也不是细长脖子）。腿脚不画，藏在屏幕外。
+      // 和正面探头来回切，所以头探出来的多少、上下位置都对齐正面那颗头；正面不叼草，这里也不叼
       width: 32,
-      from: 'lie',
+      from: 'sit',
       headOnly: true,
+      keepParts: ['nape', 'back', 'chest', 'belly', 'hips'],
+      grass: false,
       turn: -1,
       flipY: true,
       offsetX: 11,
-      offsetY: 5,
+      offsetY: 6,
       reachPixels: 1,
     },
     hold: {
       width: 32,
-      head: { x: 13.5, y: 12, rot: 0, scale: 1 },
+      // 头的小数位置和坐姿一样（都落在半格上），栅格化出来才是同一颗头
+      head: { x: 13.5, y: 12.5, rot: 0, scale: 1 },
       yuzu: true,
       pivotRow: 17,
       tiltDegrees: 8,
       parts: [
-        box('farHindLeg', '远侧后腿', 'shade', 14, 28.5, 2, 5, 0),
-        box('nearHindLeg', '近侧后腿', 'body', 19, 28.5, 2, 5, 0),
-        ell('neck', '后颈', 'body', 18.5, 17, 4.6, 4),
-        ell('belly', '圆肚子', 'body', 15, 21.6, 8.2, 7),
-        ell('tummy', '浅色肚皮', 'light', 12.8, 22.6, 4.4, 5, { onlyOver: 'body' }),
+        // 身子和坐姿一样壮（见 capybara.test.mjs 的体量检查）：肚子、屁股各一团，垂下来不缩水
+        box('farHindLeg', '远侧后腿', 'shade', 15, 28.5, 2, 5, 0),
+        box('nearHindLeg', '近侧后腿', 'body', 21, 28.5, 2, 5, 0),
+        ell('neck', '后颈', 'body', 19.5, 16.5, 5.6, 4.6),
+        ell('rump', '屁股', 'body', 20.5, 23, 8, 6.6),
+        ell('belly', '圆肚子', 'body', 15.5, 22, 9.6, 7.4),
+        ell('tummy', '浅色肚皮', 'light', 12.8, 22.8, 4.8, 5, { onlyOver: 'body' }),
         HEAD,
         cap('frontLeg', '前腿（垂在胸前）', 'body', 9.5, 19, 8.5, 22, 1.4, { edge: 'inner' }),
         ell('frontPawTip', '前爪尖', 'dark', 8.5, 22.4, 1.4, 0.9, { onlyOver: 'body' }),
-        box('hindPaws', '后爪', 'dark', 16.5, 30, 7, 2, 0, { onlyOver: 'body' }),
-        box('hindPawFar', '远侧后爪', 'dark', 14, 30, 2, 2, 0, { onlyOver: 'shade' }),
+        box('hindPaws', '后爪', 'dark', 21, 30, 2, 2, 0, { onlyOver: 'body' }),
+        box('hindPawFar', '远侧后爪', 'dark', 15, 30, 2, 2, 0, { onlyOver: 'shade' }),
       ],
       marks: [],
     },

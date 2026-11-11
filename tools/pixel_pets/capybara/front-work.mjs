@@ -1,9 +1,10 @@
-// Agent 干活时的小场景：读文件翻书、改代码写字、跑命令吃饭、派子 Agent 放小鸟、在想（正面），
+// Agent 干活时的小场景：读文件翻书、改代码写字、跑命令吃饭（正面，从道具后面探出头），
+// 派子 Agent 放小鸟是侧身（state-scenes.mjs），
 // 搜索是侧身追球（chase.mjs，2026-11-08 用户要「追着球跑来跑去」）。
 //
 // 规则（2026-11-08 跟用户定的）：
 // - 用贴边那颗正面的头（front-peek.mjs），三视图比例一致；
-// - 道具大，挡住身体，只从道具后面探出头（在想 / 放小鸟没有道具，就是正面坐着）；
+// - 道具大，挡住身体，只从道具后面探出头（没有道具的就不用正脸：正面干坐着光秃秃的）；
 // - 眼珠扫、头微动，不会定住；每轮一个主动作，最后抬头看你一次。
 // 每个场景是几张关键帧 + 一个播放顺序（关键帧下标，按 fps 走），写进 work/scenes.json 给 App 读。
 import { Grid } from './raster.mjs';
@@ -12,7 +13,6 @@ import { stateSceneDefinitions } from './state-scenes.mjs';
 import { chaseFrame, CHASE_BEATS } from './chase.mjs';
 import { HEADWEAR } from './headwear.mjs';
 import { frontFace, frontHead, frontHeadwearLayer, rect, FRONT_SIZE as N } from './front-head.mjs';
-import { renderFrontSit } from './front-sit.mjs';
 
 /** 场景里头中心那一行：头整体抬高，给下面的道具腾地方（道具挡住下巴，嘴和鼻头露在外面） */
 const HEAD_ROW = 15;
@@ -24,7 +24,7 @@ const layer = () => Grid.empty(N, N);
 
 // ---------------- 头 ----------------
 
-/** 正面那颗头（和贴边、转身同一颗）带表情和头顶装扮；eyes 见 front-head.mjs 的 frontFace */
+/** 正面那颗头（和贴边同一颗）带表情和头顶装扮；eyes 见 front-head.mjs 的 frontFace */
 function headAt(c, faceOptions, headwear) {
   return frontFace(frontHead(c), c, faceOptions).overlaid(frontHeadwearLayer(headwear, c));
 }
@@ -177,31 +177,6 @@ for (const level of [3, 2, 1]) {
 EAT_KEYS.push({ level: 0, eyes: 'open' }, { level: 3, eyes: 'open' });
 EAT_ORDER.push(9, 9, 9, 9, 10, 10);
 
-// ---------------- 放小鸟（派子 Agent） ----------------
-
-function bird([x, y], wingUp) {
-  return layer()
-    .dots('bird', [...rect(x, y, x + 2, y + 1), [x - 1, y]])
-    .dots('birdWing', wingUp ? [[x + 1, y - 1], [x + 2, y - 1]] : [[x + 1, y + 2], [x + 2, y + 2]])
-    .outlined()
-    .dots('star', [[x - 2, y]])
-    .dots('outline', [[x, y]]);
-}
-
-const BIRD_PATH = [null, [20, 5], [23, 3], [26, 2], [28, 1], null, null, [28, 1], [26, 2], [23, 3], [20, 5], null];
-function delegateFrame({ step, headwear }) {
-  const spot = BIRD_PATH[step];
-  const look = spot ? 1 : 0;
-  // 小鸟在飞就睁眼盯着，没鸟的时候和平时一样半眯
-  const eyes = step === BIRD_PATH.length - 1 ? 'happy' : spot ? 'open' : 'relaxed';
-  // 和转身那一下同一个正面坐姿，只是抬眼盯着飞走又飞回来的小鸟
-  const scene = renderFrontSit({ headwear, eyes, look });
-  return spot ? scene.overlaid(bird(spot, step % 2 === 0)) : scene;
-}
-
-const DELEGATE_KEYS = BIRD_PATH.map((_, step) => ({ step }));
-const DELEGATE_ORDER = [0, 0, 0, 1, 2, 3, 4, 5, 5, 6, 6, 7, 8, 9, 10, 11, 11, 11];
-
 // ---------------- 汇总 ----------------
 
 /** 场景名（App 用同样的名字）→ 关键帧画法、关键帧参数、播放顺序 */
@@ -219,8 +194,7 @@ const SCENE_DEFINITIONS = {
     motion: 'chase',
   },
   // 在想事情（还没调用工具）没有专门的场景：保持平时侧身坐着嚼草（用户 2026-11-08 定，正面干坐着太丑）
-  delegate: { render: delegateFrame, keys: DELEGATE_KEYS, order: DELEGATE_ORDER },
-  // 在等你 / 干完了 / 出错了：侧身坐姿的三段状态动作（见 state-scenes.mjs）
+  // 派子 Agent 放小鸟、在等你 / 干完了 / 出错了、两段健康提醒：侧身坐姿（见 state-scenes.mjs）
   ...stateSceneDefinitions(),
 };
 

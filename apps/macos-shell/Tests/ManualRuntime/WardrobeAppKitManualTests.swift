@@ -202,3 +202,27 @@ func testWardrobeCoordinatorFallsBackToTheBuiltInCatalog() throws {
     ) { _ in }
     try expect(coordinator.catalog == .builtIn, "a missing wardrobe.json still gives the orange and the straw hat")
 }
+
+func testWardrobeReloadsItsCopyWhenTheLanguageChanges() throws {
+    let original = TextCatalog.shared
+    defer { TextCatalog.installShared(original) }
+    TextCatalog.installShared(try TextCatalog.live(repoRootURL: inferredManualTestRepoRootURL(), language: .chinese))
+
+    let controller = try makeWardrobe(WardrobeProbe())
+    try expect(controller.view.tabButtons[.head]?.title == "头顶", "tabs start in Chinese")
+    let orangeBefore = try cell("orange", in: controller)
+    try expect(orangeBefore.accessibilityLabel() == "橙子", "item names start in Chinese")
+
+    TextCatalog.installShared(try TextCatalog.live(repoRootURL: inferredManualTestRepoRootURL(), language: .english))
+    NotificationCenter.default.post(name: .icuCopyDidChange, object: nil)
+
+    try expect(controller.view.tabButtons[.head]?.title == "Head", "tabs follow the language")
+    let orangeAfter = try cell("orange", in: controller)
+    try expect(orangeAfter.accessibilityLabel() == "Orange", "cells are rebuilt with the new names")
+    try expect(controller.view.suitButtons.first?.title == "Default", "suit buttons are rebuilt with the new names")
+    let locked = controller.view.cells.first { $0.look == .locked }
+    try expect(
+        locked?.accessibilityLabel() == "Not unlocked yet. Finishing reminders can drop it",
+        "the locked hint follows too (got \(String(describing: locked?.accessibilityLabel())))"
+    )
+}

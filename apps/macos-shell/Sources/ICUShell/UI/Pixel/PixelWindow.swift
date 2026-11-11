@@ -58,7 +58,7 @@ enum PixelPanelChrome {
         let button = PixelButton(icon: .crossWhite, identifier: identifier)
         button.frame = closeButtonFrame()
         button.fillColor = PixelPalette.blush
-        button.setAccessibilityLabel("关闭")
+        button.setAccessibilityLabel(TextCatalog.shared.text("common.close"))
         return button
     }
 

@@ -17,8 +17,9 @@ $ARGUMENTS
 
 PRD 文档存放在 Obsidian Vault：
 ```
-~/Documents/Obsidian Vault/个性项目/icu/prd/
+~/Library/Mobile Documents/com~apple~CloudDocs/Documents/Obsidian Vault/个性项目/icu/prd/
 ```
+（Vault 在 iCloud Drive 里，`~/Documents` 下没有）。新增 PRD 后，同步在 `个性项目/icu/00-阅读入口.md` 的 PRD 表里加一行。
 
 其他报告文档存放在项目本地：
 ```

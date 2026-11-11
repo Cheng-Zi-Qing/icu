@@ -60,7 +60,9 @@ func testDesktopPetStatusChipHugsItsTextAndCentersUnderThePet() throws {
 
 func testDesktopPetStatusChipUsesAFontThatCoversChineseAndNeverTruncates() throws {
     let view = try makePeekablePetView()
-    for text in ["待机中", "专注工作中", "Idle"] {
+    // 四种状态的标签（中英文都在 config/copy/ 里），桌宠底下的胶囊放得下、不出省略号
+    let labels = ["发呆中", "陪你上班", "安静陪着", "等你回来", "Chilling", "With you", "Staying quiet", "Waiting"]
+    for text in labels + ["专注工作中"] {
         view.setStatusText(text)
         view.layoutSubtreeIfNeeded()
         let chip = try requireStatusLabel(in: view)
@@ -147,7 +149,7 @@ func testDesktopPetOverlaysStayInFrontOfATiltedPet() throws {
         "desktopPet.statusLabel",
         "desktopPet.transientBubbleContainer",
         "desktopPet.transientBubbleTail",
-        "desktopPet.reminderCard",
+        "desktopPet.waitCard",
     ]
     for id in overlayIDs {
         let overlay = try require(

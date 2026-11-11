@@ -1,6 +1,6 @@
 import Foundation
 
-/// 桌宠可以演的一段场景：Agent 在干活时的小场景，或者 Agent 状态的三段动作。
+/// 桌宠可以演的一段场景：Agent 在干活时的小场景、Agent 状态的三段动作，或者健康提醒的配套动作。
 /// `name` 就是 `work/scenes.json` 里的场景名
 enum PetScene: Equatable {
     case work(AgentActivity)
@@ -10,6 +10,8 @@ enum PetScene: Equatable {
     case done
     /// 出错了：歪头冒问号（只放一遍）
     case failed
+    /// 健康提醒挂着时跟着做：该喝水了捧杯子喝，该护眼了抬头望远处（循环到提醒关掉）
+    case remind(HealthReminderType)
 
     var name: String {
         switch self {
@@ -17,6 +19,8 @@ enum PetScene: Equatable {
         case .waiting: return "wait"
         case .done: return "done"
         case .failed: return "fail"
+        case .remind(.hydration): return "drink"
+        case .remind(.eyeCare): return "look_away"
         }
     }
 
@@ -30,9 +34,9 @@ enum PetScene: Equatable {
         self == .done || self == .failed
     }
 
-    /// 侧身坐着演（和待机一样），可以转头看鼠标；干活小场景是正脸的
+    /// 侧身坐着演（和待机一样），可以转头看鼠标；干活小场景是正脸的，派子 Agent 放小鸟除外（侧身）
     var facesSideways: Bool {
-        activity == nil
+        activity == nil || activity == .delegate
     }
 }
 

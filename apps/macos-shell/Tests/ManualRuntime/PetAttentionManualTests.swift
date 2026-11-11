@@ -212,3 +212,24 @@ func testAgentWaitCardSaysWhoWaitsAndWhatFor() throws {
     record["tool"] = "mcp__claude_ai_Claude_Docs__batch"
     try expect(AgentWaitCardContent(summary: summary(.waiting, AgentSession(record: record)))?.detail == "回终端批准 batch", "an MCP tool shows its action name")
 }
+
+/// 已经点了「开始休息」、屏幕被全屏休息盖着：来了「在等你」也不打断，歇完再说
+@MainActor
+func testPetAttentionLetsAStartedRestFinishBeforeAWaitingAgent() throws {
+    let probe = AttentionProbe()
+    let attention = probe.coordinator
+    let eye = reminder(.eyeCare, "看远处")
+
+    attention.reminderDue(eye)
+    attention.reminderRestStarted(UUID())
+    try expect(!attention.isResting, "only the card on screen can start a rest")
+    attention.reminderRestStarted(eye.id)
+    attention.agentChanged(summary(.waiting, session("a", "PermissionRequest")))
+    try expect(probe.withdrawn == 0 && attention.isResting, "a rest that already started is not cut short")
+    try expect(attention.showingReminderID == eye.id, "the reminder is still the one on screen")
+
+    attention.reminderClosed(eye.id)
+    try expect(!attention.isResting && attention.showingReminderID == nil, "the rest is over")
+    attention.reminderDue(reminder(.hydration, "喝水"))
+    try expect(probe.reminders == ["看远处"], "the agent is still waiting, so the next reminder is held")
+}

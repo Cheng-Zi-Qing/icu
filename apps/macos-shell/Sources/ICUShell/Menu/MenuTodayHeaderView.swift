@@ -14,7 +14,7 @@ final class MenuTodayHeaderView: NSView {
         identifier = NSUserInterfaceItemIdentifier("menu-today")
         setAccessibilityElement(true)
         setAccessibilityRole(.staticText)
-        setAccessibilityLabel("今天：喝水 \(summary.cupsText)，护眼 \(summary.eyeText)，工作 \(summary.workText)")
+        setAccessibilityLabel(TextCatalog.shared.format("menu.today_accessibility", summary.cupsText, summary.eyeText, summary.workText))
     }
 
     @available(*, unavailable)
@@ -23,7 +23,7 @@ final class MenuTodayHeaderView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        PixelPaint.text("今天", in: NSRect(x: 8, y: 4, width: bounds.width - 16, height: 20), color: PixelPalette.shade)
+        PixelPaint.text(TextCatalog.shared.text("menu.today"), in: NSRect(x: 8, y: 4, width: bounds.width - 16, height: 20), color: PixelPalette.shade)
         let items: [(PixelIcon, String)] = [(.drop, summary.cupsText), (.eye, summary.eyeText), (.clock, summary.workText)]
         var x: CGFloat = 8
         let row = NSRect(x: 0, y: 28, width: bounds.width, height: 22)

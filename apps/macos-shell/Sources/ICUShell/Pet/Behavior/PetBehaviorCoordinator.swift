@@ -1,7 +1,7 @@
 import AppKit
 import CoreGraphics
 
-/// 摸头、打盹、待机小动作：把鼠标动作、用户离开时长、随机节奏变成要叠在待机动画上的逐帧画面。
+/// 摸头、被戳、打盹、待机小动作：把鼠标动作、用户离开时长、随机节奏变成要叠在待机动画上的逐帧画面。
 ///
 /// 画面优先级由视图决定：拖拽 > 贴边探头 > 这里的片段 > 待机动画。
 /// `onImageChanged(nil)` 表示没有片段在放，视图回到待机动画。
@@ -35,6 +35,7 @@ final class PetBehaviorCoordinator {
     private let startsTimer: Bool
 
     private var stroke = PetStrokeDetector()
+    private var pokes = PetPokeTracker()
     private var napPhase = PetNapPhase.awake
     private var clipStartedAt: TimeInterval = 0
     private var nextIdleActionAt: TimeInterval = 0
@@ -80,6 +81,20 @@ final class PetBehaviorCoordinator {
 
     func pointerExited() {
         stroke = PetStrokeDetector()
+    }
+
+    /// 被戳了一下（点了没拖）。戳哪儿放哪段反应，短时间戳太多下就生气；返回放的是哪段。
+    ///
+    /// 不放的时候返回 nil：睡着时（这一下会把它叫醒，醒来那段先放），正在生气时（气头上不理你）
+    @discardableResult
+    func poked(_ zone: PetPokeZone) -> PetActionClip? {
+        guard napPhase == .awake, activeClip != .grumpy else { return nil }
+        let (next, overdone) = pokes.registering(at: now())
+        pokes = next
+        let clip = overdone ? PetActionClip.grumpy : zone.reaction
+        guard sprites(clip)?.image(named: clip.frameNames[0]) != nil else { return nil }
+        play(clip)
+        return clip
     }
 
     /// 推进一拍：更新打盹阶段、片段播到哪一帧、该不该做个小动作
@@ -140,7 +155,8 @@ final class PetBehaviorCoordinator {
         case .napping: play(.nap)
         case .waking: play(.wake)
         case .awake:
-            if activeClip != .petted { stop() }
+            // 醒着时自己点出来的片段（摸头、被戳）放完为止
+            if activeClip != .petted && activeClip?.isPokeReaction != true { stop() }
         }
     }
 

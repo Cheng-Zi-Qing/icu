@@ -53,6 +53,7 @@ final class HealthSessionTracker {
         // 只入账整秒，零头留给下一次，免得每分钟结一次越结越少
         let settled = try settle(activeState, upTo: date)
         activeStateStartedAt = startedAt.addingTimeInterval(settled)
+        try store.recordStillOnDuty(at: date)
     }
 
     /// 电脑要睡了：先把睡前这段结掉，睡着的时间不算
@@ -68,6 +69,12 @@ final class HealthSessionTracker {
         if activeState != nil {
             activeStateStartedAt = date
         }
+    }
+
+    /// 启动时调：上次 App 意外退出（被强退 / 崩溃 / 断电）没来得及下班，按最后确认还在上班的时刻补上下班打卡
+    @discardableResult
+    func closeInterruptedShifts() throws -> Int {
+        try store.closeInterruptedShifts()
     }
 
     /// App 要退出了：还在上班就当成下班，把最后一段结掉

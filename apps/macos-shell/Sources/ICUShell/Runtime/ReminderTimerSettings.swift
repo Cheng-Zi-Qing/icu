@@ -12,9 +12,9 @@ enum EyeCareMode: String, CaseIterable, Equatable {
 
     var title: String {
         switch self {
-        case .rule202020: return "20-20-20 推荐"
-        case .hourlyBreak: return "每小时歇歇"
-        case .custom: return "自定义"
+        case .rule202020: return TextCatalog.shared.text("eye_mode.rule202020")
+        case .hourlyBreak: return TextCatalog.shared.text("eye_mode.hourly_break")
+        case .custom: return TextCatalog.shared.text("eye_mode.custom")
         }
     }
 
@@ -27,7 +27,7 @@ enum EyeCareMode: String, CaseIterable, Equatable {
         }
     }
 
-    /// 每次提醒要休息多久（提醒卡倒计时）
+    /// 每次提醒要休息多久（全屏休息倒计时）
     var restSeconds: TimeInterval {
         self == .hourlyBreak ? 5 * 60 : 20
     }
@@ -36,11 +36,11 @@ enum EyeCareMode: String, CaseIterable, Equatable {
     var explanation: String {
         switch self {
         case .rule202020:
-            return "推荐：每 20 分钟看 6 米外 20 秒。眼科协会推荐，2023 年研究显示能减轻眼疲劳和干眼症状。"
+            return TextCatalog.shared.text("eye_mode.rule202020_explanation")
         case .hourlyBreak:
-            return "每小时离开屏幕歇 5 分钟。NIOSH 研究：眼酸、视物模糊更少，效率不降。"
+            return TextCatalog.shared.text("eye_mode.hourly_break_explanation")
         case .custom:
-            return "自己定间隔，每次看 6 米外 20 秒。"
+            return TextCatalog.shared.text("eye_mode.custom_explanation")
         }
     }
 }

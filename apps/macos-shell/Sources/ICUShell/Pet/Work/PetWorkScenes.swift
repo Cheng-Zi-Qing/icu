@@ -7,7 +7,8 @@ import AppKit
 /// ```
 /// `order` 是关键帧下标，按 fps 一拍一个，放完从头循环。场景名见 `PetScene.name`。
 /// 场景可以有自己的 `fps`；`"motion": "chase"` 表示边演边把窗口左右来回挪（搜索时追球）；
-/// `"once": true` 只放一遍；`"hop": { "atBeat", "pixels", "beats" }` 在第几拍把整只往上抛几格、抛几拍。
+/// `"once": true` 表示只放一遍；
+/// `"hop": { "atBeat", "pixels", "beats" }` 在第几拍把整只往上抛几格、抛几拍。
 final class PetWorkScenes {
     private struct Manifest: Decodable {
         struct Hop: Decodable {

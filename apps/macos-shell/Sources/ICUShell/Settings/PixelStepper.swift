@@ -22,8 +22,8 @@ final class PixelStepper: NSView {
         let side = Self.size.height
         minusButton.frame = NSRect(x: 0, y: 0, width: side, height: side)
         plusButton.frame = NSRect(x: Self.size.width - side, y: 0, width: side, height: side)
-        minusButton.setAccessibilityLabel("减少")
-        plusButton.setAccessibilityLabel("增加")
+        minusButton.setAccessibilityLabel(TextCatalog.shared.text("common.decrease"))
+        plusButton.setAccessibilityLabel(TextCatalog.shared.text("common.increase"))
         for button in [minusButton, plusButton] {
             button.target = self
             button.action = #selector(handleStep(_:))

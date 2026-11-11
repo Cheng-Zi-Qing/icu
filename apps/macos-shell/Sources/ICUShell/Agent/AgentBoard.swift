@@ -196,9 +196,15 @@ struct AgentSummary: Equatable {
         switch kind {
         case .idle: return nil
         case .working: return AgentActivity.statusText(tool: lead?.tool)
-        case .done: return count > 1 ? "\(count) 个干完了" : "干完了"
-        case .failed: return "出错了"
-        case .waiting: return count > 1 ? "\(count) 个在等你" : "在等你"
+        case .done:
+            return count > 1
+                ? TextCatalog.shared.format("agent.done_count", count)
+                : TextCatalog.shared.text("agent.done")
+        case .failed: return TextCatalog.shared.text("agent.failed")
+        case .waiting:
+            return count > 1
+                ? TextCatalog.shared.format("agent.waiting_count", count)
+                : TextCatalog.shared.text("agent.waiting")
         }
     }
 }

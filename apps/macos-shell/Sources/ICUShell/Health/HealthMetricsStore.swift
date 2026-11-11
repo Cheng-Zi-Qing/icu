@@ -9,6 +9,8 @@ private struct PersistedSessionDayMetrics: Codable {
     var shiftCount: Int = 0
     var firstClockInAt: Date?
     var lastClockOutAt: Date?
+    /// 当天每一段上下班的打卡（按上班时刻先后）
+    var shifts: [WorkShift] = []
 
     static let empty = PersistedSessionDayMetrics(workDuration: 0, focusCount: 0, focusDuration: 0, breakCount: 0)
 
@@ -34,6 +36,7 @@ private struct PersistedSessionDayMetrics: Codable {
         shiftCount = try container.decodeIfPresent(Int.self, forKey: .shiftCount) ?? 0
         firstClockInAt = try container.decodeIfPresent(Date.self, forKey: .firstClockInAt)
         lastClockOutAt = try container.decodeIfPresent(Date.self, forKey: .lastClockOutAt)
+        shifts = try container.decodeIfPresent([WorkShift].self, forKey: .shifts) ?? []
     }
 }
 
@@ -159,19 +162,47 @@ final class HealthMetricsStore {
         try settleSessionDuration(seconds: seconds, at: date, metric: \.breakDuration)
     }
 
-    /// 上班打卡：当天上班次数 +1，记下当天最早的上班时刻
+    /// 上班打卡：当天上班次数 +1，记下当天最早的上班时刻，新开一段打卡记录。
+    /// 还有没下班的旧记录（上次意外退出）就先按最后确认的时刻补下班
     func recordClockIn(at date: Date) throws {
-        try mutateSessionDay(at: date) { day in
+        try mutateMetrics { metrics in
+            Self.closeOpenShifts(in: &metrics)
+            let key = dayKey(for: date)
+            var day = metrics.sessionDays[key] ?? .empty
             day.shiftCount += 1
             day.firstClockInAt = min(day.firstClockInAt ?? date, date)
+            day.shifts = day.shifts + [WorkShift(clockInAt: date)]
+            metrics.sessionDays[key] = day
         }
     }
 
-    /// 下班打卡：记下当天最晚的下班时刻
+    /// 下班打卡：记下当天最晚的下班时刻，把正在进行的那段打卡记录收尾
     func recordClockOut(at date: Date) throws {
-        try mutateSessionDay(at: date) { day in
+        try mutateMetrics { metrics in
+            let key = dayKey(for: date)
+            var day = metrics.sessionDays[key] ?? .empty
             day.lastClockOutAt = max(day.lastClockOutAt ?? date, date)
+            metrics.sessionDays[key] = day
+            Self.updateLatestOpenShift(in: &metrics) { $0.clockingOut(at: date) }
         }
+    }
+
+    /// 还在上班：给正在进行的那段记一下「这一刻还在」，意外退出时用它补下班
+    func recordStillOnDuty(at date: Date) throws {
+        try mutateMetrics { metrics in
+            Self.updateLatestOpenShift(in: &metrics) { $0.seen(at: date) }
+        }
+    }
+
+    /// 启动时调：上次 App 意外退出、没来得及下班的打卡记录，按最后确认还在上班的时刻补上下班。
+    /// 返回补了几段
+    @discardableResult
+    func closeInterruptedShifts() throws -> Int {
+        var closed = 0
+        try mutateMetrics { metrics in
+            closed = Self.closeOpenShifts(in: &metrics)
+        }
+        return closed
     }
 
     /// 本机上累计：上过班的天数、总上班时长
@@ -256,6 +287,43 @@ final class HealthMetricsStore {
 
     private var metricsFileURL: URL {
         appPaths.stateDirectory.appendingPathComponent("health_metrics.json", isDirectory: false)
+    }
+
+    private func mutateMetrics(_ mutate: (inout PersistedHealthMetricsDocument) -> Void) throws {
+        var pendingDiagnostics: [String] = []
+        try queue.sync {
+            var metrics = try loadMetrics(pendingDiagnostics: &pendingDiagnostics)
+            mutate(&metrics)
+            try saveMetrics(metrics)
+        }
+        emitDiagnostics(pendingDiagnostics)
+    }
+
+    /// 最近开始、还没下班的那段（同一时间只会有一段）
+    private static func updateLatestOpenShift(
+        in metrics: inout PersistedHealthMetricsDocument,
+        _ transform: (WorkShift) -> WorkShift
+    ) {
+        let candidates = metrics.sessionDays.flatMap { key, day in
+            day.shifts.indices.filter { day.shifts[$0].isOpen }.map { (key, $0, day.shifts[$0].clockInAt) }
+        }
+        guard let (key, index, _) = candidates.max(by: { $0.2 < $1.2 }), var day = metrics.sessionDays[key] else { return }
+        day.shifts = day.shifts.enumerated().map { $0.offset == index ? transform($0.element) : $0.element }
+        metrics.sessionDays[key] = day
+    }
+
+    @discardableResult
+    private static func closeOpenShifts(in metrics: inout PersistedHealthMetricsDocument) -> Int {
+        var closed = 0
+        for (key, day) in metrics.sessionDays where day.shifts.contains(where: \.isOpen) {
+            var updated = day
+            updated.shifts = day.shifts.map { $0.isOpen ? $0.closedAfterInterruption() : $0 }
+            let clockOuts = updated.shifts.compactMap(\.clockOutAt) + [day.lastClockOutAt].compactMap { $0 }
+            updated.lastClockOutAt = clockOuts.max()
+            closed += day.shifts.filter(\.isOpen).count
+            metrics.sessionDays[key] = updated
+        }
+        return closed
     }
 
     private func mutateSessionDay(at date: Date, _ mutate: (inout PersistedSessionDayMetrics) -> Void) throws {
@@ -354,6 +422,7 @@ final class HealthMetricsStore {
                 aggregate.shiftCount += value.shiftCount
                 aggregate.firstClockInAt = earliest(aggregate.firstClockInAt, value.firstClockInAt)
                 aggregate.lastClockOutAt = latest(aggregate.lastClockOutAt, value.lastClockOutAt)
+                aggregate.shifts = aggregate.shifts + value.shifts
             }
 
             guard let nextDay = calendar.date(byAdding: .day, value: 1, to: day) else {
@@ -401,7 +470,8 @@ final class HealthMetricsStore {
             breakDuration: sessionMetrics.breakDuration,
             shiftCount: sessionMetrics.shiftCount,
             firstClockInAt: sessionMetrics.firstClockInAt,
-            lastClockOutAt: sessionMetrics.lastClockOutAt
+            lastClockOutAt: sessionMetrics.lastClockOutAt,
+            shifts: sessionMetrics.shifts
         )
     }
 

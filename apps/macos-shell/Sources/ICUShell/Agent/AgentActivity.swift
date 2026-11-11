@@ -33,19 +33,23 @@ enum AgentActivity: String, CaseIterable, Equatable {
     /// 这种活的通称，按 Claude Code 终端里的说法（Thinking、Read、Search、Update、Bash、子 Agent）
     var label: String {
         switch self {
-        case .think: return "思考中"
-        case .read: return "读取中"
-        case .search: return "搜索中"
-        case .write: return "更新中"
-        case .eat: return "运行 Bash"
-        case .delegate: return "子 Agent 运行中"
+        case .think: return TextCatalog.shared.text("agent.activity_think")
+        case .read: return TextCatalog.shared.text("agent.activity_read")
+        case .search: return TextCatalog.shared.text("agent.activity_search")
+        case .write: return TextCatalog.shared.text("agent.activity_update")
+        case .eat: return TextCatalog.shared.text("agent.activity_bash")
+        case .delegate: return TextCatalog.shared.text("agent.activity_delegate")
         }
     }
 
     /// Claude Code 终端里有自己名字的工具，状态条照着翻
-    private static let toolLabels: [String: String] = [
-        "Write": "写入中", "WebFetch": "抓取网页中", "WebSearch": "网页搜索中",
-    ]
+    private static var toolLabels: [String: String] {
+        [
+            "Write": TextCatalog.shared.text("agent.activity_write"),
+            "WebFetch": TextCatalog.shared.text("agent.activity_fetch"),
+            "WebSearch": TextCatalog.shared.text("agent.activity_web_search"),
+        ]
+    }
 
     /// 状态条上的字：和 Claude Code 终端里显示的工具名对得上；没调用工具就是「思考中」
     static func statusText(tool: String?) -> String {

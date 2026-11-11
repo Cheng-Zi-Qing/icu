@@ -1,6 +1,6 @@
 import AppKit
 
-/// 在等你时头顶的卡片：和提醒卡占同一个位置（窗口按提醒卡的高度展开）
+/// 在等你时头顶的卡片（窗口按卡片的高度展开）。健康提醒不在这里，在屏幕中央
 extension DesktopPetView {
     var isShowingWaitCard: Bool { !waitCardView.isHidden }
 
@@ -33,7 +33,7 @@ extension DesktopPetView {
         guard waitCardView != nil else { return }
         let width = min(bounds.width - 4, 200)
         let height = AgentWaitCardView.height
-        let y = usesExpandedReminderLayout ? petStageTop + LayoutMetrics.reminderGap : max(26, bounds.height - height - 8)
+        let y = usesExpandedCardLayout ? petStageTop + LayoutMetrics.cardGap : max(26, bounds.height - height - 8)
         waitCardView.frame = NSRect(x: (bounds.width - width) / 2, y: y, width: width, height: height)
     }
 }

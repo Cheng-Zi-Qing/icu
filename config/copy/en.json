@@ -1,0 +1,330 @@
+{
+  "menu": {
+    "show_pet": "Show Pet",
+    "today_report": "Today's Report…",
+    "quit_app": "Quit",
+    "start_work": "I'm Starting Work",
+    "enter_focus": "I Need to Focus",
+    "take_break": "Stepping Away",
+    "resume_working": "I'm Back",
+    "stop_work": "Done for Today",
+    "hide_pet": "Hide Pet",
+    "open_wardrobe": "Wardrobe",
+    "open_settings": "Settings…",
+    "connect_claude": "Connect Claude Code",
+    "disconnect_claude": "Disconnect Claude Code",
+    "today": "Today",
+    "today_accessibility": "Today: water %@, eye breaks %@, work %@",
+    "cups_count": "%d/%d cups",
+    "eye_count": "%d×"
+  },
+  "pet": {
+    "status_idle": "Chilling",
+    "status_working": "With you",
+    "status_focus": "Staying quiet",
+    "status_break": "Waiting",
+    "focus_end_light": "Look up a moment, then carry on.",
+    "focus_end_heavy": "Long stretch. Go rest.",
+    "stop_work_message": "Done for the day. Go rest.",
+    "eye_reminder": "Look far away, rest your eyes.",
+    "hydration_reminder": "Take a sip, no rush."
+  },
+  "errors": {
+    "work_invalid_transition": "You can't do that right now.",
+    "work_invalid_start_work": "You can't start work right now.",
+    "work_invalid_enter_focus": "You can only focus while working.",
+    "work_invalid_take_break": "Start work first.",
+    "work_invalid_resume_working": "Nothing to resume right now.",
+    "claude_settings_unreadable": "Claude settings unreadable",
+    "claude_hook_missing": "No icu-hook. Reinstall ICU"
+  },
+  "common": {
+    "close": "Close",
+    "selected": "Selected",
+    "decrease": "Decrease",
+    "increase": "Increase",
+    "save_failed": "Couldn't save. Try again.",
+    "accessibility_separator": ", "
+  },
+  "app": {
+    "report_empty": "Nothing logged today yet",
+    "claude_connected": "Connected. New sessions show up",
+    "claude_disconnected": "Disconnected from Claude Code",
+    "action_failed": "Didn't work. Try again later"
+  },
+  "settings": {
+    "title": "ICU Settings",
+    "section_health": "Health",
+    "section_reminders": "Reminders",
+    "health_weight": "Weight",
+    "health_cup_volume": "Cup Size",
+    "health_work_hours": "Work Hours",
+    "eye_interval": "Eye Break",
+    "hydration_headline": "Drink %d cups at work (about %d ml)",
+    "hydration_detail": "Remind me every %d min",
+    "value_hours": "%d h",
+    "value_minutes": "%d min",
+    "language": "Language",
+    "language_zh": "Chinese",
+    "language_en": "English"
+  },
+  "eye_mode": {
+    "rule202020": "20-20-20 Rec",
+    "hourly_break": "Hourly Break",
+    "custom": "Custom",
+    "rule202020_explanation": "Look 20 feet away for 20 seconds every 20 minutes. A 2023 study found it eases eye strain.",
+    "hourly_break_explanation": "Leave the screen for 5 minutes every hour. NIOSH studies found less eye soreness and blur.",
+    "custom_explanation": "Pick your own interval. Each break is 20 seconds."
+  },
+  "reminder": {
+    "remaining_clock": "%d:%02d left",
+    "remaining_seconds": "%ds left",
+    "sip_slowly": "Sip slowly",
+    "cup_progress": "Cup %d/%d",
+    "cup_over": "%d over goal",
+    "eye_plan_seconds": "Look 20 ft away for %ds",
+    "eye_plan_minutes": "Leave the screen for %d min",
+    "card_hint_rest": "Press start and the screen dims for you",
+    "card_hint_water": "Tap when done and Capy logs it"
+  },
+  "quips": {
+    "hydration": {
+      "lines": [
+        "Gulp o'clock!",
+        "Getting dry?",
+        "Bottoms up!",
+        "Cup's crying",
+        "Chug chug!",
+        "Capy says sip",
+        "Sip, then work",
+        "Water yourself"
+      ],
+      "done": [
+        "Drank up",
+        "Glug glug",
+        "All done",
+        "Cheers!"
+      ]
+    },
+    "look_away": {
+      "lines": [
+        "Eyes need rest",
+        "Look far away",
+        "Cloud out there",
+        "Off the screen",
+        "Eye vacation",
+        "View far off",
+        "Peek far away"
+      ],
+      "done": [
+        "Looked",
+        "All done",
+        "All seen"
+      ],
+      "start": [
+        "Start rest",
+        "Look away",
+        "Take a rest"
+      ]
+    },
+    "stand_up": {
+      "lines": [
+        "Butt numb?",
+        "Shake it off",
+        "Take a walk",
+        "Big stretch",
+        "Rest with Capy",
+        "Stand and twist"
+      ],
+      "done": [
+        "Moved",
+        "All done",
+        "Rested"
+      ],
+      "start": [
+        "Take a walk",
+        "Start break",
+        "Start rest"
+      ]
+    },
+    "later": [
+      "Later",
+      "One min",
+      "Soon"
+    ],
+    "nope": [
+      "Nope",
+      "Nah",
+      "Skip"
+    ]
+  },
+  "wardrobe": {
+    "title": "Wardrobe",
+    "suits": "Suits",
+    "wearing": "Wearing",
+    "suit_locked": "Missing pieces",
+    "locked_hint": "Task drop",
+    "locked_accessibility": "Not unlocked yet. Finishing reminders can drop it",
+    "slot": {
+      "head": "Head",
+      "mouth": "Mouth",
+      "neck": "Neck",
+      "face": "Face"
+    },
+    "item": {
+      "orange": "Orange",
+      "straw_hat": "Straw Hat",
+      "orange_stack": "Orange Stack",
+      "flower": "Flower",
+      "duck": "Rubber Duck",
+      "onsen_towel": "Onsen Towel",
+      "santa_hat": "Santa Hat",
+      "grass": "Grass",
+      "foxtail": "Foxtail",
+      "carrot": "Baby Carrot",
+      "sakura": "Cherry Branch",
+      "bell": "Bell",
+      "scarf": "Scarf",
+      "badge": "Badge",
+      "round_glasses": "Glasses",
+      "sunglasses": "Sunglasses"
+    },
+    "suit": {
+      "default": "Default",
+      "summer": "Summer",
+      "programmer": "Programmer",
+      "spring": "Spring"
+    }
+  },
+  "advice": {
+    "water_done": "Hydration on track",
+    "eyes_done": "Good eye breaks",
+    "all_good": "Looking good, keep it up",
+    "water_behind": "Time for water: %d behind",
+    "eyes_rest": "Rest your eyes, look far",
+    "rest_break": "No break yet, get up",
+    "overtime": "Past hours, wrap up early",
+    "snoozed_often": "Snoozed %d times, try not to",
+    "rest_done": "Good break rhythm",
+    "hours_done": "Hours within plan"
+  },
+  "report": {
+    "title": "Today's Report",
+    "accessibility_prefix": "Today's report: ",
+    "footer_lifetime": "%d days total · %@",
+    "shift_segments": "%d shifts",
+    "count_and_duration": "%d× · %@",
+    "eye_ratio": "%d/%d",
+    "cup_ratio": "%d/%d cups",
+    "now": "now",
+    "row_on_duty": "On duty",
+    "row_span": "Span",
+    "row_shifts": "Shifts",
+    "span_since": "from %@",
+    "shift_interrupted": "%@ app quit",
+    "row_focus": "Focus",
+    "row_rest": "Break",
+    "row_eyes": "Eyes",
+    "row_water": "Water",
+    "score_points": "%d pts",
+    "score_great": "Feeling great",
+    "score_good": "Doing well",
+    "score_okay": "A bit tense",
+    "score_tired": "Time to rest",
+    "score_warming_up": "Just started",
+    "score_caption_great": "All habits on track",
+    "score_caption_good": "Mostly good, small gaps",
+    "score_caption_okay": "Tense. See the tips below",
+    "score_caption_tired": "Heavy day. Rest first",
+    "score_caption_warming_up": "Scored after 30 min on duty",
+    "meter_water": "Water",
+    "meter_eyes": "Eyes",
+    "meter_hours": "Hours",
+    "meter_hours_value": "%@ / %@",
+    "section_advice": "Tips",
+    "section_praise": "Well done",
+    "section_week": "This week",
+    "week_caption": "%d days · avg %@",
+    "week_above": "Today is %@ above average",
+    "week_below": "Today is %@ below average",
+    "weekdays": [
+      "M",
+      "T",
+      "W",
+      "T",
+      "F",
+      "S",
+      "S"
+    ]
+  },
+  "agent": {
+    "activity_think": "Thinking",
+    "activity_read": "Reading",
+    "activity_search": "Searching",
+    "activity_update": "Updating",
+    "activity_bash": "Running Bash",
+    "activity_delegate": "Sub-agent running",
+    "activity_write": "Writing",
+    "activity_fetch": "Fetching page",
+    "activity_web_search": "Web search",
+    "waiting": "Waiting for you",
+    "waiting_suffix_count": "waiting ×%d",
+    "waiting_count": "%d waiting",
+    "done": "All done",
+    "done_count": "%d done",
+    "failed": "Error",
+    "answer_in_terminal": "Answer in terminal",
+    "approve_in_terminal": "Allow in terminal",
+    "approve_tool": "Allow",
+    "jump_there": "Open",
+    "got_it": "Got it",
+    "reminder_eye": "Claude's on it. Look far away",
+    "reminder_water": "Claude's busy. Grab some water"
+  },
+  "digest": {
+    "headline": "While you were away: %@ %@",
+    "more": "%@, and %d more",
+    "verb_waiting": "is waiting for you",
+    "verb_failed": "hit an error",
+    "verb_done": "wrapped up"
+  },
+  "rest": {
+    "title_look_away": "Look at something 20 ft away",
+    "title_stand_up": "Get up and leave the screen",
+    "hint": "The screen is covered. Capy rests with you",
+    "end_early": "End early",
+    "accessibility": "Eye rest in progress, %@"
+  },
+  "poke": {
+    "tickle": [
+      "Hehe, tickles!",
+      "Not the belly!",
+      "Ticklish!",
+      "Stop, haha!"
+    ],
+    "annoyed": [
+      "Paws off my legs",
+      "Ugh, what?",
+      "Hey, my foot!",
+      "Not the toes."
+    ],
+    "sneeze": [
+      "Achoo!",
+      "Itchy nose…",
+      "Ah-CHOO!",
+      "Lost my grass!"
+    ],
+    "startled": [
+      "Eek!",
+      "Who's there?!",
+      "You scared me!",
+      "Sneak attack!"
+    ],
+    "grumpy": [
+      "Hmph! Bye.",
+      "Enough poking!",
+      "I'm mad now!",
+      "Not talking."
+    ]
+  }
+}

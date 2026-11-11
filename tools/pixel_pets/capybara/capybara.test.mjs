@@ -169,14 +169,47 @@ test('peek keeps the counter-clockwise, head-up turn of the lying pose', () => {
   assert.equal(DEFAULT_MODEL.poses.peek.flipY, true);
 });
 
-test('peek only shows the orange and part of the head', () => {
-  const inks = (grid) => new Set(grid.cells);
-  for (const opts of [{}, { blink: true }, { reach: true }]) {
-    const peek = renderPose(DEFAULT_MODEL, 'peek', opts);
-    const columns = opaqueColumns(peek);
-    const shown = Math.max(...columns) - Math.min(...columns) + 1;
-    assert.ok(shown <= 16, `only a small part sticks out (${shown}px, ${JSON.stringify(opts)})`);
-    assert.ok(inks(peek).has('orange'), 'orange visible');
+test('turning its head at the edge keeps the head as big as the front peek', () => {
+  // 贴边转头（edge/turn_*）和正面探头来回切：头探出屏幕的多少、上下的位置都得对得上，不然一转头像缩了一圈
+  const head = (grid) => {
+    const columns = [];
+    const rows = [];
+    for (let y = 0; y < grid.height; y += 1) {
+      for (let x = 0; x < grid.width; x += 1) {
+        // 嘴里的草不算（叼着的草会伸出头外）；头顶的橙子算，正面、侧面都顶着它
+        if (['clear', 'grass'].includes(grid.get(x, y))) continue;
+        columns.push(x);
+        rows.push(y);
+      }
+    }
+    return { left: Math.min(...columns), right: Math.max(...columns), middle: (Math.min(...rows) + Math.max(...rows)) / 2 };
+  };
+  const front = head(renderFrontPeek({}));
+  // 有脖子伸进屏幕边（不是飘着的一颗头）：贴着屏幕边那一列，肤色占的高度够一段脖子
+  const turnedGrid = renderPose(DEFAULT_MODEL, 'peek', {});
+  const edgeSkin = Array.from({ length: turnedGrid.height }, (_, y) => turnedGrid.get(turnedGrid.width - 1, y)).filter((ink) => ink === 'body').length;
+  assert.ok(edgeSkin >= 8, `a neck runs into the screen edge (${edgeSkin}px tall)`);
+  // 背是坐姿那条往后弯的弧：后脑勺下面，身子的左轮廓一路往屏幕边收，越往下收得越快（弯的，不是一根直线、也不是细长脖子）
+  const leftmost = (y) => Array.from({ length: turnedGrid.width }, (_, x) => x).find((x) => !['clear', 'orange', 'grass', 'white'].includes(turnedGrid.get(x, y)));
+  const orangeRows = Array.from({ length: turnedGrid.height }, (_, y) => y).filter((y) => Array.from({ length: turnedGrid.width }, (_, x) => turnedGrid.get(x, y)).includes('orange'));
+  const backRows = Array.from({ length: turnedGrid.height - Math.max(...orangeRows) - 1 }, (_, i) => Math.max(...orangeRows) + 1 + i);
+  const back = backRows.map(leftmost);
+  assert.ok(back.every((x, i) => i === 0 || x >= back[i - 1]), `the back keeps curving toward the edge (${back})`);
+  const half = Math.floor(back.length / 2);
+  const upper = back[half] - back[0];
+  const lower = back[back.length - 1] - back[half];
+  assert.ok(lower > upper, `it bends: steeper lower down than right under the head (${upper} then ${lower}: ${back})`);
+  assert.ok(back[back.length - 1] >= turnedGrid.width - 8, `and tucks behind the screen edge at the bottom (${back})`);
+  const green = (grid) => grid.cells.filter((ink) => ink === 'grass').length;
+  assert.equal(green(turnedGrid), green(renderFrontPeek({})), 'only the leaf on the orange is green: no grass in the mouth, like the front peek');
+  for (const opts of [{}, { blink: true }]) {
+    // 只量头：同样的位置参数，不带后面那段背
+    const headOnly = { ...DEFAULT_MODEL, poses: { ...DEFAULT_MODEL.poses, peek: { ...DEFAULT_MODEL.poses.peek, keepParts: [] } } };
+    const turned = head(renderPose(headOnly, 'peek', opts));
+    assert.ok(Math.abs(turned.left - front.left) <= 2, `sticks out as far as the front face (turned ${turned.left}, front ${front.left})`);
+    assert.ok(turned.right >= front.right - 3, `the head sits by the screen edge (turned ${turned.right}, front ${front.right})`);
+    assert.ok(Math.abs(turned.middle - front.middle) <= 1, `same height on screen (turned ${turned.middle}, front ${front.middle})`);
+    assert.ok(new Set(renderPose(DEFAULT_MODEL, 'peek', opts).cells).has('orange'), 'orange visible');
   }
 });
 
@@ -244,7 +277,9 @@ test('front peek head is about as big as the side head-turn frame', () => {
   const front = renderFrontPeek({});
   const side = renderPose(DEFAULT_MODEL, 'peek', {});
   assert.ok(size(front) - size(side) <= 6, `sticks out about as far (only the orange on top adds a few pixels) (${size(front)} vs ${size(side)})`);
-  assert.ok(Math.abs(rows(front) - rows(side)) <= 3, `about as tall (${rows(front)} vs ${rows(side)})`);
+  // 侧面下面还连着一段背（弯进屏幕边），不比整体高度；头顶对齐就行（头的位置另有测试）
+  const top = (g) => Math.min(...g.cells.flatMap((c, i) => (c !== 'clear' ? [Math.floor(i / 32)] : [])));
+  assert.ok(Math.abs(top(front) - top(side)) <= 1, `the heads start at the same height (${top(front)} vs ${top(side)})`);
 });
 
 test('front peek blink closes the eyes and reach pokes out one pixel further', () => {

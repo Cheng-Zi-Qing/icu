@@ -22,6 +22,8 @@ final class PetAttentionCoordinator {
     /// 压着没弹的提醒，先来的先弹；同一种只留最新的
     private(set) var heldReminders: [ReminderPresentationPayload] = []
     private var showingReminder: ReminderPresentationPayload?
+    /// 已经点了「开始休息」、屏幕正被全屏休息盖着：这时来了「在等你」也不打断，歇完再说
+    private(set) var isResting = false
     /// 正挂着的提醒卡是哪一张
     var showingReminderID: UUID? { showingReminder?.id }
     private var agentWorkingSince: TimeInterval?
@@ -43,7 +45,7 @@ final class PetAttentionCoordinator {
         if context.userAway {
             digest = digest.recording(summary)
         }
-        if context.agentWaiting, let showing = showingReminder {
+        if context.agentWaiting, !isResting, let showing = showingReminder {
             // L3 盖过 L2：卡片收起来，排回队头
             showingReminder = nil
             context.reminderShowing = false
@@ -68,9 +70,16 @@ final class PetAttentionCoordinator {
     /// 提醒卡关掉了（点了按钮 / 倒计时走完）。不是正挂着的那张就不算（被收起的旧卡迟到的回调）
     func reminderClosed(_ id: UUID?) {
         guard let id, id == showingReminder?.id else { return }
+        isResting = false
         showingReminder = nil
         context.reminderShowing = false
         advance()
+    }
+
+    /// 正挂着的那张提醒点了「开始休息」，全屏休息开始了
+    func reminderRestStarted(_ id: UUID) {
+        guard id == showingReminder?.id else { return }
+        isResting = true
     }
 
     func userLeft() {

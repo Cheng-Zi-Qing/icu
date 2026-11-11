@@ -30,6 +30,10 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
     private var chasedActivity: AgentActivity?
     /// 打扰分级：在等你 > 健康提醒 > 干完了 / 出错了；你不在、全屏时压着（见 PetAttentionCoordinator）
     private let attention = PetAttentionCoordinator()
+    /// 健康提醒：屏幕中央的提醒卡 + 护眼时盖住屏幕的全屏休息；挂着的时候桌宠跟着做动作
+    let reminderStage = ReminderStagePresenter()
+    let eyeRest = EyeRestOverlayController()
+    private var reminderScene: PetScene?
     /// 点了「知道了」的那个会话；它还在等时不再弹卡片，不等了就清掉
     private var dismissedWait: String?
     /// 每秒报一次你多久没碰键盘鼠标（使用时长统计）
@@ -131,7 +135,7 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
         contextMenuController.todayReportProvider = todayReportProvider
         contextMenuController.petFrameProvider = { [weak self] in self?.petBodyFrameOnScreen() }
         contextMenuController.onEmptyReport = { [weak self] in
-            self?.petView.showTransientMessage("今天还没有记录")
+            self?.petView.showTransientMessage(TextCatalog.shared.text("app.report_empty"))
         }
 
         applyCurrentStateToView(showBubble: true)
@@ -164,10 +168,20 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
         )
         gaze.canTurn = { [weak self] in
             guard let self, self.petView.canTurnTowardCursor else { return false }
-            guard let edgeDock = self.edgeDock else { return true }
-            return edgeDock.dock.horizontal == nil && !edgeDock.isHidden
+            return self.isFacingUpToThePet
         }
         self.gaze = gaze
+        // 戳太多下生气了：扭过身去背对你；气消了（这段放完）转头看鼠标那套会再把它转回来
+        petView.onPokeReaction = { [weak self] clip, pokedFromRight in
+            guard let self, clip == .grumpy, self.isFacingUpToThePet else { return }
+            self.petView.turn(toFacingRight: !pokedFromRight)
+        }
+    }
+
+    /// 朝向能不能由桌宠自己定：贴在左右屏幕边时归贴边管（脸朝屏幕里）
+    private var isFacingUpToThePet: Bool {
+        guard let edgeDock else { return true }
+        return edgeDock.dock.horizontal == nil && !edgeDock.isHidden
     }
 
     private func configureEdgeDock(window: NSWindow, settings: EdgeSnapSettings) {
@@ -192,7 +206,7 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
         petView.onPetDragStarted = { [weak self, weak edgeDock] in
             // 被拎起来就不追了，留在手里（往回跑的路上被拎起来，跑步帧也停）
             self?.chaseRunner?.stop(returnHome: false)
-            if let self { self.petView.setScene(self.attention.stage.scene(work: self.sceneHold.shown)) }
+            if let self { self.petView.setScene(self.sceneToShow(work: self.sceneHold.shown)) }
             edgeDock?.dragStarted()
         }
         petView.onPointerEntered = { [weak edgeDock] in edgeDock?.pointerEntered() }
@@ -203,6 +217,12 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    /// 关桌宠窗口时，屏幕中央的提醒卡和全屏休息也一起收掉
+    override func close() {
+        putReminderAway()
+        super.close()
     }
 
     override func showWindow(_ sender: Any?) {
@@ -223,7 +243,7 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
 
     private func configureAttention() {
         attention.onReminderReady = { [weak self] payload in self?.showReminder(payload) }
-        attention.onReminderWithdrawn = { [weak self] in self?.petView.dismissReminderCard() }
+        attention.onReminderWithdrawn = { [weak self] in self?.putReminderAway() }
         attention.onDigest = { [weak self] message in
             // 卡片上已经写着谁在等你了，不再冒一句盖住它
             guard let self, !self.petView.isShowingWaitCard else { return }
@@ -245,9 +265,40 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
         }
 
         let cups = payload.type == .hydration ? todaySummaryProvider().map(CupProgress.init(summary:)) : nil
-        petView.showReminderCard(payload, cups: cups) { [weak self] outcome in
-            self?.handleReminderOutcome(outcome, for: payload)
+        let content = ReminderCardContent(payload: payload, cups: cups)
+        reminderScene = content.scene
+        applyAgentScene()
+        reminderStage.show(
+            content: content,
+            petImage: { [weak petView] elapsed in petView?.sceneImage(content.scene, after: elapsed) },
+            onAction: { [weak self] outcome in self?.handleReminderChoice(outcome, content: content, payload: payload) }
+        )
+    }
+
+    /// 提醒卡上点了按钮。护眼的主按钮不是直接完成：先全屏休息，歇完（或提前结束）再记结果
+    private func handleReminderChoice(_ outcome: HealthReminderOutcome, content: ReminderCardContent, payload: ReminderPresentationPayload) {
+        guard outcome == .completed, content.startsRest else {
+            handleReminderOutcome(outcome, for: payload)
+            return
         }
+        attention.reminderRestStarted(payload.id)
+        eyeRest.start(
+            content: content,
+            petImage: { [weak petView] elapsed in petView?.napImage(after: elapsed) },
+            onFinish: { [weak self] rested in self?.handleReminderOutcome(rested, for: payload) }
+        )
+    }
+
+    /// 提醒被「在等你」盖过：卡片收起来，桌宠不再跟着做动作（之后会重新弹）
+    private func putReminderAway() {
+        reminderStage.dismiss()
+        eyeRest.cancel()
+        reminderScene = nil
+    }
+
+    /// 现在该演的场景：健康提醒挂着就跟着做动作，否则按 Agent 的状态来
+    private func sceneToShow(work: AgentActivity?) -> PetScene? {
+        reminderScene ?? attention.stage.scene(work: work)
     }
 
     func setPetID(_ petID: String) {
@@ -329,7 +380,7 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
         if chaseRunner?.isReturning == true, let chasedActivity {
             petView.setScene(.work(chasedActivity))
         } else {
-            petView.setScene(attention.stage.scene(work: hold.shown))
+            petView.setScene(sceneToShow(work: hold.shown))
         }
         // 字跟着画面换（画面要停够 3 秒，字也一样）；字没变时 setStatusText 什么都不做
         petView.setStatusText(statusText(for: workSessionController.state))
@@ -341,7 +392,8 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
 
     /// 正在演追球（搜索）就让窗口跑起来；贴在边上、藏起来、被拎着时不跑。停下小跑回原位，到家再朝回屏幕中间
     private func updateChase() {
-        let chasing = sceneHold.shown.map { petView.workPlayer.scenes?.chases(.work($0)) == true } ?? false
+        // 健康提醒挂着时在原地做动作，不追球
+        let chasing = reminderScene == nil && (sceneHold.shown.map { petView.workPlayer.scenes?.chases(.work($0)) == true } ?? false)
         let free = edgeDock.map { $0.dock == .none && !$0.isHidden } ?? true
         let shouldRun = chasing && free && !petView.isDraggingPet
         guard shouldRun != isChasing, let window else { return }
@@ -425,7 +477,7 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
 
     private func handleReminderOutcome(_ outcome: HealthReminderOutcome, for payload: ReminderPresentationPayload) {
         let now = nowProvider()
-        petView.dismissReminderCard()
+        putReminderAway()
         applyCurrentStateToView(showBubble: false)
         defer { attention.reminderClosed(payload.id) }
 
@@ -494,8 +546,8 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
             targetSize = DesktopPetView.compactContentSize
         case .transientBubble:
             targetSize = DesktopPetView.transientBubbleExpandedContentSize
-        case .reminderCard:
-            targetSize = DesktopPetView.reminderExpandedContentSize
+        case .card:
+            targetSize = DesktopPetView.cardExpandedContentSize
         }
         guard window.contentView?.frame.size != targetSize else {
             return

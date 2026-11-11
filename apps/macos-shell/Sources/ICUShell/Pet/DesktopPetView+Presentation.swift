@@ -10,9 +10,9 @@ extension DesktopPetView {
         !isPeeking && !isDraggingPet && behavior.activeClip == nil && workPlayer.scene?.facesSideways != false
     }
 
-    /// 没有拖拽 / 探头时该显示的画面：转身那一下的正面 > Agent 干活小场景 > 摸头打盹片段 > 待机动画帧
+    /// 没有拖拽 / 探头时该显示的画面：Agent 干活小场景 > 摸头打盹片段 > 待机动画帧
     var restingImage: NSImage? {
-        turnImage ?? workImage ?? actionImage ?? currentImage
+        workImage ?? actionImage ?? currentImage
     }
 
     func makeBehaviorCoordinator() -> PetBehaviorCoordinator {
@@ -44,15 +44,11 @@ extension DesktopPetView {
 
     // MARK: - 朝向与身体轮廓（贴边用）
 
-    /// 直接转到这边（贴边、追球、放下时用）；正在转身的那一下作废
+    /// 直接转到这边（贴边、追球、放下时用；转头看鼠标另外蹦一下，见 +Turn）
     func setFacingRight(_ facingRight: Bool) {
-        let wasTurning = cancelTurn()
-        guard facingRight != isFacingRight else {
-            if wasTurning { presentAfterTurn() }
-            return
-        }
+        guard facingRight != isFacingRight else { return }
         isFacingRight = facingRight
-        if wasTurning { presentAfterTurn() } else { present(presentedSource) }
+        present(presentedSource)
         layoutStatusChip()
     }
 
@@ -109,7 +105,7 @@ extension DesktopPetView {
         )
     }
 
-    /// 拖拽时必须留在屏幕内的部分：身体，加上正在显示的气泡 / 提醒卡片
+    /// 拖拽时必须留在屏幕内的部分：身体，加上正在显示的气泡 / 在等你的卡片
     var dragKeepVisibleRect: CGRect {
         let body = petBodyRect ?? petCanvasRect
         guard currentOverlayLayoutMode != .compact else { return body }
@@ -147,9 +143,6 @@ extension DesktopPetView {
                 (name, PetPoseSprites(directory: $0, canvasPointSize: Self.compactContentSize))
             }
         })
-        turnSprites = assetLocator.resolvePoseSpriteDirectory(for: petID, subdirectory: "turn", outfit: outfitID).map {
-            PetPoseSprites(directory: $0, canvasPointSize: Self.compactContentSize)
-        }
         peekFrames = PetPeekFrames(sprites: assetLocator.resolvePoseSpriteDirectory(for: petID, subdirectory: "edge", outfit: outfitID).map {
             PetPoseSprites(directory: $0, canvasPointSize: Self.compactContentSize)
         })

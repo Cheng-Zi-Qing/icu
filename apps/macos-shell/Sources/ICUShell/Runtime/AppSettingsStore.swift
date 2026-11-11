@@ -32,6 +32,16 @@ final class AppSettingsStore {
         ReminderTimerSettings(settingsObject: loadRootObjectOrEmpty(section: "timers"))
     }
 
+    /// 界面语言；读不到就是中文
+    func loadLanguage() -> AppLanguage {
+        let root = (try? loadRootObject()) ?? [:]
+        return AppLanguage.stored(root["language"] as? String)
+    }
+
+    func saveLanguage(_ language: AppLanguage) throws {
+        try writeRootObject(try loadRootObject().merging(["language": language.rawValue]) { _, new in new })
+    }
+
     func saveHealthProfile(_ profile: HealthProfile) throws {
         try saveSection("user", mergingInto: [
             "body_weight": profile.bodyWeightKg,
@@ -55,12 +65,15 @@ final class AppSettingsStore {
 
     /// 只改动 key 对应的那一段，其他配置原样保留
     func saveSection(_ key: String, _ value: [String: Any]) throws {
-        let merged = try loadRootObject().merging([key: value]) { _, new in new }
+        try writeRootObject(try loadRootObject().merging([key: value]) { _, new in new })
+    }
+
+    private func writeRootObject(_ object: [String: Any]) throws {
         try fileManager.createDirectory(
             at: primarySettingsFileURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
-        let data = try JSONSerialization.data(withJSONObject: merged, options: [.prettyPrinted, .sortedKeys])
+        let data = try JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys])
         try data.write(to: primarySettingsFileURL, options: .atomic)
     }
 

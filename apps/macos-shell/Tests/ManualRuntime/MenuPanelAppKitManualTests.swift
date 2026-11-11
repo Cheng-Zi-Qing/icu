@@ -121,7 +121,7 @@ func testContextMenuPanelControllerDispatchesSelectedActionAndDismissesPanel() t
         throw TestFailure(message: "context menu controller should expose a panel after present")
     }
 
-    try requirePixelButton(in: panel, title: "开始工作").performClick(nil)
+    try requirePixelButton(in: panel, title: "我要上班").performClick(nil)
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
 
     try expect(receivedActions == [.startWork], "context menu controller should dispatch the selected menu action")

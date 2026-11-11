@@ -15,6 +15,16 @@ extension DesktopPetView {
         setScene(activity.map(PetScene.work))
     }
 
+    /// 屏幕中央的提醒卡上那只水豚：和桌宠同一套帧、同一个动作，从头放起
+    func sceneImage(_ scene: PetScene, after elapsed: TimeInterval) -> NSImage? {
+        workPlayer.scenes?.image(for: scene, after: elapsed)
+    }
+
+    /// 全屏休息时陪着打盹的那只
+    func napImage(after elapsed: TimeInterval) -> NSImage? {
+        PetActionClip.nap.frameName(after: elapsed).flatMap { actionSprites[PetActionClip.nap.directory]?.image(named: $0) }
+    }
+
     func makeWorkPlayer() -> PetWorkScenePlayer {
         let player = PetWorkScenePlayer()
         player.onImageChanged = { [weak self] image in

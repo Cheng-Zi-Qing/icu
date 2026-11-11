@@ -1,130 +1,133 @@
 import AppKit
 
-func testReminderCardRendersCompleteSnoozeAndSkipActions() throws {
+/// 屏幕中央的提醒卡：三个按钮各报各的结果
+@MainActor
+func testReminderStageShowsThePlayfulCopyAndDispatchesEachButton() throws {
     _ = try makeInstalledThemeManager()
-    let view = DesktopPetView(frame: NSRect(x: 0, y: 0, width: 128, height: 128))
-    let payload = ReminderPresentationPayload(id: UUID(), type: .eyeCare, text: "看看远处，护护眼。")
-    view.showReminderCard(payload)
-
-    let completeButton = try requireButton(in: view, identifier: "desktopPet.reminderCard.complete")
-    let snoozeButton = try requireButton(in: view, identifier: "desktopPet.reminderCard.snooze")
-    let skipButton = try requireButton(in: view, identifier: "desktopPet.reminderCard.skip")
-
-    let content = try requireReminderCard(in: view).content
-    try expect(content != nil, "the card should keep what it shows")
-    try expect(completeButton.title == content?.completeTitle, "complete button shows the picked quip")
-    try expect(snoozeButton.title == content?.snoozeTitle, "snooze button shows the picked quip")
-    try expect(skipButton.title == content?.skipTitle, "skip is a visible 我就不-style button")
-    try expect(ReminderQuips.lookAway.lines.contains(content?.title ?? ""), "a 20 second break picks a look-away line")
-    try expect(!completeButton.isEnabled, "reminder complete action should stay disabled until callbacks are wired")
-    try expect(!snoozeButton.isEnabled, "reminder snooze action should stay disabled until callbacks are wired")
-    try expect(!skipButton.isEnabled, "reminder skip action should stay disabled until callbacks are wired")
-}
-
-func testReminderCardRelayoutsAfterBoundsChange() throws {
-    let view = DesktopPetView(frame: NSRect(x: 0, y: 0, width: 128, height: 128))
-    let payload = ReminderPresentationPayload(id: UUID(), type: .eyeCare, text: "看看远处，护护眼。")
-    view.showReminderCard(payload)
-    view.layoutSubtreeIfNeeded()
-
-    let initialCard = try requireView(in: view, identifier: "desktopPet.reminderCard")
-    let initialFrame = initialCard.frame
-
-    view.setFrameSize(NSSize(width: 200, height: 180))
-    view.layoutSubtreeIfNeeded()
-
-    let resizedCard = try requireView(in: view, identifier: "desktopPet.reminderCard")
-    try expect(initialFrame != resizedCard.frame, "reminder card frame should update when desktop pet bounds change")
-}
-
-func testReminderCardEnablesAndDispatchesActionsWhenCallbackProvided() throws {
-    _ = try makeInstalledThemeManager()
-    let view = DesktopPetView(frame: NSRect(x: 0, y: 0, width: 128, height: 128))
-    let payload = ReminderPresentationPayload(id: UUID(), type: .eyeCare, text: "看看远处，护护眼。")
-    var receivedOutcomes: [HealthReminderOutcome] = []
-
-    view.showReminderCard(payload) { outcome in
-        receivedOutcomes.append(outcome)
+    let content = ReminderCardContent(
+        payload: ReminderPresentationPayload(id: UUID(), type: .hydration, text: "喝口水，慢慢来。"),
+        cups: CupProgress(done: 3, goal: 6)
+    )
+    var asked: [TimeInterval] = []
+    let stage = ReminderStageView(content: content) { elapsed in
+        asked.append(elapsed)
+        return nil
     }
+    stage.layoutSubtreeIfNeeded()
+    var outcomes: [HealthReminderOutcome] = []
+    stage.onAction = { outcomes.append($0) }
 
-    let completeButton = try requireButton(in: view, identifier: "desktopPet.reminderCard.complete")
-    let snoozeButton = try requireButton(in: view, identifier: "desktopPet.reminderCard.snooze")
-    let skipButton = try requireButton(in: view, identifier: "desktopPet.reminderCard.skip")
+    let complete = try requireButton(in: stage, identifier: "reminderStage.complete")
+    let snooze = try requireButton(in: stage, identifier: "reminderStage.snooze")
+    let skip = try requireButton(in: stage, identifier: "reminderStage.skip")
+    try expect(ReminderQuips.hydration.done.contains(complete.title ?? ""), "water is confirmed with a drinking quip (got \(complete.title ?? "nil"))")
+    try expect(snooze.title == content.snoozeTitle && skip.title == content.skipTitle, "later and nope come from the content")
+    for button in [complete, snooze, skip] {
+        try expect(stage.bounds.contains(button.frame) && button.frame.width >= 100, "buttons sit inside the card and are easy to hit (got \(button.frame))")
+    }
+    try expect(complete.frame.width > snooze.frame.width, "the main button is the biggest")
+    try expect(stage.accessibilityLabel()?.contains("第 4/6 杯") == true, "reads out which cup this is")
+    try expect(stage.acceptsFirstMouse(for: nil), "works with one click while another app is in front")
 
-    try expect(completeButton.isEnabled, "complete action should enable when callback is provided")
-    try expect(snoozeButton.isEnabled, "snooze action should enable when callback is provided")
-    try expect(skipButton.isEnabled, "skip action should enable when callback is provided")
+    complete.performClick(nil)
+    snooze.performClick(nil)
+    skip.performClick(nil)
+    try expect(outcomes == [.completed, .snoozed, .skipped], "each button reports its outcome (got \(outcomes))")
 
-    completeButton.performClick(nil)
-    snoozeButton.performClick(nil)
-    skipButton.performClick(nil)
-
-    try expect(
-        receivedOutcomes == [.completed, .snoozed, .skipped],
-        "reminder card should forward each button tap to the matching outcome callback"
-    )
+    // 水豚的动作跟着时间走
+    _ = stage.bitmapImageRepForCachingDisplay(in: stage.bounds).map { stage.cacheDisplay(in: stage.bounds, to: $0) }
+    stage.advance(by: 0.5)
+    _ = stage.bitmapImageRepForCachingDisplay(in: stage.bounds).map { stage.cacheDisplay(in: stage.bounds, to: $0) }
+    try expect(asked.first == 0 && asked.last == 0.5, "the pet frame follows the time on screen (got \(asked))")
 }
 
-func testReminderCardButtonsWinHitTestingOverTransparentPetPixels() throws {
+/// 提醒卡摆在屏幕正中，比桌宠头顶那张小卡大得多，不抢键盘焦点
+@MainActor
+func testReminderStagePresenterCentersABigCardWithoutStealingFocus() throws {
     _ = try makeInstalledThemeManager()
-    let appPaths = try makeTemporaryAppPaths()
-    let view = DesktopPetView(
-        frame: NSRect(x: 0, y: 0, width: 128, height: 128),
-        assetLocator: PetAssetLocator(appPaths: appPaths),
-        petID: "missing_pet"
-    )
-    let payload = ReminderPresentationPayload(id: UUID(), type: .eyeCare, text: "看看远处，护护眼。")
+    let visible = CGRect(x: 0, y: 0, width: 1440, height: 860)
+    let presenter = ReminderStagePresenter(visibleFrame: { visible }, unansweredTimeout: 0)
+    defer { presenter.dismiss() }
+    let content = ReminderCardContent(payload: ReminderPresentationPayload(id: UUID(), type: .eyeCare, text: "x", restSeconds: 20), cups: nil)
+    var outcomes: [HealthReminderOutcome] = []
+    presenter.show(content: content, petImage: { _ in nil }) { outcomes.append($0) }
 
-    view.showReminderCard(payload) { _ in }
-    view.layoutSubtreeIfNeeded()
+    let panel = try requireValue(presenter.panel, "the card is in its own panel")
+    try expect(presenter.isShowing && panel.isVisible, "on screen")
+    try expect(!panel.canBecomeKey, "typing stays in the app you were using")
+    try expect(panel.level.rawValue >= NSWindow.Level.statusBar.rawValue, "above every normal window")
+    try expect(panel.frame.size == ReminderStageView.preferredSize && panel.frame.width >= 400, "a big card (got \(panel.frame.size))")
+    let settled = waitForCondition(timeout: 1) { abs(panel.frame.midX - visible.midX) <= 1 && abs(panel.frame.midY - visible.midY) < 90 }
+    try expect(settled, "settles in the middle of the screen (got \(panel.frame))")
 
-    let snoozeButton = try requireButton(in: view, identifier: "desktopPet.reminderCard.snooze")
-    let pointInsideButtonNearTrailingEdge = NSPoint(
-        x: snoozeButton.frame.maxX - 4,
-        y: snoozeButton.frame.midY
-    )
-    let hitPoint = view.convert(pointInsideButtonNearTrailingEdge, from: snoozeButton.superview)
-    let hitView = view.hitTest(hitPoint)
-
-    let actualDescription = hitView.map { "\($0.identifier?.rawValue ?? String(describing: type(of: $0)))" } ?? "nil"
-    try expect(
-        hitView === snoozeButton,
-        "reminder buttons should stay clickable even above transparent pet pixels (got \(actualDescription))"
-    )
+    try requireButton(in: try requireValue(presenter.stageView, "stage view"), identifier: "reminderStage.complete").performClick(nil)
+    try expect(outcomes == [.completed] && !presenter.isShowing, "a click reports once and puts the card away")
 }
 
-func testReminderCardBodyWinsHitTestingOverTransparentPetPixels() throws {
+@MainActor
+func testReminderStageGivesUpAsSkippedWhenNobodyAnswers() throws {
     _ = try makeInstalledThemeManager()
-    let appPaths = try makeTemporaryAppPaths()
-    let view = DesktopPetView(
-        frame: NSRect(x: 0, y: 0, width: 128, height: 128),
-        assetLocator: PetAssetLocator(appPaths: appPaths),
-        petID: "missing_pet"
-    )
-    let payload = ReminderPresentationPayload(id: UUID(), type: .eyeCare, text: "看看远处，护护眼。")
+    let presenter = ReminderStagePresenter(visibleFrame: { CGRect(x: 0, y: 0, width: 1440, height: 860) }, unansweredTimeout: 0.05)
+    defer { presenter.dismiss() }
+    let content = ReminderCardContent(payload: ReminderPresentationPayload(id: UUID(), type: .hydration, text: "x"), cups: nil)
+    var outcomes: [HealthReminderOutcome] = []
+    presenter.show(content: content, petImage: { _ in nil }) { outcomes.append($0) }
+    try expect(waitForCondition(timeout: 1) { outcomes == [.skipped] }, "an unanswered card counts as skipped (got \(outcomes))")
+    try expect(!presenter.isShowing, "and goes away")
 
-    view.showReminderCard(payload) { _ in }
-    view.layoutSubtreeIfNeeded()
-
-    let reminderCard = try requireView(in: view, identifier: "desktopPet.reminderCard")
-    // 卡片里标题那一块（不是按钮）
-    let pointInsideTitle = NSPoint(x: 40, y: 14)
-    let hitPoint = view.convert(pointInsideTitle, from: reminderCard)
-    let hitView = view.hitTest(hitPoint)
-
-    try expect(
-        hitView === reminderCard,
-        "reminder body clicks should stay on the reminder card instead of falling through to the transparent desktop"
-    )
+    presenter.show(content: content, petImage: { _ in nil }) { outcomes.append($0) }
+    presenter.dismiss()
+    _ = waitForCondition(timeout: 0.15) { false }
+    try expect(outcomes == [.skipped], "a card that was put away reports nothing later (got \(outcomes))")
 }
 
-func testReminderCardAcceptsFirstMouseWhenWindowIsInactive() throws {
-    let reminderCard = ReminderCardView(frame: NSRect(x: 0, y: 0, width: 120, height: 108))
+/// 护眼全屏休息：每块屏幕盖一层，倒计时走完算完成
+@MainActor
+func testEyeRestCoversEveryScreenCountsDownAndCompletesOnce() throws {
+    _ = try makeInstalledThemeManager()
+    let screens = [CGRect(x: 0, y: 0, width: 1440, height: 900), CGRect(x: 1440, y: 0, width: 1920, height: 1080)]
+    let rest = EyeRestOverlayController(screenFrames: { screens }, now: { 0 })
+    defer { rest.cancel() }
+    let content = ReminderCardContent(payload: ReminderPresentationPayload(id: UUID(), type: .eyeCare, text: "x", restSeconds: 20), cups: nil)
+    var outcomes: [HealthReminderOutcome] = []
+    rest.start(content: content, petImage: { _ in nil }) { outcomes.append($0) }
 
-    try expect(
-        reminderCard.acceptsFirstMouse(for: nil),
-        "reminder card should accept the first click so the desktop prompt works while the app is inactive"
-    )
+    try expect(rest.isActive && rest.windows.map(\.frame) == screens, "one cover per screen (got \(rest.windows.map(\.frame)))")
+    try expect(rest.windows.allSatisfy { $0.level.rawValue >= NSWindow.Level.screenSaver.rawValue && $0.canBecomeKey }, "above everything, and takes the keyboard")
+    let view = try requireValue(rest.overlayViews.first, "overlay view")
+    try expect(view.clockText == "还剩 20 秒" && view.litSegments == ReminderCardContent.progressSegments, "starts full (got \(view.clockText))")
+    _ = try requireButton(in: view, identifier: "eyeRest.endEarly")
+
+    rest.advance(by: 6)
+    try expect(view.clockText == "还剩 14 秒" && view.litSegments == 14, "ticks down (got \(view.clockText), \(view.litSegments))")
+    try expect(view.accessibilityLabel()?.contains("还剩 14 秒") == true, "read out too")
+    rest.advance(by: 14)
+    rest.advance(by: 1)
+    try expect(outcomes == [.completed] && !rest.isActive && rest.windows.isEmpty, "finishing completes exactly once and uncovers the screens (got \(outcomes))")
+}
+
+@MainActor
+func testEyeRestEndedEarlyReportsSkippedOrCompletedByHowMuchWasDone() throws {
+    _ = try makeInstalledThemeManager()
+    let content = ReminderCardContent(payload: ReminderPresentationPayload(id: UUID(), type: .eyeCare, text: "x", restSeconds: 20), cups: nil)
+    let rest = EyeRestOverlayController(screenFrames: { [CGRect(x: 0, y: 0, width: 800, height: 600)] }, now: { 0 })
+    defer { rest.cancel() }
+    var outcomes: [HealthReminderOutcome] = []
+
+    rest.start(content: content, petImage: { _ in nil }) { outcomes.append($0) }
+    rest.advance(by: 4)
+    try requireButton(in: try requireValue(rest.overlayViews.first, "overlay"), identifier: "eyeRest.endEarly").performClick(nil)
+    try expect(outcomes == [.skipped] && !rest.isActive, "leaving after 4 of 20 seconds is a skip (got \(outcomes))")
+
+    rest.start(content: content, petImage: { _ in nil }) { outcomes.append($0) }
+    rest.advance(by: 12)
+    try requireValue(rest.overlayViews.first, "overlay").cancelOperation(nil)
+    try expect(outcomes == [.skipped, .completed], "Esc after 12 of 20 seconds still counts (got \(outcomes))")
+
+    rest.start(content: content, petImage: { _ in nil }) { outcomes.append($0) }
+    rest.cancel()
+    rest.advance(by: 30)
+    try expect(outcomes.count == 2 && !rest.isActive, "a cancelled rest reports nothing")
 }
 
 @MainActor
@@ -143,11 +146,19 @@ func testReminderCompleteAndSkipLogExpectedOutcomes() throws {
         text: "起来活动一下。"
     )
 
+    // 护眼：点「开始休息」先全屏挡住屏幕，歇完才记完成
     harness.controller.presentReminder(payload: completePayload)
-    try requireButton(in: harness.window.contentView!, identifier: "desktopPet.reminderCard.complete").performClick(nil)
+    try expect(harness.petView.scene == .remind(.eyeCare), "the pet looks away along with the card")
+    try harness.stageButton("complete").performClick(nil)
+    try expect(!harness.controller.reminderStage.isShowing && harness.controller.eyeRest.isActive, "start hands over to the full-screen rest")
+    let duringRest = try harness.store.daySummary(for: harness.probe.now)
+    try expect(duringRest.eyeReminder.completed == 0, "nothing is recorded until the rest is over")
+    harness.controller.eyeRest.advance(by: completePayload.restSeconds)
+    try expect(!harness.controller.eyeRest.isActive && harness.petView.scene == nil, "the screen comes back and the pet settles")
 
     harness.controller.presentReminder(payload: skipPayload)
-    try requireButton(in: harness.window.contentView!, identifier: "desktopPet.reminderCard.skip").performClick(nil)
+    try harness.stageButton("skip").performClick(nil)
+    try expect(!harness.controller.eyeRest.isActive, "skipping never covers the screen")
 
     let summary = try harness.store.daySummary(for: harness.probe.now)
     try expect(summary.eyeReminder.shown == 2, "manual reminder presentations should record shown events")
@@ -157,29 +168,32 @@ func testReminderCompleteAndSkipLogExpectedOutcomes() throws {
 }
 
 @MainActor
-func testReminderPresentationExpandsWindowAndKeepsCardAbovePetCanvas() throws {
+func testReminderShowsInTheMiddleOfTheScreenAndLeavesThePetWindowAlone() throws {
     let harness = try makeHealthFlowHarness()
     defer { harness.controller.close() }
 
     let payload = ReminderPresentationPayload(
         id: UUID(uuidString: "dddddddd-4444-4444-4444-444444444444")!,
-        type: .eyeCare,
-        text: "看看远处，护护眼。"
+        type: .hydration,
+        text: "喝口水，慢慢来。"
     )
-
     harness.controller.presentReminder(payload: payload)
 
-    let contentView = try requireWindowContentView(of: harness.controller)
-    let reminderCard = try requireView(in: contentView, identifier: "desktopPet.reminderCard")
+    try expect(harness.controller.reminderStage.isShowing, "the reminder is a card of its own")
+    try expect(
+        harness.petView.currentOverlayLayoutMode != .card && harness.window.frame.height < DesktopPetView.cardExpandedContentSize.height,
+        "no card hangs over the pet any more, so its window does not grow for one (got \(harness.window.frame.size))"
+    )
+    try expect(harness.petView.scene == .remind(.hydration), "the pet drinks along")
+    try harness.stageButton("complete").performClick(nil)
+    try expect(!harness.controller.reminderStage.isShowing && !harness.controller.eyeRest.isActive, "water is confirmed right on the card")
+    try expect(harness.petView.scene == nil, "and the pet goes back to idling")
+    let afterCup = try harness.store.daySummary(for: harness.probe.now)
+    try expect(afterCup.hydrationReminder.completed == 1, "one cup recorded")
 
-    try expect(
-        harness.window.frame.height > DesktopPetView.compactContentSize.height,
-        "presenting a reminder should expand the window so the prompt does not stack on top of the pet"
-    )
-    try expect(
-        reminderCard.frame.minY >= DesktopPetView.compactContentSize.height,
-        "expanded reminder layout should place the card above the 128pt pet canvas instead of covering it (got card \(reminderCard.frame), window \(harness.window.frame), content \(contentView.bounds))"
-    )
+    harness.controller.presentReminder(payload: ReminderPresentationPayload(id: UUID(), type: .hydration, text: "x"))
+    harness.controller.close()
+    try expect(!harness.controller.reminderStage.isShowing, "closing the pet takes the card with it")
 }
 
 @MainActor
@@ -219,7 +233,7 @@ func testReminderSnoozeSchedulesFreshFollowUpAndLogsOutcomes() throws {
     )
 
     harness.controller.presentReminder(payload: originalPayload)
-    try requireButton(in: harness.window.contentView!, identifier: "desktopPet.reminderCard.snooze").performClick(nil)
+    try harness.stageButton("snooze").performClick(nil)
 
     let receivedFollowUp = waitForCondition(timeout: 0.6) {
         harness.probe.deliveredReminderPayloads.count == 1
@@ -233,7 +247,8 @@ func testReminderSnoozeSchedulesFreshFollowUpAndLogsOutcomes() throws {
     try expect(followUpPayload.id != originalPayload.id, "snooze follow-up should use a fresh reminder id")
 
     harness.probe.now = harness.probe.now.addingTimeInterval(300)
-    try requireButton(in: harness.window.contentView!, identifier: "desktopPet.reminderCard.complete").performClick(nil)
+    try harness.stageButton("complete").performClick(nil)
+    harness.controller.eyeRest.advance(by: followUpPayload.restSeconds)
 
     let summary = try harness.store.daySummary(for: harness.probe.now)
     try expect(summary.eyeReminder.shown == 2, "original reminder and follow-up should both count as shown")
@@ -241,84 +256,55 @@ func testReminderSnoozeSchedulesFreshFollowUpAndLogsOutcomes() throws {
     try expect(summary.eyeReminder.completed == 1, "follow-up completion should persist separately from the snooze")
 }
 
-func testReminderCardFitsInsideThePetWindowWidth() throws {
-    _ = try makeInstalledThemeManager()
-    let view = DesktopPetView(frame: NSRect(origin: .zero, size: DesktopPetView.reminderExpandedContentSize))
-    view.showReminderCard(ReminderPresentationPayload(id: UUID(), type: .eyeCare, text: "x"))
-    view.layoutSubtreeIfNeeded()
-
-    let card = try requireView(in: view, identifier: "desktopPet.reminderCard")
-    try expect(card.frame.minX >= 0 && card.frame.maxX <= view.bounds.width, "the card should not be clipped by the 128pt window (got \(card.frame))")
-    try expect(card.frame.maxY <= view.bounds.height, "the card should fit under the window top (got \(card.frame))")
-    for identifier in ["complete", "snooze", "skip"] {
-        let button = try requireButton(in: view, identifier: "desktopPet.reminderCard.\(identifier)")
-        try expect(card.bounds.contains(button.frame), "\(identifier) button should sit inside the card (got \(button.frame))")
-    }
-}
-
-func testHydrationReminderCardShowsWhichCupThisIs() throws {
-    _ = try makeInstalledThemeManager()
-    let view = DesktopPetView(frame: NSRect(x: 0, y: 0, width: 128, height: 128))
-    let payload = ReminderPresentationPayload(id: UUID(), type: .hydration, text: "喝口水，慢慢来。")
-    view.showReminderCard(payload, cups: CupProgress(done: 3, goal: 6)) { _ in }
-
-    let card = try requireReminderCard(in: view)
-    try expect(ReminderQuips.hydration.lines.contains(card.content?.title ?? ""), "water card picks a water line (got \(String(describing: card.content?.title)))")
-    try expect(card.detailText == "第 4/6 杯", "water card should say which cup this is (got \(card.detailText))")
-    let complete = try requireButton(in: view, identifier: "desktopPet.reminderCard.complete")
-    try expect(ReminderQuips.hydration.done.contains(complete.title ?? ""), "water is confirmed with a drinking quip")
-    try expect(card.remainingSegments == 0, "water cards have no countdown bar")
-}
-
-func testEyeReminderCardCountsDownAndCompletesOnce() throws {
-    _ = try makeInstalledThemeManager()
-    let view = DesktopPetView(frame: NSRect(x: 0, y: 0, width: 128, height: 128))
-    var outcomes: [HealthReminderOutcome] = []
-    let payload = ReminderPresentationPayload(id: UUID(), type: .eyeCare, text: "x", restSeconds: 20)
-    view.showReminderCard(payload) { outcomes.append($0) }
-
-    let card = try requireReminderCard(in: view)
-    try expect(card.detailText == "还剩 20 秒" && card.remainingSegments == 10, "starts full (got \(card.detailText))")
-    card.advanceCountdown(by: 6)
-    try expect(card.detailText == "还剩 14 秒" && card.remainingSegments == 7, "ticks down (got \(card.detailText), \(card.remainingSegments))")
-    card.advanceCountdown(by: 14)
-    card.advanceCountdown(by: 1)
-    try expect(outcomes == [.completed], "finishing the countdown completes the reminder exactly once (got \(outcomes))")
-}
-
-/// 每句俏皮话放进卡片都不会被截掉：标题行、按钮、「我就不」、还有最长的说明
+/// 每句俏皮话放进屏幕中央的提醒卡都不会被截掉：两倍大的标题、三个按钮、说明和小字；中英文都量
 func testReminderQuipsFitTheirSlotsOnTheCard() throws {
     let repoRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     PixelFont.register(assetsDirectory: repoRoot.appendingPathComponent("assets"))
     try expect(PixelFont.isAvailable, "measure with the real pixel font (repo root \(repoRoot.path))")
-    let font = PixelFont.font()
-    func width(_ text: String) -> CGFloat { PixelPaint.textSize(text, font: font).width }
-    let cardWidth: CGFloat = DesktopPetView.reminderExpandedContentSize.width - 4
-    let titleRoom = cardWidth - 8 * 2 - PixelPaint.iconSize(.eye).width - 4
-    let pools = [ReminderQuips.hydration, ReminderQuips.lookAway, ReminderQuips.standUp]
-    for line in pools.flatMap(\.lines) {
-        try expect(width(line) <= titleRoom, "'\(line)' is \(width(line))pt, title room is \(titleRoom)pt")
-    }
-    let buttonRoom = ((cardWidth - 16 - 4) / 2) - 8
-    for title in pools.flatMap(\.done) + ReminderQuips.later {
-        try expect(width(title) <= buttonRoom, "button '\(title)' is \(width(title))pt, room is \(buttonRoom)pt")
-    }
-    let skipRoom: CGFloat = 44
-    let detailRoom = cardWidth - 6 - skipRoom - 8
-    for title in ReminderQuips.nope {
-        try expect(width(title) <= skipRoom, "skip '\(title)' is \(width(title))pt")
-    }
-    for detail in ["还剩 20 秒", "还剩 4:59", "第 14/14 杯", "超额 3 杯", "小口慢慢喝"] {
-        try expect(width(detail) <= detailRoom, "detail '\(detail)' is \(width(detail))pt, room is \(detailRoom)pt")
+    let original = TextCatalog.shared
+    defer { TextCatalog.installShared(original) }
+    func width(_ text: String, scale: Int = 1) -> CGFloat { PixelPaint.textSize(text, font: PixelFont.font(scale: scale)).width }
+    // 右边一栏：从 184 到卡片右边留白 16
+    let column = ReminderStageView.preferredSize.width - 16 - 184
+    let titleRoom = column - PixelPaint.iconSize(.eye).width - 8
+    let halfButton = (column - 8) / 2 - 8
+
+    for language in [AppLanguage.chinese, .english] {
+        TextCatalog.installShared(try TextCatalog.live(appPaths: nil, repoRootURL: repoRoot, language: language))
+        let pools = [ReminderQuips.hydration, ReminderQuips.lookAway, ReminderQuips.standUp]
+        try expect(!ReminderQuips.lookAway.start.isEmpty && !ReminderQuips.standUp.start.isEmpty, "eye care has start-rest buttons (\(language))")
+        for line in pools.flatMap(\.lines) {
+            try expect(width(line, scale: 2) <= titleRoom, "'\(line)' is \(width(line, scale: 2))pt, title room is \(titleRoom)pt")
+        }
+        for title in pools.flatMap({ $0.done + $0.start }) {
+            try expect(width(title) <= column - 8, "main button '\(title)' is \(width(title))pt")
+        }
+        for title in ReminderQuips.later + ReminderQuips.nope {
+            try expect(width(title) <= halfButton, "button '\(title)' is \(width(title))pt, room is \(halfButton)pt")
+        }
+        let payloads = [
+            ReminderPresentationPayload(id: UUID(), type: .hydration, text: "x"),
+            ReminderPresentationPayload(id: UUID(), type: .eyeCare, text: "x", restSeconds: 20),
+            ReminderPresentationPayload(id: UUID(), type: .eyeCare, text: "x", restSeconds: 300),
+        ]
+        for payload in payloads {
+            let content = ReminderCardContent(payload: payload, cups: CupProgress(done: 13, goal: 14))
+            for text in [content.summary, content.hint] {
+                try expect(width(text) <= column, "'\(text)' is \(width(text))pt, column is \(column)pt")
+            }
+        }
+        // 今日报告评分那一块：右边一行说明的地方有限
+        for grade in ["great", "good", "okay", "tired"] {
+            let caption = TextCatalog.shared.text("report.score_caption_\(grade)")
+            try expect(width(caption) <= 182, "score caption '\(caption)' is \(width(caption))pt")
+        }
     }
 }
 
-private func requireReminderCard(in root: NSView) throws -> ReminderCardView {
-    guard let card = allSubviews(in: root).compactMap({ $0 as? ReminderCardView }).first else {
-        throw TestFailure(message: "expected a reminder card")
-    }
-    return card
+private func requireValue<T>(_ value: T?, _ message: String) throws -> T {
+    guard let value else { throw TestFailure(message: "expected \(message)") }
+    return value
 }
 
 private func requireButton(in root: NSView, identifier: String) throws -> PixelButton {
@@ -367,6 +353,14 @@ private struct HealthFlowHarness {
     let window: DesktopPetWindow
     let store: HealthMetricsStore
     let probe: HealthFlowTestProbe
+
+    var petView: DesktopPetView { window.contentView as! DesktopPetView }
+
+    /// 屏幕中央那张提醒卡上的按钮
+    @MainActor
+    func stageButton(_ name: String) throws -> PixelButton {
+        try requireButton(in: try requireValue(controller.reminderStage.stageView, "a reminder card on screen"), identifier: "reminderStage.\(name)")
+    }
 }
 
 @MainActor

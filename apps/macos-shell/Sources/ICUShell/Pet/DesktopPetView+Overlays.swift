@@ -1,6 +1,6 @@
 import AppKit
 
-/// 桌宠周围的浮层布局（状态标签、气泡、提醒卡片）与主题 / 文案刷新
+/// 桌宠周围的浮层布局（状态标签、气泡）与主题 / 文案刷新
 extension DesktopPetView {
     var petCanvasRect: NSRect {
         NSRect(
@@ -11,23 +11,23 @@ extension DesktopPetView {
         )
     }
 
-    /// 形象 + 头顶留白的上沿；气泡和提醒卡片从这里往上排
+    /// 形象 + 头顶留白的上沿；气泡和在等你的卡片从这里往上排
     var petStageTop: CGFloat {
         min(LayoutMetrics.petStageHeight, bounds.height)
     }
 
-    var usesExpandedReminderLayout: Bool {
-        bounds.height >= Self.reminderExpandedContentSize.height - 1
+    var usesExpandedCardLayout: Bool {
+        bounds.height >= Self.cardExpandedContentSize.height - 1
     }
 
     var usesExpandedTransientBubbleLayout: Bool {
         bounds.height >= Self.transientBubbleExpandedContentSize.height - 1
-            && bounds.height < Self.reminderExpandedContentSize.height - 1
+            && bounds.height < Self.cardExpandedContentSize.height - 1
     }
 
     var currentOverlayLayoutMode: OverlayLayoutMode {
-        if !reminderCardView.isHidden || waitCardView?.isHidden == false {
-            return .reminderCard
+        if waitCardView?.isHidden == false {
+            return .card
         }
         if !transientBubbleContainer.isHidden {
             return .transientBubble
@@ -74,15 +74,9 @@ extension DesktopPetView {
         let maxBubbleWidth = max(72, petRect.width - 20)
         let horizontalPadding: CGFloat = 10
         let verticalPadding: CGFloat = 7
-        let maxTextSize = NSSize(width: maxBubbleWidth - (horizontalPadding * 2), height: 52)
-        let font = transientBubbleLabel.font ?? NSFont.monospacedSystemFont(ofSize: 11, weight: .medium)
-        let textRect = NSString(string: transientBubbleLabel.stringValue).boundingRect(
-            with: maxTextSize,
-            options: [.usesLineFragmentOrigin, .usesFontLeading],
-            attributes: [.font: font]
-        )
-        let bubbleWidth = min(maxBubbleWidth, ceil(textRect.width) + (horizontalPadding * 2))
-        let bubbleHeight = max(28, min(LayoutMetrics.transientBubbleMaxHeight, ceil(textRect.height) + (verticalPadding * 2)))
+        let textSize = transientBubbleTextSize(maxWidth: maxBubbleWidth - (horizontalPadding * 2))
+        let bubbleWidth = min(maxBubbleWidth, textSize.width + (horizontalPadding * 2))
+        let bubbleHeight = max(28, min(LayoutMetrics.transientBubbleMaxHeight, textSize.height + (verticalPadding * 2)))
         let bubbleX = max(6, min(petRect.midX - (bubbleWidth / 2), petRect.width - bubbleWidth - 6))
         let bubbleY: CGFloat
         if usesExpandedTransientBubbleLayout {
@@ -112,6 +106,18 @@ extension DesktopPetView {
         )
     }
 
+    /// 气泡里这句话要占多大：用标签自己的 cell 量（它画字时左右各留一点边，拿字形宽度直接量会少算，
+    /// 英文按词换行时就多出一行、被气泡截掉）。短句收窄到字那么宽；收窄后换行变了（多出一行）就用满宽
+    private func transientBubbleTextSize(maxWidth: CGFloat) -> NSSize {
+        guard let cell = transientBubbleLabel.cell else { return NSSize(width: maxWidth, height: 14) }
+        let unbounded = CGFloat.greatestFiniteMagnitude
+        let widest = cell.cellSize(forBounds: NSRect(x: 0, y: 0, width: maxWidth, height: unbounded))
+        let narrow = min(maxWidth, ceil(widest.width))
+        let narrowHeight = cell.cellSize(forBounds: NSRect(x: 0, y: 0, width: narrow, height: unbounded)).height
+        guard narrowHeight > widest.height else { return NSSize(width: narrow, height: ceil(narrowHeight)) }
+        return NSSize(width: maxWidth, height: ceil(widest.height))
+    }
+
     func hideTransientBubble(notifyLayoutChange: Bool = true) {
         transientBubbleContainer.isHidden = true
         transientBubbleTail.isHidden = true
@@ -119,24 +125,6 @@ extension DesktopPetView {
             notifyOverlayLayoutModeChanged()
         }
         updateToolTipForVisibleContent()
-    }
-
-    func layoutReminderCard() {
-        // 窗口只有 128 宽：卡片几乎贴满，左右各留 2pt
-        let width = min(bounds.width - 4, 200)
-        let height = reminderCardView.preferredHeight
-        let y: CGFloat
-        if usesExpandedReminderLayout {
-            y = petStageTop + LayoutMetrics.reminderGap
-        } else {
-            y = max(26, bounds.height - height - 8)
-        }
-        reminderCardView.frame = NSRect(
-            x: (bounds.width - width) / 2,
-            y: y,
-            width: width,
-            height: height
-        )
     }
 
     func subscribeToThemeChanges() {
@@ -203,15 +191,12 @@ extension DesktopPetView {
         transientBubbleTail.layer?.cornerRadius = 1
         transientBubbleTail.layer?.setAffineTransform(CGAffineTransform(rotationAngle: .pi / 4))
         layoutTransientBubble()
-        layoutReminderCard()
         updateToolTipForVisibleContent()
     }
 
     func updateToolTipForVisibleContent() {
         let next: String?
-        if !reminderCardView.isHidden, let activeReminderTooltip {
-            next = activeReminderTooltip
-        } else if !transientBubbleContainer.isHidden {
+        if !transientBubbleContainer.isHidden {
             next = transientBubbleLabel.stringValue
         } else {
             next = persistentStatusText

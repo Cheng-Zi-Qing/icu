@@ -44,6 +44,8 @@ struct HealthDaySummary: Codable {
     /// 今天第一次上班、最后一次下班的时刻
     var firstClockInAt: Date? = nil
     var lastClockOutAt: Date? = nil
+    /// 每一段上下班的打卡（按上班时刻先后）；老版本记的天没有
+    var shifts: [WorkShift] = []
 
     /// 上班到下班一共多久：普通工作 + 专注 + 休息，多段上下班累加
     var onDutyDuration: Int {

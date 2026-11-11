@@ -15,19 +15,21 @@ struct CupProgress: Equatable {
     }
 }
 
-/// 提醒卡上写什么：图标、随机俏皮标题、一行说明、随机按钮文字。和画法分开，方便单测
+/// 屏幕中央那张提醒卡（和护眼全屏休息）上写什么：图标、随机俏皮标题、说明、随机按钮文字。和画法分开，方便单测
 struct ReminderCardContent: Equatable {
     enum Symbol: Equatable {
         case drop
         case eye
     }
 
-    static let progressSegments = 10
+    /// 全屏休息的倒计时条分几格
+    static let progressSegments = 20
 
     let symbol: Symbol
     let title: String
     /// 倒计时总长；喝水提醒为 0（不倒计时）
     let restSeconds: TimeInterval
+    /// 主按钮：喝水是「我喝了」，护眼是「开始休息」（点了才开始全屏倒计时）
     let completeTitle: String
     let snoozeTitle: String
     let skipTitle: String
@@ -40,7 +42,8 @@ struct ReminderCardContent: Equatable {
         pick: (Int) -> Int = { Int.random(in: 0..<$0) }
     ) {
         func choose(_ options: [String]) -> String {
-            options[min(max(0, pick(options.count)), options.count - 1)]
+            guard !options.isEmpty else { return "" }
+            return options[min(max(0, pick(options.count)), options.count - 1)]
         }
         let pool: ReminderQuips.Pool
         switch payload.type {
@@ -56,21 +59,48 @@ struct ReminderCardContent: Equatable {
             fixedDetail = nil
         }
         title = choose(pool.lines)
-        completeTitle = choose(pool.done)
+        completeTitle = choose(payload.type == .eyeCare ? pool.start : pool.done)
         snoozeTitle = choose(ReminderQuips.later)
         skipTitle = choose(ReminderQuips.nope)
     }
 
     var showsCountdown: Bool { restSeconds > 0 }
 
-    /// 喝水：第几杯；护眼：还剩多久
+    /// 点主按钮是不是先进全屏休息（护眼），而不是直接算完成（喝水）
+    var startsRest: Bool { showsCountdown }
+
+    /// 起身歇几分钟的那种休息（否则是看远处几十秒）
+    var isLongRest: Bool { restSeconds >= 60 }
+
+    /// 提醒卡上的一行说明。喝水：第几杯；护眼：要歇多久
+    var summary: String {
+        if let fixedDetail { return fixedDetail }
+        return isLongRest
+            ? TextCatalog.shared.format("reminder.eye_plan_minutes", Int((restSeconds / 60).rounded()))
+            : TextCatalog.shared.format("reminder.eye_plan_seconds", Int(restSeconds.rounded()))
+    }
+
+    /// 说明下面那行小字：点了按钮会发生什么
+    var hint: String {
+        TextCatalog.shared.text(startsRest ? "reminder.card_hint_rest" : "reminder.card_hint_water")
+    }
+
+    /// 全屏休息时的大标题
+    var restTitle: String {
+        TextCatalog.shared.text(isLongRest ? "rest.title_stand_up" : "rest.title_look_away")
+    }
+
+    /// 跟着提醒做动作的场景
+    var scene: PetScene { .remind(symbol == .drop ? .hydration : .eyeCare) }
+
+    /// 全屏休息时的倒计时文字（喝水没有倒计时，还是第几杯）
     func detail(remaining: TimeInterval) -> String {
         if let fixedDetail { return fixedDetail }
         let seconds = max(0, Int(remaining.rounded(.up)))
-        if restSeconds >= 60 && seconds >= 60 {
-            return String(format: "还剩 %d:%02d", seconds / 60, seconds % 60)
+        if isLongRest && seconds >= 60 {
+            return TextCatalog.shared.format("reminder.remaining_clock", seconds / 60, seconds % 60)
         }
-        return "还剩 \(seconds) 秒"
+        return TextCatalog.shared.format("reminder.remaining_seconds", seconds)
     }
 
     /// 进度条还亮着几格：最后一格要等时间真到了才灭
@@ -81,8 +111,10 @@ struct ReminderCardContent: Equatable {
     }
 
     private static func cupDetail(_ cups: CupProgress?) -> String {
-        guard let cups else { return "小口慢慢喝" }
+        guard let cups else { return TextCatalog.shared.text("reminder.sip_slowly") }
         let next = cups.done + 1
-        return next <= cups.goal ? "第 \(next)/\(cups.goal) 杯" : "超额 \(next - cups.goal) 杯"
+        return next <= cups.goal
+            ? TextCatalog.shared.format("reminder.cup_progress", next, cups.goal)
+            : TextCatalog.shared.format("reminder.cup_over", next - cups.goal)
     }
 }

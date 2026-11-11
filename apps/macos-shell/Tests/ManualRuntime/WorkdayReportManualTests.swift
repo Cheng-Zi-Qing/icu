@@ -163,7 +163,7 @@ func testTodayReportContentShowsShiftsSpanAndLifetime() throws {
     try expect(values["休息"] == "1 次 · 0:15", "breaks show their time (got \(values))")
     try expect(values["喝水"] == "2/6 杯", "cups against the goal (got \(values))")
     try expect(done.footer == "累计 12 天 · 86:30", "lifetime on this Mac (got \(String(describing: done.footer)))")
-    try expect(done.accessibilityText.hasPrefix("今日报告：该补水了"), "the conclusion is read first (got \(done.accessibilityText))")
+    try expect(done.accessibilityText.hasPrefix("今日报告：48 分，该歇歇了，该补水了"), "the score and the conclusion are read first (got \(done.accessibilityText))")
 
     let working = TodayReportContent(day: summary, lifetime: nil, cupsGoal: 6, workHours: 8, isOnDuty: true, calendar: testUTCCalendar)
     try expect(working.rows.contains { $0.value == "09:12–现在" }, "still on duty reads 现在")
@@ -192,4 +192,83 @@ func testReportPanelSitsBesideThePetTowardTheScreenCenter() throws {
     let button = CGRect(x: 1400, y: 875, width: 24, height: 24)
     let menuBar = ReportPanelPlacement.frame(size: size, below: button, in: screen)
     try expect(menuBar.maxX == button.maxX && menuBar.maxY == button.minY - 6, "menu bar: hangs under the button, growing left (got \(menuBar))")
+}
+
+// MARK: - 评分、进度条、本周
+
+func testTodayScoreWeighsWaterEyesRestAndHours() throws {
+    let fresh = TodayScore(day: day(work: 600), cupsGoal: 8, workHours: 8)
+    try expect(fresh.points == nil && fresh.grade == .warmingUp && fresh.title == "刚开工，晚点再评", "ten minutes in: no score yet (got \(fresh))")
+
+    let good = HealthReminderCounts(shown: 3, completed: 3, snoozed: 0, skipped: 0)
+    let perfect = TodayScore(day: day(work: 3 * 3600, breaks: 1, eye: good, cups: 8), cupsGoal: 8, workHours: 8)
+    try expect(perfect.points == 100 && perfect.grade == .great && perfect.pointsText == "100 分", "everything on track (got \(perfect))")
+
+    // 喝了该喝的一半（17.5）+ 护眼做了一半（15）+ 该歇两次歇了一次（10）+ 没超时（15）
+    let half = HealthReminderCounts(shown: 4, completed: 2, snoozed: 0, skipped: 2)
+    let middle = TodayScore(day: day(work: 4 * 3600, breaks: 1, eye: half, cups: 2), cupsGoal: 8, workHours: 8)
+    try expect(middle.points == 58 && middle.grade == .okay && middle.title == "有点紧绷", "half of everything (got \(middle))")
+
+    // 10 小时没喝水、没护眼、没休息；超时 1.5 小时，工时那 15 分扣一半
+    let rough = TodayScore(day: day(work: 10 * 3600), cupsGoal: 8, workHours: 8)
+    try expect(rough.points == 8 && rough.grade == .tired, "a rough day (got \(rough))")
+    try expect(TodayScore.Weight.water + TodayScore.Weight.eyes + TodayScore.Weight.rest + TodayScore.Weight.hours == 100, "weights add up to 100")
+}
+
+func testTodayReportMetersAndWeekTrend() throws {
+    let half = HealthReminderCounts(shown: 4, completed: 2, snoozed: 0, skipped: 2)
+    let meters = TodayReportMeter.meters(for: day(work: 4 * 3600, eye: half, cups: 2), cupsGoal: 8, workHours: 8)
+    try expect(meters.map(\.kind) == [.water, .eyes, .hours], "water, eyes, hours (got \(meters.map(\.kind)))")
+    try expect(meters.map(\.filled) == [2, 5, 5] && meters.map(\.value) == ["2/8 杯", "2/4 次", "4:00 / 8:00"], "bars and numbers (got \(meters))")
+    try expect(meters.allSatisfy { !$0.isOver }, "nothing over yet")
+
+    let long = TodayReportMeter.meters(for: day(work: 10 * 3600), cupsGoal: 8, workHours: 8)
+    try expect(long.map(\.kind) == [.water, .hours], "no eye reminders yet: no eye bar")
+    try expect(long[0].filled == 0 && long[1].filled == TodayReportMeter.segments && long[1].isOver, "overtime fills the bar and turns it red")
+
+    // 今天 4 小时，前两天 6 小时、8 小时，这周后面还没到
+    let durations = [6, 8, 4, 0, 0, 0, 0]
+    let start = morning.addingTimeInterval(-2 * 86_400)
+    let days = durations.enumerated().map { index, hours -> HealthDaySummary in
+        var summary = day(work: hours * 3600)
+        summary.date = start.addingTimeInterval(Double(index) * 86_400)
+        return summary
+    }
+    let week = HealthWeekSummary(
+        weekStartDate: start, weekEndExclusiveDate: start.addingTimeInterval(7 * 86_400),
+        eyeReminder: .empty, eyeReminderCompletionRate: 0, hydrationReminder: .empty, hydrationReminderCompletionRate: 0,
+        workDuration: 0, focusCount: 0, focusDuration: 0, breakCount: 0, days: days
+    )
+    guard let trend = TodayReportWeek(week: week, today: morning, calendar: testUTCCalendar) else {
+        throw TestFailure(message: "a week with work has a trend")
+    }
+    try expect(trend.bars.map(\.level) == [6, 8, 4, 0, 0, 0, 0], "bars follow the hours (got \(trend.bars.map(\.level)))")
+    try expect(trend.bars.map(\.isToday) == [false, false, true, false, false, false, false], "today is marked")
+    try expect(Set(trend.bars.map(\.label)).count == 7, "one weekday label per bar (got \(trend.bars.map(\.label)))")
+    try expect(trend.caption == "3 天 · 日均 6:00", "average over the days worked (got \(trend.caption))")
+    try expect(trend.comparison == "今天比日均少 3:00", "today against the other days (got \(String(describing: trend.comparison)))")
+
+    var idle = week
+    idle.days = days.map { var copy = $0; copy.workDuration = 0; return copy }
+    try expect(TodayReportWeek(week: idle, today: morning, calendar: testUTCCalendar) == nil, "no work this week: no trend")
+
+    let content = TodayReportContent(day: days[2], lifetime: nil, cupsGoal: 8, workHours: 8, isOnDuty: false, week: week, calendar: testUTCCalendar)
+    try expect(content.week == trend && content.score.points != nil, "the report carries the trend and a score")
+    try expect(!content.detailRows.contains { $0.kind == .water || $0.kind == .eyes }, "water and eyes are drawn as bars, not repeated as rows")
+    try expect(content.accessibilityText.contains("3 天 · 日均 6:00") && content.accessibilityText.contains(content.score.title), "read out too")
+}
+
+func testTodayAdviceListsPraiseBesideTheActions() throws {
+    let good = HealthReminderCounts(shown: 3, completed: 3, snoozed: 0, skipped: 0)
+    let behind = day(work: 4 * 3600, breaks: 2, eye: good, cups: 1)
+    let content = TodayReportContent(day: behind, lifetime: nil, cupsGoal: 8, workHours: 8, isOnDuty: true)
+    try expect(content.advice.map(\.topic) == [.water], "one thing to do (got \(content.advice))")
+    try expect(content.praise.map(\.text) == ["护眼做得不错", "休息节奏不错"], "and what went well is listed too (got \(content.praise))")
+
+    let fine = TodayReportContent(day: day(work: 3 * 3600, breaks: 1, eye: good, cups: 8), lifetime: nil, cupsGoal: 8, workHours: 8, isOnDuty: true)
+    try expect(fine.advice.allSatisfy { $0.tone == .good } && fine.praise.isEmpty, "a good day lists the praise once")
+
+    let snoozy = HealthReminderCounts(shown: 4, completed: 4, snoozed: 3, skipped: 0)
+    let advice = TodayAdvice.advise(day: day(work: 3600, eye: snoozy, cups: 8), cupsGoal: 8, workHours: 8)
+    try expect(advice.map(\.text) == ["提醒推迟了 3 次，别总等会儿"], "snoozing a lot gets a nudge (got \(advice))")
 }
