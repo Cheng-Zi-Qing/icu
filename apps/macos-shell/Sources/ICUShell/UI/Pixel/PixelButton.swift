@@ -50,11 +50,14 @@ final class PixelButton: NSControl {
         switch (title, icon) {
         case let (title?, icon?):
             // 字在前、图标跟在后面（比如锁着的套装「程序员 🔒」）
+            // 字太长时只给它按钮里剩下的地方（放不下会截成「…」），图标永远在按钮里
             let iconWidth = PixelPaint.iconSize(icon).width
             let gap: CGFloat = 4
-            let total = PixelPaint.textSize(title).width + gap + iconWidth
+            let room = content.width - 8 - gap - iconWidth
+            let textWidth = min(PixelPaint.textSize(title).width, room)
+            let total = textWidth + gap + iconWidth
             let startX = (content.midX - total / 2).rounded()
-            PixelPaint.text(title, in: NSRect(x: startX, y: content.minY, width: total, height: content.height), color: textColor)
+            PixelPaint.text(title, in: NSRect(x: startX, y: content.minY, width: room < PixelPaint.textSize(title).width ? room : total, height: content.height), color: textColor)
             PixelPaint.draw(icon, centeredIn: NSRect(x: startX + total - iconWidth, y: content.minY, width: iconWidth, height: content.height))
         case let (nil, icon?):
             PixelPaint.draw(icon, centeredIn: content)

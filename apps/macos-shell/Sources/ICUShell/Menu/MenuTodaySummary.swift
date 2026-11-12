@@ -11,11 +11,12 @@ struct MenuTodaySummary: Equatable {
         cupsDone = day.hydrationReminder.completed
         self.cupsGoal = cupsGoal
         eyeBreaks = day.eyeReminder.completed
-        workSeconds = day.workDuration
+        // 上班到下班一共多久（含专注和休息），和今日报告的「上班」一致
+        workSeconds = day.onDutyDuration
     }
 
-    var cupsText: String { "\(cupsDone)/\(cupsGoal) 杯" }
-    var eyeText: String { "\(eyeBreaks) 次" }
+    var cupsText: String { TextCatalog.shared.format("menu.cups_count", cupsDone, cupsGoal) }
+    var eyeText: String { TextCatalog.shared.format("menu.eye_count", eyeBreaks) }
 
     /// 「3:20」= 3 小时 20 分
     var workText: String {

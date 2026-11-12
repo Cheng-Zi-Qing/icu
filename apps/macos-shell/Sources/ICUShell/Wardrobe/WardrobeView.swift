@@ -31,6 +31,7 @@ final class WardrobeView: NSView {
     private var state: WardrobeState
     private var previewImage: NSImage?
     private var decorationImage: NSImage?
+    private var copyObserver: NSObjectProtocol?
 
     override var isFlipped: Bool { true }
 
@@ -88,6 +89,13 @@ final class WardrobeView: NSView {
         buildTabs()
         buildSuits()
         update(state: state)
+        copyObserver = NotificationCenter.default.addObserver(forName: .icuCopyDidChange, object: nil, queue: .main) { [weak self] _ in
+            self?.reloadCopy()
+        }
+    }
+
+    deinit {
+        copyObserver.map(NotificationCenter.default.removeObserver)
     }
 
     @available(*, unavailable)
@@ -111,9 +119,20 @@ final class WardrobeView: NSView {
         selectedSlot = slot
         for (tabSlot, button) in tabButtons {
             button.fillColor = tabSlot == slot ? PixelPalette.yellow : PixelPalette.paper2
-            button.setAccessibilityValue(tabSlot == slot ? "已选" : nil)
+            button.setAccessibilityValue(tabSlot == slot ? TextCatalog.shared.text("common.selected") : nil)
         }
         rebuildCells()
+    }
+
+    /// 语言换了：页签、套装、格子里的字都重读一遍（宽度跟着变，所以套装按钮重建）
+    func reloadCopy() {
+        for (slot, button) in tabButtons {
+            button.title = slot.title
+        }
+        buildSuits()
+        refreshSuits()
+        select(slot: selectedSlot)
+        needsDisplay = true
     }
 
     private func buildTabs() {
@@ -158,11 +177,13 @@ final class WardrobeView: NSView {
     }
 
     private func buildSuits() {
+        suitButtons.forEach { $0.removeFromSuperview() }
         var x = Layout.padding + Layout.suitLabelWidth
         suitButtons = catalog.suits.map { suit in
-            let button = PixelButton(title: suit.name, identifier: "wardrobe.suit.\(suit.id)")
+            let title = suit.displayName
+            let button = PixelButton(title: title, identifier: "wardrobe.suit.\(suit.id)")
             let lockRoom = state.canWear(suit) ? 0 : PixelPaint.iconSize(.lock).width + 4
-            let width = (PixelPaint.textSize(suit.name).width + 24 + lockRoom).rounded(.up)
+            let width = (PixelPaint.textSize(title).width + 24 + lockRoom).rounded(.up)
             button.frame = NSRect(x: x, y: Self.suitsTop(for: catalog), width: width, height: Layout.suitHeight)
             button.target = self
             button.action = #selector(handleSuit(_:))
@@ -178,16 +199,20 @@ final class WardrobeView: NSView {
             button.isEnabled = unlocked
             button.icon = unlocked ? nil : .lock
             button.fillColor = state.isWearing(suit) ? PixelPalette.yellow : PixelPalette.paper2
-            button.setAccessibilityValue(unlocked ? (state.isWearing(suit) ? "穿着" : nil) : "缺件，还不能穿")
+            button.setAccessibilityValue(
+                unlocked
+                    ? (state.isWearing(suit) ? TextCatalog.shared.text("wardrobe.wearing") : nil)
+                    : TextCatalog.shared.text("wardrobe.suit_locked")
+            )
         }
     }
 
     // MARK: - 绘制
 
     override func draw(_ dirtyRect: NSRect) {
-        PixelPanelChrome.draw(in: bounds, title: "衣柜", decoration: decorationImage)
+        PixelPanelChrome.draw(in: bounds, title: TextCatalog.shared.text("wardrobe.title"), decoration: decorationImage)
         drawStand()
-        PixelPaint.text("套装", in: NSRect(x: Layout.padding, y: Self.suitsTop(for: catalog), width: Layout.suitLabelWidth, height: Layout.suitHeight))
+        PixelPaint.text(TextCatalog.shared.text("wardrobe.suits"), in: NSRect(x: Layout.padding, y: Self.suitsTop(for: catalog), width: Layout.suitLabelWidth, height: Layout.suitHeight))
         if let message {
             let y = Self.suitsTop(for: catalog) + Layout.suitHeight + 6
             PixelPaint.text(message, in: NSRect(x: Layout.padding, y: y, width: bounds.width - 2 * Layout.padding, height: Layout.messageHeight), color: PixelPalette.danger)

@@ -67,18 +67,19 @@ func testPetPlaysTheSceneForWhatTheAgentIsDoing() throws {
     let reading = AgentSession(record: ["v": 1, "session": "s1", "event": "PreToolUse", "tool": "Read", "at": 1.0])
     controller.setAgentSummary(AgentSummary(kind: .working, count: 1, lead: reading))
     try expect(view.workActivity == .read, "reading a file: the reading scene (got \(String(describing: view.workActivity)))")
-    try expect(view.persistentStatusText == "读取中", "the status chip names the work (got \(view.persistentStatusText))")
+    try expect(isLine(view.persistentStatusText, of: .read), "the status chip names the work (got \(view.persistentStatusText))")
 
-    // 一秒内又去搜索：画面要停够 3 秒，字也跟着画面，不各说各的
+    // 一秒内又去搜索：画面要停够，字也跟着画面，不各说各的
     let searching = AgentSession(record: ["v": 1, "session": "s1", "event": "PreToolUse", "tool": "Grep", "at": 2.0])
     controller.setAgentSummary(AgentSummary(kind: .working, count: 1, lead: searching))
-    try expect(view.workActivity == .read && view.persistentStatusText == "读取中",
+    let readingLine = view.persistentStatusText
+    try expect(view.workActivity == .read && isLine(view.persistentStatusText, of: .read),
                "text stays with the scene on screen (got \(String(describing: view.workActivity)), \(view.persistentStatusText))")
 
-    // 同一个画面里换了个工具（读文件 → 抓网页）：画面不动，字马上换
+    // 同一个画面里换了个工具（读文件 → 抓网页）：画面不动，字也不动（像 Claude Code 一段活儿就一个词）
     let fetching = AgentSession(record: ["v": 1, "session": "s1", "event": "PreToolUse", "tool": "WebFetch", "at": 3.0])
     controller.setAgentSummary(AgentSummary(kind: .working, count: 1, lead: fetching))
-    try expect(view.persistentStatusText == "抓取网页中", "same scene, the text follows the tool (got \(view.persistentStatusText))")
+    try expect(view.persistentStatusText == readingLine, "same scene, same line (got \(view.persistentStatusText))")
 
     controller.setAgentSummary(AgentSummary(kind: .waiting, count: 1, lead: agentSession("PermissionRequest")))
     try expect(view.workActivity == nil, "waiting for you stops the scene at once")

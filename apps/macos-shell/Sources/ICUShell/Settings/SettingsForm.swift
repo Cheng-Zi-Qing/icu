@@ -33,20 +33,20 @@ struct SettingsForm: Equatable {
     /// 「建议上班时喝 6 杯（约 2050 ml）」：体重 × 35 ml 是全天的量，上班时段喝其中 65%
     var hydrationHeadline: String {
         let workMl = Int((hydrationPlan.workWaterMl / 10).rounded()) * 10
-        return "建议上班时喝 \(cups) 杯（约 \(workMl) ml）"
+        return TextCatalog.shared.format("settings.hydration_headline", cups, workMl)
     }
 
     /// 「每 80 分钟提醒一次」
     var hydrationDetail: String {
-        "每 \(Int((hydrationPlan.interval / 60).rounded())) 分钟提醒一次"
+        TextCatalog.shared.format("settings.hydration_detail", Int((hydrationPlan.interval / 60).rounded()))
     }
 
     func valueText(_ field: Field) -> String {
         switch field {
         case .bodyWeight: return "\(Int(profile.bodyWeightKg.rounded())) kg"
         case .cupVolume: return "\(Int(profile.cupVolumeMl.rounded())) ml"
-        case .workHours: return "\(Int(profile.workHours.rounded())) 小时"
-        case .eyeInterval: return "\(Int((timers.eyeInterval / 60).rounded())) 分钟"
+        case .workHours: return TextCatalog.shared.format("settings.value_hours", Int(profile.workHours.rounded()))
+        case .eyeInterval: return TextCatalog.shared.format("settings.value_minutes", Int((timers.eyeInterval / 60).rounded()))
         }
     }
 

@@ -3,33 +3,609 @@
     "show_pet": "显示桌宠",
     "today_report": "今日报告…",
     "quit_app": "退出",
-    "start_work": "开始工作",
-    "enter_focus": "进入专注",
-    "take_break": "暂离",
-    "resume_working": "回来工作",
-    "stop_work": "下班",
+    "start_work": "我要上班",
+    "enter_focus": "我要专注",
+    "take_break": "我离开一下",
+    "resume_working": "我回来了",
+    "stop_work": "我下班了",
     "hide_pet": "隐藏桌宠",
     "open_wardrobe": "衣柜",
     "open_settings": "设置…",
     "connect_claude": "接入 Claude Code",
-    "disconnect_claude": "断开 Claude Code"
+    "disconnect_claude": "断开 Claude Code",
+    "today": "今天",
+    "today_accessibility": "今天：喝水 %@，护眼 %@，工作 %@",
+    "cups_count": "%d/%d 杯",
+    "eye_count": "%d 次"
   },
   "pet": {
-    "status_idle": "待机中",
-    "status_working": "工作中",
-    "status_focus": "专注中",
-    "status_break": "暂离中",
+    "status_idle": "发呆中",
+    "status_working": "陪你上班",
+    "status_focus": "安静陪着",
+    "status_break": "等你回来",
     "focus_end_light": "抬头缓一缓，再接着做。",
     "focus_end_heavy": "这一段够久了，先休息一下。",
     "stop_work_message": "收工，歇会儿。",
     "eye_reminder": "看看远处，护护眼。",
-    "hydration_reminder": "喝口水，慢慢来。"
+    "hydration_reminder": "喝口水，慢慢来。",
+    "lines": {
+      "idle": [
+        "发呆中",
+        "放空中",
+        "坐着呢",
+        "静静嚼草",
+        "岁月静好",
+        "原地待机"
+      ],
+      "working": [
+        "陪你上班",
+        "监工中",
+        "坐班中",
+        "陪你肝",
+        "在线陪伴",
+        "工位护法"
+      ],
+      "focus": [
+        "安静陪着",
+        "嘘…专注",
+        "屏息陪着",
+        "不出声",
+        "心流护法",
+        "静音模式"
+      ],
+      "break": [
+        "等你回来",
+        "打个盹",
+        "歇会儿",
+        "原地充电",
+        "慢慢等",
+        "晾一会儿"
+      ],
+      "focus_end_light": [
+        "抬头缓一缓，再接着做。",
+        "这段漂亮，喘口气再冲",
+        "做完一段了，伸个懒腰吧"
+      ],
+      "focus_end_heavy": [
+        "这一段够久了，先休息一下。",
+        "脑袋冒烟了，歇会儿吧",
+        "连轴转太久，水豚看不下去了"
+      ],
+      "stop_work": [
+        "收工，歇会儿。",
+        "下班！今天辛苦啦",
+        "打卡下班，泡澡去咯"
+      ],
+      "rest_fish": [
+        "摸鱼中",
+        "钓鱼中",
+        "等鱼上钩",
+        "字面摸鱼",
+        "浮漂动了？",
+        "钓个寂寞"
+      ],
+      "sunbathe": [
+        "晒太阳中",
+        "墨镜一戴",
+        "光合作用",
+        "晒晒更香",
+        "日光浴中",
+        "别挡我光"
+      ],
+      "bath": [
+        "泡澡中",
+        "咕嘟咕嘟",
+        "泡得真舒服",
+        "温泉模式",
+        "冒热气中",
+        "泡到发软"
+      ],
+      "bird": [
+        "看小鸟",
+        "小鸟来啦",
+        "有客人",
+        "头顶停机坪",
+        "鸟鸟你好",
+        "别动别动"
+      ],
+      "wobble": [
+        "晃悠中",
+        "橙子晃晃",
+        "摇摇摆摆",
+        "顶橙平衡",
+        "晃一晃",
+        "稳住别掉"
+      ],
+      "nap": [
+        "打个盹",
+        "睡着了",
+        "呼…",
+        "充电中",
+        "梦到草了",
+        "zzZ"
+      ],
+      "drink": [
+        "喝水时间",
+        "咕咚咕咚",
+        "补水中",
+        "吨吨吨",
+        "干杯！",
+        "小口慢喝"
+      ],
+      "look_away": [
+        "看看远处",
+        "眼睛歇歇",
+        "眺望中",
+        "远方有草",
+        "放松眼睛",
+        "望远模式"
+      ]
+    }
   },
   "errors": {
     "work_invalid_transition": "当前状态下不能执行这个操作。",
-    "work_invalid_start_work": "当前状态下不能开始工作。",
-    "work_invalid_enter_focus": "只有在工作中才能进入专注。",
-    "work_invalid_take_break": "只有在工作中才能暂离。",
-    "work_invalid_resume_working": "当前不需要恢复工作。"
+    "work_invalid_start_work": "已经在上班了。",
+    "work_invalid_enter_focus": "先点「我要上班」，才能专注。",
+    "work_invalid_take_break": "还没上班，不用离开。",
+    "work_invalid_resume_working": "当前不需要恢复工作。",
+    "claude_settings_unreadable": "Claude Code 设置读不懂，没敢改",
+    "claude_hook_missing": "没找到 icu-hook，重装 ICU 试试"
+  },
+  "common": {
+    "close": "关闭",
+    "selected": "已选",
+    "decrease": "减少",
+    "increase": "增加",
+    "save_failed": "没存上，再点一次试试",
+    "accessibility_separator": "，"
+  },
+  "app": {
+    "report_empty": "今天还没有记录",
+    "claude_connected": "接上 Claude Code 了，新开的会话就能看到",
+    "claude_disconnected": "和 Claude Code 断开了",
+    "action_failed": "没弄成，稍后再试试"
+  },
+  "settings": {
+    "title": "ICU 设置",
+    "section_health": "健康资料",
+    "section_reminders": "提醒",
+    "health_weight": "体重",
+    "health_cup_volume": "杯子容量",
+    "health_work_hours": "每天工作",
+    "eye_interval": "护眼间隔",
+    "hydration_headline": "建议上班时喝 %d 杯（约 %d ml）",
+    "hydration_detail": "每 %d 分钟提醒一次",
+    "value_hours": "%d 小时",
+    "value_minutes": "%d 分钟",
+    "language": "语言",
+    "language_zh": "中文",
+    "language_en": "English"
+  },
+  "eye_mode": {
+    "rule202020": "20-20-20 推荐",
+    "hourly_break": "每小时歇歇",
+    "custom": "自定义",
+    "rule202020_explanation": "推荐：每 20 分钟看 6 米外 20 秒。眼科协会推荐，2023 年研究显示能减轻眼疲劳和干眼症状。",
+    "hourly_break_explanation": "每小时离开屏幕歇 5 分钟。NIOSH 研究：眼酸、视物模糊更少，效率不降。",
+    "custom_explanation": "自己定间隔，每次看 6 米外 20 秒。"
+  },
+  "reminder": {
+    "remaining_clock": "还剩 %d:%02d",
+    "remaining_seconds": "还剩 %d 秒",
+    "sip_slowly": "小口慢慢喝",
+    "cup_progress": "第 %d/%d 杯",
+    "cup_over": "超额 %d 杯",
+    "eye_plan_seconds": "看 6 米外的远处 %d 秒",
+    "eye_plan_minutes": "离开屏幕歇 %d 分钟",
+    "card_hint_rest": "点开始，屏幕会先帮你挡一会儿",
+    "card_hint_water": "喝完点一下，水豚帮你记上"
+  },
+  "quips": {
+    "hydration": {
+      "lines": [
+        "咕嘟时间到！",
+        "嘴巴干了吧？",
+        "来，干一杯！",
+        "你的杯子在哭",
+        "吨吨吨走起！",
+        "水豚盯着你喝",
+        "喝口水再忙嘛",
+        "给自己浇浇水"
+      ],
+      "done": [
+        "我喝了",
+        "吨吨吨",
+        "喝完啦",
+        "干了！"
+      ]
+    },
+    "look_away": {
+      "lines": [
+        "眼睛喊累啦",
+        "看看远处嘛",
+        "窗外有朵云",
+        "别盯屏幕啦",
+        "眼珠子放个假",
+        "远处有风景",
+        "望远一下下"
+      ],
+      "done": [
+        "看过了",
+        "好嘞",
+        "看完啦"
+      ],
+      "start": [
+        "开始休息",
+        "去看远处",
+        "歇一下"
+      ]
+    },
+    "stand_up": {
+      "lines": [
+        "屁股坐麻了吧",
+        "起来晃一晃",
+        "去走两步嘛",
+        "伸个大懒腰",
+        "水豚陪你歇会",
+        "站起来扭一扭"
+      ],
+      "done": [
+        "动过了",
+        "好嘞",
+        "歇好啦"
+      ],
+      "start": [
+        "起来走走",
+        "去歇会儿",
+        "开始休息"
+      ]
+    },
+    "later": [
+      "等会儿",
+      "再忙下",
+      "一会儿"
+    ],
+    "nope": [
+      "我就不",
+      "不要",
+      "偏不"
+    ]
+  },
+  "wardrobe": {
+    "title": "衣柜",
+    "suits": "套装",
+    "wearing": "穿着",
+    "suit_locked": "缺件，还不能穿",
+    "locked_hint": "完成任务掉落",
+    "locked_accessibility": "还没拿到，完成提醒有机会掉落",
+    "slot": {
+      "head": "头顶",
+      "mouth": "嘴里",
+      "neck": "脖子",
+      "face": "脸上"
+    },
+    "item": {
+      "orange": "橙子",
+      "straw_hat": "草帽",
+      "orange_stack": "一叠橙子",
+      "flower": "小花",
+      "duck": "小黄鸭",
+      "onsen_towel": "温泉毛巾",
+      "santa_hat": "圣诞帽",
+      "grass": "草",
+      "foxtail": "狗尾巴草",
+      "carrot": "小胡萝卜",
+      "sakura": "樱花枝",
+      "bell": "铃铛",
+      "scarf": "围巾",
+      "badge": "工牌",
+      "round_glasses": "圆眼镜",
+      "sunglasses": "墨镜"
+    },
+    "suit": {
+      "default": "默认",
+      "summer": "夏天",
+      "programmer": "程序员",
+      "spring": "春天"
+    }
+  },
+  "advice": {
+    "water_done": "喝水达标了",
+    "eyes_done": "护眼做得不错",
+    "all_good": "状态不错，继续保持",
+    "water_behind": "该补水了，还差 %d 杯",
+    "eyes_rest": "眼睛该放松了，看看远处",
+    "rest_break": "还没休息过，起来走走",
+    "overtime": "上班超时了，早点收工",
+    "snoozed_often": "提醒推迟了 %d 次，别总等会儿",
+    "rest_done": "休息节奏不错",
+    "hours_done": "工时在计划内"
+  },
+  "report": {
+    "title": "今日报告",
+    "accessibility_prefix": "今日报告：",
+    "footer_lifetime": "累计 %d 天 · %@",
+    "shift_segments": "%d 段",
+    "count_and_duration": "%d 次 · %@",
+    "eye_ratio": "%d/%d 次",
+    "cup_ratio": "%d/%d 杯",
+    "now": "现在",
+    "row_on_duty": "上班",
+    "row_span": "时段",
+    "row_shifts": "打卡",
+    "span_since": "%@ 起",
+    "shift_interrupted": "%@ 意外退出",
+    "row_focus": "专注",
+    "row_rest": "休息",
+    "row_eyes": "护眼",
+    "row_water": "喝水",
+    "score_points": "%d 分",
+    "score_great": "状态很好",
+    "score_good": "状态不错",
+    "score_okay": "有点紧绷",
+    "score_tired": "该歇歇了",
+    "score_warming_up": "刚开工，晚点再评",
+    "score_caption_great": "喝水、护眼、休息都跟上了",
+    "score_caption_good": "大体不错，还有一两处能更好",
+    "score_caption_okay": "身体在提意见了，看看下面的建议",
+    "score_caption_tired": "今天透支得有点多，先照顾自己",
+    "score_caption_warming_up": "上班满半小时后给出今天的评分",
+    "meter_water": "喝水",
+    "meter_eyes": "护眼",
+    "meter_hours": "工时",
+    "meter_hours_value": "%@ / %@",
+    "section_advice": "建议",
+    "section_praise": "做得好",
+    "section_week": "本周",
+    "week_caption": "%d 天 · 日均 %@",
+    "week_above": "今天比日均多 %@",
+    "week_below": "今天比日均少 %@",
+    "weekdays": [
+      "一",
+      "二",
+      "三",
+      "四",
+      "五",
+      "六",
+      "日"
+    ]
+  },
+  "agent": {
+    "activity_think": "思考中",
+    "activity_read": "读取中",
+    "activity_search": "搜索中",
+    "activity_update": "更新中",
+    "activity_bash": "运行 Bash",
+    "activity_delegate": "子 Agent 运行中",
+    "activity_write": "写入中",
+    "activity_fetch": "抓取网页中",
+    "activity_web_search": "网页搜索中",
+    "waiting": "在等你",
+    "waiting_suffix_count": "在等你 ×%d",
+    "waiting_count": "%d 个在等你",
+    "done": "干完了",
+    "done_count": "%d 个干完了",
+    "failed": "出错了",
+    "answer_in_terminal": "回终端回答问题",
+    "approve_in_terminal": "回终端批准",
+    "approve_tool": "回终端批准",
+    "jump_there": "跳过去",
+    "got_it": "知道了",
+    "reminder_eye": "Claude 还在跑，起来走两步，看看远处",
+    "reminder_water": "Claude 还要忙一阵，去倒杯水吧",
+    "lines": {
+      "think": [
+        "嚼草沉思…",
+        "反刍思路…",
+        "草料发酵中…",
+        "慢慢嚼透…",
+        "嚼出灵感…",
+        "腮帮子在想…"
+      ],
+      "read": [
+        "戴镜翻页…",
+        "一目十行…",
+        "逐字品读…",
+        "翻翻翻…",
+        "眯眼细看…",
+        "书虫上身…"
+      ],
+      "search": [
+        "追球中…",
+        "满屋飞奔…",
+        "球呢球呢…",
+        "冲冲冲…",
+        "一路小跑…",
+        "追丢再追…"
+      ],
+      "update": [
+        "涂涂改改…",
+        "划掉重写…",
+        "改一丢丢…",
+        "精修细抠…",
+        "小修小补…",
+        "咬笔斟酌…"
+      ],
+      "bash": [
+        "边吃边等…",
+        "嚼嚼命令…",
+        "等它跑完…",
+        "加餐等待…",
+        "咔嚓咔嚓…",
+        "吃饱再说…"
+      ],
+      "delegate": [
+        "派小鸟去…",
+        "飞鸽传书…",
+        "摇人中…",
+        "外包给鸟…",
+        "小鸟出差…",
+        "请个帮手…"
+      ],
+      "write": [
+        "码字中…",
+        "奋笔疾书…",
+        "下笔如草…",
+        "妙笔生草…",
+        "唰唰唰…",
+        "笔尖冒烟…"
+      ],
+      "fetch": [
+        "翻网页中…",
+        "眯眼看网页…",
+        "网页翻翻…",
+        "一页页翻…",
+        "远程翻书…",
+        "读网页中…"
+      ],
+      "web_search": [
+        "全网追球…",
+        "满网飞奔…",
+        "网上追丢…",
+        "网上撒欢…",
+        "搜搜搜…",
+        "四处追…"
+      ],
+      "waiting": [
+        "喊你呢！",
+        "招手中",
+        "等你拍板",
+        "看这里～",
+        "挥挥爪",
+        "你来定"
+      ],
+      "done": [
+        "干完啦！",
+        "大功告成",
+        "交作业啦",
+        "收工蹦一下",
+        "搞定！",
+        "完美落地"
+      ],
+      "failed": [
+        "呜，报错",
+        "出岔子了",
+        "报错啦",
+        "歪头不解",
+        "啊这…",
+        "有点懵"
+      ],
+      "reminder_eye": [
+        "Claude 还在跑，起来走两步，看看远处",
+        "Claude 在吭哧干活，你去看看窗外",
+        "让 Claude 先忙着，你眼睛歇一歇",
+        "屏幕交给 Claude 盯，你看看窗外",
+        "Claude 在加班，你的眼睛先下班"
+      ],
+      "reminder_water": [
+        "Claude 还要忙一阵，去倒杯水吧",
+        "Claude 在加班，你去接杯水",
+        "趁 Claude 忙，吨吨吨一杯",
+        "Claude 盯着代码呢，你盯着水杯",
+        "让 Claude 先卷，你去吨吨吨"
+      ],
+      "think_dots": [
+        "脑内绕圈…",
+        "转呀转呀…",
+        "思路兜风…",
+        "念头打转…",
+        "小点在跑…",
+        "嗡嗡运转…"
+      ],
+      "think_bulb": [
+        "憋大招中…",
+        "灯泡预热…",
+        "灵光加载…",
+        "叮！有了…",
+        "点子孵化…",
+        "亮了亮了…"
+      ],
+      "paper": [
+        "啃文档中…",
+        "嚼两口纸…",
+        "文档真香…",
+        "尝尝咸淡…",
+        "吃掉一角…",
+        "若无其事…"
+      ],
+      "rummage": [
+        "翻箱倒柜…",
+        "埋头扒拉…",
+        "箱底探险…",
+        "一件件扔…",
+        "屁股朝外…",
+        "找到没…"
+      ],
+      "button": [
+        "按下回车…",
+        "拍大按钮…",
+        "啪！跑起来",
+        "一键起飞…",
+        "按就完了…",
+        "点火！"
+      ],
+      "surf": [
+        "终端冲浪…",
+        "滑起来咯…",
+        "乘风破浪…",
+        "速度与水豚",
+        "浪里白条…",
+        "顺流而下…"
+      ],
+      "fall": [
+        "翻车了",
+        "摔了一跤",
+        "啪叽…",
+        "平地摔…",
+        "脸先着地",
+        "没事没事"
+      ]
+    }
+  },
+  "digest": {
+    "headline": "你不在时：%@ %@",
+    "more": "%@，还有 %d 件",
+    "verb_waiting": "在等你",
+    "verb_failed": "出错了",
+    "verb_done": "干完了"
+  },
+  "rest": {
+    "title_look_away": "看看 6 米外的远处",
+    "title_stand_up": "起来走走，离开屏幕",
+    "hint": "屏幕先帮你挡着，水豚陪你歇会儿",
+    "end_early": "提前结束",
+    "accessibility": "护眼休息中，%@"
+  },
+  "poke": {
+    "tickle": [
+      "哈哈哈好痒！",
+      "别挠肚子啦～",
+      "痒痒痒！",
+      "嘿嘿嘿停一下"
+    ],
+    "annoyed": [
+      "别碰我的腿",
+      "啧，干嘛呀",
+      "腿是走路用的",
+      "不要踩我脚"
+    ],
+    "sneeze": [
+      "阿嚏！",
+      "鼻子痒痒…",
+      "阿——嚏！",
+      "草都喷飞了"
+    ],
+    "startled": [
+      "吓我一跳！",
+      "谁！谁戳我？",
+      "哇啊！",
+      "背后偷袭！"
+    ],
+    "grumpy": [
+      "哼！不理你了",
+      "戳够了没？",
+      "生气了！",
+      "哼，扭头"
+    ]
   }
 }

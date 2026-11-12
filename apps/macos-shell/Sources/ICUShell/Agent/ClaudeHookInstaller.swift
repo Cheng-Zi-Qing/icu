@@ -8,9 +8,9 @@ enum ClaudeHookInstallerError: Error, Equatable {
     var userMessage: String {
         switch self {
         case .unreadableSettings:
-            return "Claude Code 的设置文件读不懂，没敢改。可以检查一下 ~/.claude/settings.json"
+            return TextCatalog.shared.text("errors.claude_settings_unreadable")
         case .missingHookBinary:
-            return "没找到 icu-hook，重新安装一下 ICU 试试"
+            return TextCatalog.shared.text("errors.claude_hook_missing")
         }
     }
 }

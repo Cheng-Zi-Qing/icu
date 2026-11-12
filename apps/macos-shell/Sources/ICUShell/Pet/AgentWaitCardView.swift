@@ -2,7 +2,7 @@ import AppKit
 
 /// 在等你时桌宠头顶的卡片：谁在等、等什么，「跳过去」（或点卡片任何地方）切回那个终端，「知道了」先收起来。
 /// 批准 / 回答都回终端里做，卡片上不做（见 AgentWaitCardContent）。
-/// 和提醒卡一个样子（像素底板 + 指向桌宠的小尖角），挂着时不抢焦点
+/// 像素底板 + 指向桌宠的小尖角，挂着时不抢焦点
 final class AgentWaitCardView: NSView {
     private enum Metrics {
         static let tailHeight: CGFloat = 6
@@ -18,8 +18,8 @@ final class AgentWaitCardView: NSView {
 
     static let height = Metrics.buttonsTop + Metrics.buttonHeight + Metrics.padding + Metrics.tailHeight
 
-    let jumpButton = PixelButton(title: "跳过去", identifier: "desktopPet.waitCard.jump")
-    let dismissButton = PixelButton(title: "知道了", identifier: "desktopPet.waitCard.dismiss")
+    let jumpButton = PixelButton(title: TextCatalog.shared.text("agent.jump_there"), identifier: "desktopPet.waitCard.jump")
+    let dismissButton = PixelButton(title: TextCatalog.shared.text("agent.got_it"), identifier: "desktopPet.waitCard.dismiss")
 
     private(set) var content: AgentWaitCardContent?
     /// 文字能占多宽
@@ -52,7 +52,7 @@ final class AgentWaitCardView: NSView {
     func configure(with content: AgentWaitCardContent) {
         self.content = content
         jumpButton.isHidden = content.appBundleID == nil
-        setAccessibilityLabel("\(content.title)，\(content.detail)")
+        setAccessibilityLabel("\(content.title)\(TextCatalog.shared.text("common.accessibility_separator"))\(content.detail)")
         needsLayout = true
         needsDisplay = true
     }

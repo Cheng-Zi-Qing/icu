@@ -23,16 +23,19 @@ struct AgentWaitCardContent: Equatable {
         guard summary.kind == .waiting else { return nil }
         let lead = summary.lead
         titleName = lead?.project ?? "Claude"
-        titleSuffix = summary.count > 1 ? "在等你 ×\(summary.count)" : "在等你"
+        titleSuffix = summary.count > 1
+            ? TextCatalog.shared.format("agent.waiting_suffix_count", summary.count)
+            : TextCatalog.shared.text("agent.waiting")
         switch lead?.phase {
         case .waiting(.question):
-            detailLead = "回终端回答问题"
+            detailLead = TextCatalog.shared.text("agent.answer_in_terminal")
             detailTool = nil
         case let .waiting(.permission(tool?)):
-            detailLead = "回终端批准"
+            // 后面还跟着工具名，英文用短的「Allow」（「Allow Bash」），卡片窄，放不下「Approve in terminal Bash」
+            detailLead = TextCatalog.shared.text("agent.approve_tool")
             detailTool = Self.displayName(of: tool)
         default:
-            detailLead = "回终端批准"
+            detailLead = TextCatalog.shared.text("agent.approve_in_terminal")
             detailTool = nil
         }
         appBundleID = lead?.appBundleID

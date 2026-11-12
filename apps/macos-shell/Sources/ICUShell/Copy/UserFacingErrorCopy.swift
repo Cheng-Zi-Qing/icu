@@ -14,11 +14,11 @@ enum UserFacingErrorCopy {
         case let .invalidTransition(_, attempted):
             switch attempted {
             case "startWork":
-                return text("errors.work_invalid_start_work", fallback: "当前状态下不能开始工作。")
+                return text("errors.work_invalid_start_work", fallback: "已经在上班了。")
             case "enterFocus":
-                return text("errors.work_invalid_enter_focus", fallback: "只有在工作中才能进入专注。")
+                return text("errors.work_invalid_enter_focus", fallback: "先点「我要上班」，才能专注。")
             case "takeBreak":
-                return text("errors.work_invalid_take_break", fallback: "只有在工作中才能暂离。")
+                return text("errors.work_invalid_take_break", fallback: "还没上班，不用离开。")
             case "resumeWorking":
                 return text("errors.work_invalid_resume_working", fallback: "当前不需要恢复工作。")
             default:

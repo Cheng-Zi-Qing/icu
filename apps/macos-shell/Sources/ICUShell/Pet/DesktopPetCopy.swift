@@ -1,44 +1,45 @@
 import Foundation
 
 enum DesktopPetCopy {
-    private static func text(_ key: String, fallback: String) -> String {
-        TextCatalog.shared.text(key, fallback: fallback)
+    private static func text(_ key: String) -> String {
+        TextCatalog.shared.text(key)
     }
 
+    /// 状态条上平时的字：每种状态一组话，进这个状态时抽一句，待在这个状态里不换
     static func statusText(for state: ShellWorkState) -> String {
         switch state {
         case .idle:
-            return text("pet.status_idle", fallback: "待机中")
+            return PlayfulLines.workStatus.line(pool: WorkLinePool.idle.key, fallback: "pet.status_idle")
         case .working:
-            return text("pet.status_working", fallback: "工作中")
+            return PlayfulLines.workStatus.line(pool: WorkLinePool.working.key, fallback: "pet.status_working")
         case .focus:
-            return text("pet.status_focus", fallback: "专注中")
+            return PlayfulLines.workStatus.line(pool: WorkLinePool.focus.key, fallback: "pet.status_focus")
         case .breakState:
-            return text("pet.status_break", fallback: "暂离中")
+            return PlayfulLines.workStatus.line(pool: WorkLinePool.breakTime.key, fallback: "pet.status_break")
         }
     }
 
     static func focusSuggestionMessage(for suggestion: FocusEndSuggestion?) -> String? {
         switch suggestion {
         case .light:
-            return text("pet.focus_end_light", fallback: "抬头缓一缓，再接着做。")
+            return PlayfulLines.bubble.fresh(pool: BubbleLinePool.focusEndLight.key, fallback: "pet.focus_end_light")
         case .heavy:
-            return text("pet.focus_end_heavy", fallback: "这一段够久了，先休息一下。")
+            return PlayfulLines.bubble.fresh(pool: BubbleLinePool.focusEndHeavy.key, fallback: "pet.focus_end_heavy")
         case nil:
             return nil
         }
     }
 
     static func stopWorkMessage() -> String {
-        text("pet.stop_work_message", fallback: "收工，歇会儿。")
+        PlayfulLines.bubble.fresh(pool: BubbleLinePool.stopWork.key, fallback: "pet.stop_work_message")
     }
 
     static func eyeReminderMessage() -> String {
-        text("pet.eye_reminder", fallback: "看看远处，护护眼。")
+        text("pet.eye_reminder")
     }
 
     static func hydrationReminderMessage() -> String {
-        text("pet.hydration_reminder", fallback: "喝口水，慢慢来。")
+        text("pet.hydration_reminder")
     }
 
 }

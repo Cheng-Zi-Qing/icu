@@ -4,7 +4,7 @@ struct ReminderPresentationPayload {
     let id: UUID
     let type: HealthReminderType
     let text: String
-    /// 护眼提醒要休息多久（提醒卡倒计时用）
+    /// 护眼提醒要休息多久（全屏休息倒计时用）
     var restSeconds: TimeInterval = 20
 }
 

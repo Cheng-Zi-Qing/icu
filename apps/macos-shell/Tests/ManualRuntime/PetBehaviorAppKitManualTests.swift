@@ -67,8 +67,10 @@ private func makeBehaviorFixture() throws -> BehaviorFixture {
     let idleActs = root.appendingPathComponent("idle_act", isDirectory: true)
     let pink = NSColor(deviceRed: 0.9, green: 0.5, blue: 0.6, alpha: 1)
     let blue = NSColor(deviceRed: 0.3, green: 0.4, blue: 0.8, alpha: 1)
-    for name in PetActionClip.petted.frameNames {
-        try makeColorPNG(at: react.appendingPathComponent(name), color: pink)
+    for clip in PetActionClip.allCases where clip.directory == "react" {
+        for name in clip.frameNames {
+            try makeColorPNG(at: react.appendingPathComponent(name), color: pink)
+        }
     }
     for clip in [PetActionClip.doze, .nap, .wake] {
         for name in clip.frameNames {
@@ -281,6 +283,155 @@ func testDesktopPetViewShowsHappyFramesWhenItsHeadIsRubbed() throws {
     try expect(imageView.image !== idleImage, "the happy frame replaces the idle frame on screen")
 }
 
+// MARK: - 戳一下
+
+func testPetBehaviorReactsToWherePetIsPoked() throws {
+    let fixture = try makeBehaviorFixture()
+    let clock = FakeClock()
+    let coordinator = makeCoordinator(fixture, clock: clock)
+    var shown: [NSImage?] = []
+    coordinator.onImageChanged = { shown.append($0) }
+
+    try expect(coordinator.poked(.belly) == .tickled, "poking the belly tickles")
+    try expect(coordinator.activeClip == .tickled, "the tickle frames play")
+    try expect(shown.last! === fixture.react.image(named: "tickle_0.png"), "starting from the first one")
+
+    clock.now += 1 / PetActionClip.tickled.framesPerSecond
+    coordinator.tick()
+    try expect(shown.last! === fixture.react.image(named: "tickle_1.png"), "frame by frame")
+
+    clock.now += 0.2
+    try expect(coordinator.poked(.legs) == .annoyed, "a poke somewhere else switches to that reaction")
+
+    clock.now += PetActionClip.annoyed.duration
+    coordinator.tick()
+    try expect(coordinator.activeClip == nil && shown.last! == nil, "and it ends on its own")
+}
+
+func testPetBehaviorGetsGrumpyWhenPokedTooOften() throws {
+    let fixture = try makeBehaviorFixture()
+    let clock = FakeClock()
+    let coordinator = makeCoordinator(fixture, clock: clock)
+    var played: [PetActionClip?] = []
+    for _ in 0..<PetPokeTracker.overdoneCount {
+        clock.now += 0.3
+        played.append(coordinator.poked(.belly))
+    }
+    try expect(played.last == .grumpy, "too many pokes in a row make it cross (got \(played))")
+    clock.now += 0.3
+    try expect(coordinator.poked(.nose) == nil, "while cross it ignores you")
+    try expect(coordinator.activeClip == .grumpy, "and keeps sulking")
+
+    clock.now += PetActionClip.grumpy.duration
+    coordinator.tick()
+    try expect(coordinator.activeClip == nil, "it gets over it")
+    try expect(coordinator.poked(.nose) == .sneezed, "and reacts again, starting the count afresh")
+}
+
+func testPetBehaviorIgnoresPokesWhileAsleep() throws {
+    let fixture = try makeBehaviorFixture()
+    let clock = FakeClock()
+    let coordinator = makeCoordinator(fixture, clock: clock)
+    clock.userIdle = PetNapSchedule.napAfterIdle + 1
+    coordinator.tick()
+    clock.now += PetNapSchedule.dozeDuration
+    coordinator.tick()
+    try expect(coordinator.activeClip == .nap, "asleep")
+    try expect(coordinator.poked(.belly) == nil, "the click wakes it up instead (the wake-up frame comes first)")
+    try expect(coordinator.activeClip == .nap, "still showing the sleeping frames until the next beat")
+}
+
+private func makePokeTestView() throws -> DesktopPetView {
+    let appPaths = try makeTemporaryAppPaths()
+    let petRoot = appPaths.assetsDirectory
+        .appendingPathComponent("pets", isDirectory: true)
+        .appendingPathComponent("capybara", isDirectory: true)
+    try makeColorPNG(at: petRoot.appendingPathComponent("idle/main/0.png"), color: .brown)
+    for clip in PetActionClip.allCases where clip.isPokeReaction {
+        for name in clip.frameNames {
+            try makeColorPNG(at: petRoot.appendingPathComponent("react/\(name)"), color: .systemPink)
+        }
+    }
+    let view = DesktopPetView(
+        frame: NSRect(origin: .zero, size: DesktopPetView.compactContentSize),
+        assetLocator: PetAssetLocator(appPaths: appPaths),
+        petID: "capybara"
+    )
+    view.layoutSubtreeIfNeeded()
+    return view
+}
+
+/// 素材格子 (x, y)（脸朝左、y 向下）在视图里的点
+private func viewPoint(spriteX x: CGFloat, spriteY y: CGFloat, in view: DesktopPetView) throws -> NSPoint {
+    let image = try require(view.currentImage, "the pet should have a picture")
+    let rect = view.aspectFitRect(for: image.size, in: view.petCanvasRect)
+    return NSPoint(x: rect.minX + (x + 0.5) / 32 * rect.width, y: rect.maxY - (y + 0.5) / 32 * rect.height)
+}
+
+private func click(_ view: DesktopPetView, at point: NSPoint) throws {
+    for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+        let event = try require(
+            NSEvent.mouseEvent(
+                with: type, location: point, modifierFlags: [],
+                timestamp: 0, windowNumber: 0, context: nil, eventNumber: 0, clickCount: 1, pressure: 1
+            ),
+            "mouse event"
+        )
+        if type == .leftMouseDown { view.mouseDown(with: event) } else { view.mouseUp(with: event) }
+    }
+}
+
+func testDesktopPetViewTicklesWhenItsBellyIsClicked() throws {
+    let view = try makePokeTestView()
+    let imageView = try requirePetImageView(in: view)
+    let idleImage = imageView.image
+    var reactions: [PetActionClip] = []
+    view.onPokeReaction = { clip, _ in reactions.append(clip) }
+
+    try click(view, at: try viewPoint(spriteX: 14, spriteY: 22, in: view))
+    try expect(view.activeActionClipForTesting == .tickled, "clicking the belly tickles it")
+    try expect(imageView.image !== idleImage, "the tickle frame replaces the idle frame")
+    try expect(reactions == [.tickled], "the window controller hears about it")
+    let line = try require(view.visibleTransientMessageForTesting, "it says something")
+    try expect(PetPokeCopy.lines(for: .tickled).contains(line), "a line from the tickle pool (got \(line))")
+
+    try click(view, at: try viewPoint(spriteX: 11, spriteY: 29, in: view))
+    try expect(view.activeActionClipForTesting == .annoyed, "clicking a paw annoys it")
+    let annoyed = try require(view.visibleTransientMessageForTesting, "it says something else")
+    try expect(PetPokeCopy.lines(for: .annoyed).contains(annoyed), "the next poke gets its own line (got \(annoyed))")
+
+    view.showTransientMessage("You were away for 2 hours")
+    try click(view, at: try viewPoint(spriteX: 2, spriteY: 12, in: view))
+    try expect(view.activeActionClipForTesting == .sneezed, "clicking the nose makes it sneeze")
+    try expect(view.visibleTransientMessageForTesting == "You were away for 2 hours", "a poke never covers a real message")
+}
+
+func testDesktopPetViewTurnsItsBackWhenPokedTooOften() throws {
+    let view = try makePokeTestView()
+    var pokedFromRight: [Bool] = []
+    view.onPokeReaction = { clip, fromRight in
+        if clip == .grumpy { pokedFromRight.append(fromRight) }
+    }
+    let back = try viewPoint(spriteX: 25, spriteY: 18, in: view)
+    for _ in 0..<PetPokeTracker.overdoneCount {
+        try click(view, at: back)
+    }
+    try expect(view.activeActionClipForTesting == .grumpy, "five quick pokes make it cross")
+    try expect(pokedFromRight == [true], "poked on the right half, so it should turn to face left, away from you")
+    let line = try require(view.visibleTransientMessageForTesting, "it says so")
+    try expect(PetPokeCopy.lines(for: .grumpy).contains(line), "the cross line replaces the earlier ones (got \(line))")
+}
+
+func testDesktopPetViewDoesNotReactWhilePlayingAReminderScene() throws {
+    let view = try makePokeTestView()
+    view.setScene(.remind(.hydration))
+    try click(view, at: try viewPoint(spriteX: 14, spriteY: 22, in: view))
+    try expect(view.activeActionClipForTesting == nil, "while drinking for a reminder a click only makes it hop")
+    view.setScene(nil)
+    try click(view, at: try viewPoint(spriteX: 14, spriteY: 22, in: view))
+    try expect(view.activeActionClipForTesting == .tickled, "back to normal, the belly is ticklish again")
+}
+
 // MARK: - 转头看鼠标（轮询鼠标位置）
 
 func testPetGazeControllerTurnsThePetTowardALingeringCursor() throws {
@@ -319,53 +470,35 @@ func testPetGazeControllerTurnsThePetTowardALingeringCursor() throws {
     try expect(!facingRight, "turns back once it is allowed again")
 }
 
-/// 转身：先正脸对着你停一下，再转到另一边
-func testDesktopPetViewLooksAtYouMidwayThroughATurn() throws {
+/// 转头看鼠标：原地蹦一格，同时换到另一边（不再闪一张正面坐姿）
+func testDesktopPetViewHopsAroundWhenItTurnsToLookAtYou() throws {
     let appPaths = try makeTemporaryAppPaths()
     let petRoot = appPaths.assetsDirectory
         .appendingPathComponent("pets", isDirectory: true)
         .appendingPathComponent("capybara", isDirectory: true)
     try makeColorPNG(at: petRoot.appendingPathComponent("idle/main/0.png"), color: .brown)
-    try makeColorPNG(at: petRoot.appendingPathComponent("turn/front.png"), color: .systemTeal)
-    let view = DesktopPetView(
-        frame: NSRect(origin: .zero, size: DesktopPetView.compactContentSize),
-        assetLocator: PetAssetLocator(appPaths: appPaths),
-        petID: "capybara"
-    )
+    let makeView = {
+        DesktopPetView(
+            frame: NSRect(origin: .zero, size: DesktopPetView.compactContentSize),
+            assetLocator: PetAssetLocator(appPaths: appPaths, repoRootURL: nil),
+            petID: "capybara"
+        )
+    }
+    let view = makeView()
     view.layoutSubtreeIfNeeded()
     let imageView = try requirePetImageView(in: view)
     let sideImage = imageView.image
 
     view.turn(toFacingRight: true)
-    try expect(view.isTurning && !view.isFacingRight, "it first looks straight at you")
-    let frontImage = imageView.image
-    try expect(frontImage !== sideImage, "the front frame is on screen mid-turn")
-    view.turn(toFacingRight: true)
-    try expect(imageView.image === frontImage, "asking again mid-turn does not restart it")
+    try expect(view.isFacingRight, "faces the other way right away")
+    try expect(imageView.image !== sideImage, "showing the mirrored side frame")
+    let midHop = view.animationEngine.baseTransform(at: CACurrentMediaTime() + DesktopPetView.turnHopDuration / 2)
+    try expect(midHop.translateY > 0, "and hops while turning around (got \(midHop.translateY))")
 
-    view.finishTurnForTesting()
-    try expect(!view.isTurning && view.isFacingRight, "then it faces the other way")
-    try expect(imageView.image !== frontImage && imageView.image !== sideImage, "showing the mirrored side frame")
-
-    view.turn(toFacingRight: false)
-    view.setFacingRight(true)
-    try expect(!view.isTurning && view.isFacingRight, "docking / chasing / being put down cancels a turn in progress")
-    try expect(imageView.image !== frontImage, "and the front frame goes away")
-}
-
-func testDesktopPetViewTurnsAtOnceWithoutAFrontFrame() throws {
-    let appPaths = try makeTemporaryAppPaths()
-    let petRoot = appPaths.assetsDirectory
-        .appendingPathComponent("pets", isDirectory: true)
-        .appendingPathComponent("capybara", isDirectory: true)
-    try makeColorPNG(at: petRoot.appendingPathComponent("idle/main/0.png"), color: .brown)
-    let view = DesktopPetView(
-        frame: NSRect(origin: .zero, size: DesktopPetView.compactContentSize),
-        assetLocator: PetAssetLocator(appPaths: appPaths),
-        petID: "capybara"
-    )
-    view.turn(toFacingRight: true)
-    try expect(!view.isTurning && view.isFacingRight, "pets without a front frame just flip")
+    let docked = makeView()
+    docked.setFacingRight(true)
+    let still = docked.animationEngine.baseTransform(at: CACurrentMediaTime() + DesktopPetView.turnHopDuration / 2)
+    try expect(docked.isFacingRight && still == .identity, "docking / chasing / being put down flips without a hop")
 }
 
 private func require<T>(_ value: T?, _ message: String) throws -> T {

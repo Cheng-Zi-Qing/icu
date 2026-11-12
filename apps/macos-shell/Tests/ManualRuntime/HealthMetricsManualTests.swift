@@ -1,18 +1,25 @@
 import Foundation
 
+/// 统计测试按 UTC 切天，结果不随跑测试的机器时区变
+let testUTCCalendar: Calendar = {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
+    return calendar
+}()
+
 func testHealthMetricsStorePersistsReminderEventsAndIgnoresDuplicateOutcomes() throws {
     let appPaths = try makeTemporaryAppPaths()
     let shownAt = Date(timeIntervalSince1970: 1_744_000_000)
     let reminderID = UUID(uuidString: "11111111-1111-1111-1111-111111111111")!
 
     do {
-        let store = try HealthMetricsStore(appPaths: appPaths)
+        let store = try HealthMetricsStore(appPaths: appPaths, calendar: testUTCCalendar)
         try store.recordReminderShown(id: reminderID, type: .eyeCare, at: shownAt)
         try store.recordReminderOutcome(id: reminderID, outcome: .completed, at: shownAt.addingTimeInterval(30))
         try store.recordReminderOutcome(id: reminderID, outcome: .skipped, at: shownAt.addingTimeInterval(60))
     }
 
-    let reloadedStore = try HealthMetricsStore(appPaths: appPaths)
+    let reloadedStore = try HealthMetricsStore(appPaths: appPaths, calendar: testUTCCalendar)
     let summary = try reloadedStore.daySummary(for: shownAt)
 
     try expect(summary.eyeReminder.shown == 1, "shown count should persist")
@@ -22,7 +29,7 @@ func testHealthMetricsStorePersistsReminderEventsAndIgnoresDuplicateOutcomes() t
 
 func testHealthMetricsStoreTracksHydrationCountsSeparatelyInDayAndWeekSummaries() throws {
     let appPaths = try makeTemporaryAppPaths()
-    let store = try HealthMetricsStore(appPaths: appPaths)
+    let store = try HealthMetricsStore(appPaths: appPaths, calendar: testUTCCalendar)
     let firstDay = Date(timeIntervalSince1970: 1_744_000_000)
     let secondDay = firstDay.addingTimeInterval(86_400)
     var utcCalendar = Calendar(identifier: .gregorian)
@@ -83,7 +90,7 @@ func testHealthMetricsStoreTracksHydrationCountsSeparatelyInDayAndWeekSummaries(
 
 func testHealthMetricsStoreBuildsWeekSummaryFromMultipleDays() throws {
     let appPaths = try makeTemporaryAppPaths()
-    let store = try HealthMetricsStore(appPaths: appPaths)
+    let store = try HealthMetricsStore(appPaths: appPaths, calendar: testUTCCalendar)
     let firstDay = Date(timeIntervalSince1970: 1_744_000_000)
     let secondDay = firstDay.addingTimeInterval(86_400)
     var utcCalendar = Calendar(identifier: .gregorian)
@@ -175,7 +182,7 @@ func testHealthMetricsStoreRecoversFromCorruptMetricsFileAndRecordsDiagnostic() 
     try writeTextFile("{not valid json", to: metricsURL)
 
     var diagnostics: [String] = []
-    let store = try HealthMetricsStore(appPaths: appPaths) { message in
+    let store = try HealthMetricsStore(appPaths: appPaths, calendar: testUTCCalendar) { message in
         diagnostics.append(message)
     }
 
@@ -200,7 +207,7 @@ func testHealthMetricsStoreRecoversFromCorruptMetricsFileAndRecordsDiagnostic() 
 func testHealthMetricsStoreEmitsDiagnosticsForIgnoredInvalidEvents() throws {
     let appPaths = try makeTemporaryAppPaths()
     var diagnostics: [String] = []
-    let store = try HealthMetricsStore(appPaths: appPaths) { message in
+    let store = try HealthMetricsStore(appPaths: appPaths, calendar: testUTCCalendar) { message in
         diagnostics.append(message)
     }
 
@@ -230,7 +237,7 @@ func testHealthMetricsStoreEmitsDiagnosticsForIgnoredInvalidEvents() throws {
 
 func testHealthMetricsStoreSerializesConcurrentWrites() throws {
     let appPaths = try makeTemporaryAppPaths()
-    let store = try HealthMetricsStore(appPaths: appPaths)
+    let store = try HealthMetricsStore(appPaths: appPaths, calendar: testUTCCalendar)
     let shownAt = Date(timeIntervalSince1970: 1_744_000_000)
     let lock = NSLock()
     var errors: [Error] = []
@@ -255,7 +262,7 @@ func testHealthMetricsStoreSerializesConcurrentWrites() throws {
 
 func testHealthSessionTrackerSettlesWorkFocusAndBreakMetricsAcrossTransitions() throws {
     let appPaths = try makeTemporaryAppPaths()
-    let store = try HealthMetricsStore(appPaths: appPaths)
+    let store = try HealthMetricsStore(appPaths: appPaths, calendar: testUTCCalendar)
     let tracker = HealthSessionTracker(store: store)
     let start = Date(timeIntervalSince1970: 1_744_000_000)
 
@@ -273,7 +280,7 @@ func testHealthSessionTrackerSettlesWorkFocusAndBreakMetricsAcrossTransitions() 
 
 func testHealthSessionTrackerOnlyRequestsStopWorkReportWhenDataExists() throws {
     let appPaths = try makeTemporaryAppPaths()
-    let store = try HealthMetricsStore(appPaths: appPaths)
+    let store = try HealthMetricsStore(appPaths: appPaths, calendar: testUTCCalendar)
     let tracker = HealthSessionTracker(store: store)
     let start = Date(timeIntervalSince1970: 1_744_000_000)
 
@@ -289,7 +296,7 @@ func testHealthSessionTrackerOnlyRequestsStopWorkReportWhenDataExists() throws {
 
 func testHealthSessionTrackerSplitsSettledDurationAcrossMidnightBoundary() throws {
     let appPaths = try makeTemporaryAppPaths()
-    let store = try HealthMetricsStore(appPaths: appPaths)
+    let store = try HealthMetricsStore(appPaths: appPaths, calendar: testUTCCalendar)
     let tracker = HealthSessionTracker(store: store)
 
     var utcCalendar = Calendar(identifier: .gregorian)

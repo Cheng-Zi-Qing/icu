@@ -6,9 +6,10 @@ final class ContextMenuPanelController {
 
     private(set) var currentPanel: ThemedMenuPanel?
 
-    /// 「今日报告…」的数据；nil（或今天一条记录都没有）= 没东西可看，只让桌宠说一句
-    var todayReportProvider: (() -> HealthDaySummary?)?
-    var cupsGoalProvider: () -> Int = { HydrationPlan(profile: HealthProfile.default).cups }
+    /// 「今日报告…」的内容；nil（或今天一条记录都没有）= 没东西可看，只让桌宠说一句
+    var todayReportProvider: (() -> TodayReportContent?)?
+    /// 桌宠身子在屏幕上的位置（报告挨着它放）；没有就用整个桌宠窗口
+    var petFrameProvider: (() -> NSRect?)?
     var onEmptyReport: (() -> Void)?
 
     var isPresented: Bool {
@@ -66,29 +67,24 @@ final class ContextMenuPanelController {
         currentPanel = panel
     }
 
-    /// 「今日报告…」：像素风浮层，锚在桌宠窗口顶上（水平居中、底边高出桌宠顶边 12pt），
-    /// 不挡桌宠、不压光标，也不贴屏幕边
+    /// 「今日报告…」：像素风浮层，挨着桌宠放在朝屏幕中间的那一侧（放不下再换上面 / 下面），
+    /// 不挡桌宠，也不出屏幕
     func showTodayReport(above window: NSWindow?) {
         guard let window else {
             return
         }
 
-        guard let report = todayReportProvider?(), report.hasActivity else {
+        guard let content = todayReportProvider?(), content.hasActivity else {
             // 没东西可看：先关菜单再让桌宠说一句
             dismiss()
             onEmptyReport?()
             return
         }
 
-        let reportView = MenuTodayReportView(report: report, cupsGoal: cupsGoalProvider())
-        let size = reportView.frame.size
-        let frame = NSRect(
-            x: window.frame.midX - size.width / 2,
-            y: window.frame.maxY + 12,
-            width: size.width,
-            height: size.height
-        )
-
+        let reportView = MenuTodayReportView(content: content)
+        let pet = petFrameProvider?() ?? window.frame
+        let visible = (window.screen ?? NSScreen.main)?.visibleFrame ?? pet.insetBy(dx: -2000, dy: -2000)
+        let frame = ReportPanelPlacement.frame(size: reportView.frame.size, beside: pet, in: visible)
         floatingPanelController.present(contentView: reportView, frame: frame)
     }
 

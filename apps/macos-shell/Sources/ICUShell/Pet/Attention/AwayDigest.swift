@@ -30,15 +30,15 @@ struct AwayDigest: Equatable {
         // 同样要紧时取最近的那件
         guard let top = items.reversed().max(by: { $0.kind < $1.kind }) else { return nil }
         let total = max(items.count, largestCount)
-        let headline = "你不在时：\(top.project ?? "Claude") \(Self.verb(for: top.kind))"
-        return total > 1 ? "\(headline)，还有 \(total - 1) 件" : headline
+        let headline = TextCatalog.shared.format("digest.headline", top.project ?? "Claude", Self.verb(for: top.kind))
+        return total > 1 ? TextCatalog.shared.format("digest.more", headline, total - 1) : headline
     }
 
     private static func verb(for kind: AgentSummary.Kind) -> String {
         switch kind {
-        case .waiting: return "在等你"
-        case .failed: return "出错了"
-        case .done, .working, .idle: return "干完了"
+        case .waiting: return TextCatalog.shared.text("digest.verb_waiting")
+        case .failed: return TextCatalog.shared.text("digest.verb_failed")
+        case .done, .working, .idle: return TextCatalog.shared.text("digest.verb_done")
         }
     }
 }

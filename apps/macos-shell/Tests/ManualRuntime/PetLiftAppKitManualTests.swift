@@ -11,6 +11,18 @@ private func transformed(_ t: CATransform3D, _ point: CGPoint) -> CGPoint {
 
 private let liftCanvas = CGRect(x: 0, y: 0, width: 128, height: 128)
 
+/// 拎着时整只的四角：脑袋（脖子以上）不动，身体从脖子往下拉长、收细
+private func hangingCorners(stretchY: CGFloat) -> [CGPoint] {
+    let neck = liftCanvas.height * PetAnimationEngine.liftedBodyShare
+    let body = PetAnimationEngine.liftedBodyTransform(stretchY: stretchY)
+    let halfWidth = liftCanvas.width / 2 * body.m11
+    let feet = neck - neck * body.m22
+    return [
+        CGPoint(x: 64 - halfWidth, y: feet), CGPoint(x: 64 + halfWidth, y: feet),
+        CGPoint(x: 0, y: 128), CGPoint(x: 128, y: 128),
+    ]
+}
+
 func testAnimationEngineLiftSwingsTheBodyAroundTheScruff() throws {
     let anchor = CGPoint(x: 0, y: 0)
     for swing in [CGFloat(-30), 30] {
@@ -39,7 +51,7 @@ func testPetLiftWindowLeavesRoomForTheWildestSwing() throws {
             layerBounds: liftCanvas,
             anchorPoint: .zero
         )
-        for corner in [CGPoint(x: 0, y: 0), CGPoint(x: 128, y: 0), CGPoint(x: 0, y: 128), CGPoint(x: 128, y: 128)] {
+        for corner in hangingCorners(stretchY: 1 + config.holdStretch + config.maxExtraStretch) {
             let moved = transformed(lift, corner)
             let inRoom = CGPoint(x: moved.x + canvasInRoom.minX, y: moved.y + canvasInRoom.minY)
             try expect(room.insetBy(dx: -0.5, dy: -0.5).contains(inRoom), "at \(swing)° the corner \(corner) lands at \(inRoom), outside \(room)")
@@ -69,7 +81,7 @@ func testPetLiftWindowKeepsRoomForTheLiftedPet() throws {
             layerBounds: liftCanvas,
             anchorPoint: .zero
         )
-        for corner in [CGPoint(x: 0, y: 0), CGPoint(x: 128, y: 0), CGPoint(x: 0, y: 128), CGPoint(x: 128, y: 128)] {
+        for corner in hangingCorners(stretchY: 1 + config.holdStretch + config.maxExtraStretch) {
             let moved = transformed(lift, corner)
             let inRoom = CGPoint(x: moved.x + canvasInRoom.minX, y: moved.y + canvasInRoom.minY)
             try expect(room.insetBy(dx: -0.5, dy: -0.5).contains(inRoom), "lifted \(swing)° the corner \(corner) lands at \(inRoom), outside \(room)")
@@ -130,7 +142,7 @@ func testDesktopPetViewHangsTheLiftedPetInABiggerWindow() throws {
     try expect(lift.parent === window, "the lift window rides along with the pet window while it is dragged")
     try expect(lift.ignoresMouseEvents, "the lift window never steals the drag")
     try expect(view.imageView.alphaValue == 0, "the clipped pet in the small window steps aside")
-    try expect(lift.spriteLayer.contents != nil, "the hold frame is drawn in the lift window")
+    try expect(lift.headLayer.contents != nil && lift.bodyLayer.contents != nil, "the hold frame is drawn in the lift window (head and body halves)")
     let canvas = window.convertToScreen(view.convert(view.imageView.frame, to: nil))
     try expect(
         lift.frame.insetBy(dx: PetLiftWindow.sideMargin - 1, dy: 0).contains(CGPoint(x: canvas.midX, y: canvas.midY))
@@ -322,4 +334,41 @@ func testDesktopPetViewLandsNormallyWhenTheStarsAlreadyBurnedOut() throws {
         "landing should put the pet back into the normal window (got \(after.filter { $0.liftVisible || $0.petAlpha != 1 }))"
     )
     try expect(after.last?.pose == DragPose.none, "after landing it should return to rest (got \(after.last?.pose ?? DragPose.none))")
+}
+
+/// 拎起来：脑袋不被拉，只有脖子以下的身体往下坠得长、收得细（2026-11-11 用户：拉伸多一点、别圆鼓鼓、脑袋不要被拉）
+func testLiftedPetStretchesTheBodyButNotTheHead() throws {
+    let config = DragPhysicsConfig()
+    try expect(config.holdStretch >= 0.3, "held still the body already hangs a third longer (got \(config.holdStretch))")
+    let stretch = 1 + config.holdStretch
+    let whole = PetAnimationEngine.liftedTransform(
+        drag: DragOutput(pose: .hold(tilt: 0), stretchY: stretch, swingDegrees: 0, landingSquash: 1),
+        layerBounds: liftCanvas,
+        anchorPoint: CGPoint(x: 0.5, y: 0.5)
+    )
+    try expect(abs(whole.m11 - 1) < 0.001 && abs(whole.m22 - 1) < 0.001, "the whole pet (and so the head) is not scaled, only swung")
+    let body = PetAnimationEngine.liftedBodyTransform(stretchY: stretch)
+    try expect(abs(body.m22 - stretch) < 0.001, "the body is taller by the stretch (got \(body.m22))")
+    try expect(body.m11 < 1 / stretch.squareRoot(), "and slimmer than a plain volume-keeping squeeze (got \(body.m11))")
+    let share = PetAnimationEngine.liftedBodyShare
+    try expect(share > 0.35 && share < 0.6, "the neck sits around the middle of the canvas (got \(share))")
+}
+
+/// 拎起窗口里的那只分成脑袋和身体两层，拼起来正好是整张图
+@MainActor
+func testPetLiftWindowSplitsHeadAndBody() throws {
+    let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 256, pixelsHigh: 256, bitsPerSample: 8, samplesPerPixel: 4,
+                               hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+    let image = NSImage(size: NSSize(width: 128, height: 128))
+    image.addRepresentation(rep)
+    let lift = PetLiftWindow()
+    let parent = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 128, height: 152), styleMask: [.borderless], backing: .buffered, defer: true)
+    lift.show(image: image, canvas: NSRect(x: 100, y: 100, width: 128, height: 128), over: parent)
+    defer { lift.hide() }
+    let head = lift.headLayer.frame
+    let body = lift.bodyLayer.frame
+    try expect(lift.headLayer.contents != nil && lift.bodyLayer.contents != nil, "both halves have their part of the picture")
+    try expect(abs(body.maxY - head.minY) < 0.01 && abs(body.minY) < 0.01 && abs(head.maxY - 128) < 0.01,
+               "body below, head on top, together the whole canvas (head \(head), body \(body))")
+    try expect(abs(body.height - 128 * PetAnimationEngine.liftedBodyShare) < 4.01, "split at the neck (got \(body.height))")
 }

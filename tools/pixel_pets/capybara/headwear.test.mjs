@@ -1,5 +1,6 @@
 // 头顶装扮：默认橙子，衣柜里可以换成草帽。每个姿势都要画得上
 import { test } from 'node:test';
+import { EYE_LEFT } from './front-head.mjs';
 import assert from 'node:assert/strict';
 import { mkdtempSync, existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -69,7 +70,15 @@ test('the big straw hat covers the top of the head but leaves the eyes visible (
   assert.ok(brim.length >= 20, `the brim sticks out past both sides of the head (${brim.length})`);
   // 正面的脸比侧面短：帽檐压到眼睛正上方那一行（再低就挡眼睛了）
   assert.ok(Math.max(...rowsWith(hat, 'straw')) >= Math.max(...rowsWith(orange, 'orange')) + 1, 'the brim sits low on the head');
-  assert.equal(inkCount(hat, 'white'), 2, 'both eye shines stay visible under the brim');
+  // 眼睛（眼皮 + 眼线）在帽檐下面照样露着，和戴橙子时一模一样
+  for (const x of [EYE_LEFT, EYE_LEFT + 1, 30 - EYE_LEFT, 31 - EYE_LEFT]) {
+    for (let y = 0; y < 32; y += 1) {
+      if (orange.get(x, y) === 'outline' && orange.get(x, y - 1) === 'shade') {
+        assert.equal(hat.get(x, y), 'outline', `eye line at (${x}, ${y}) stays visible`);
+        assert.equal(hat.get(x, y - 1), 'shade', `eye lid at (${x}, ${y - 1}) stays visible`);
+      }
+    }
+  }
 });
 
 test('wardrobe item icons are generated for every headwear', () => {

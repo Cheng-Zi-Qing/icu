@@ -9,6 +9,8 @@ echo "[check_native_shell] Running manual runtime tests..."
 swiftc \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Copy/UserVisibleCopyKey.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Copy/TextCatalog.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Copy/PlayfulLines.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Copy/SceneLines.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Copy/UserFacingErrorCopy.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/AppPaths.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/RuntimeLaunchDiagnostics.swift" \
@@ -19,7 +21,13 @@ swiftc \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/ReminderScheduler.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Health/HealthMetricsModels.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Health/HealthMetricsStore.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Health/WorkShift.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Health/HealthSessionTracker.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Health/TodayAdvice.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Health/TodayScore.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Menu/TodayReportContent.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Menu/TodayReportTrend.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Menu/ReportPanelPlacement.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/PetAnimationModels.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/PetAssetLocator.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/DesktopPetCopy.swift" \
@@ -42,13 +50,16 @@ swiftc \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Wardrobe/WardrobeState.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Wardrobe/WardrobeStore.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/ReminderCardContent.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Reminder/ReminderStageRules.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/AppSettingsStore.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/AppLanguage.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Edge/EdgeDockLayout.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Edge/PetPeekScript.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Behavior/PetStrokeDetector.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Behavior/PetNapSchedule.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Behavior/PetGazeTracker.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Behavior/PetActionClip.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Behavior/PetPoke.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Behavior/PetIdleActionSchedule.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/StateStoreManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/PetBehaviorManualTests.swift" \
@@ -63,6 +74,8 @@ swiftc \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/WorkSessionManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/MenuModelManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/HealthMetricsManualTests.swift" \
+  "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/WorkdayReportManualTests.swift" \
+  "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/WorkShiftManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/ReminderSchedulerManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/PetAssetLocatorManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/WindowPlacementManualTests.swift" \
@@ -71,6 +84,7 @@ swiftc \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/AgentHookManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Agent/AgentBoard.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/AgentBoardManualTests.swift" \
+  "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/PlayfulLinesManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Agent/AgentActivity.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/AgentActivityManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Agent/AgentDirectoryReader.swift" \
@@ -97,6 +111,8 @@ echo "[check_native_shell] Running AppKit theme tests..."
 swiftc -framework AppKit \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Copy/UserVisibleCopyKey.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Copy/TextCatalog.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Copy/PlayfulLines.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Copy/SceneLines.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Copy/UserFacingErrorCopy.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/AppPaths.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/RuntimeLaunchDiagnostics.swift" \
@@ -107,7 +123,13 @@ swiftc -framework AppKit \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/ReminderScheduler.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Health/HealthMetricsModels.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Health/HealthMetricsStore.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Health/WorkShift.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Health/HealthSessionTracker.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Health/TodayAdvice.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Health/TodayScore.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Menu/TodayReportContent.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Menu/TodayReportTrend.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Menu/ReportPanelPlacement.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/PetAnimationModels.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/PetAssetLocator.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/DesktopPetMenuModel.swift" \
@@ -119,7 +141,10 @@ swiftc -framework AppKit \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Menu/StatusItemMenuModel.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Menu/StatusMenuPanelController.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/DesktopPetCopy.swift" \
-  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/ReminderCardView.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Reminder/ReminderStageView.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Reminder/ReminderStagePresenter.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Reminder/EyeRestOverlayView.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Reminder/EyeRestOverlayController.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/PetAnimationPlayer.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/PetMotionEnhancer.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Drag/DragPhysics.swift" \
@@ -140,7 +165,9 @@ swiftc -framework AppKit \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Wardrobe/WardrobeState.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Wardrobe/WardrobeStore.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/ReminderCardContent.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Reminder/ReminderStageRules.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/AppSettingsStore.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/AppLanguage.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Edge/EdgeDockLayout.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Edge/PetPeekScript.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Work/PetScene.swift" \
@@ -152,9 +179,12 @@ swiftc -framework AppKit \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/UsageSamples.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Agent/AgentWaitCardContent.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Work/PetWorkScenes.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Work/PetWorkScenePlayer.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/PetWindowWidth.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Work/PetChase.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/DesktopPetView+Work.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/DesktopPetView+Turn.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/DesktopPetView+Poke.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/DesktopPetView+WaitCard.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/AgentWaitCardView.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Edge/WindowSlideAnimator.swift" \
@@ -183,6 +213,7 @@ swiftc -framework AppKit \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Behavior/PetStrokeDetector.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Behavior/PetNapSchedule.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Behavior/PetActionClip.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Behavior/PetPoke.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Behavior/PetIdleActionSchedule.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Behavior/PetBehaviorCoordinator.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Behavior/PetGazeTracker.swift" \
@@ -208,15 +239,18 @@ swiftc -framework AppKit \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/SettingsAppKitManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/ThemeAppKitManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/ReminderAppKitManualTests.swift" \
+  "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/PixelCopyFitAppKitManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/WardrobeAppKitManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/PetLiftAppKitManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/AgentAppKitManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/PetWorkSceneAppKitManualTests.swift" \
+  "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/PetSceneVariantAppKitManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/PetStateSceneAppKitManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/AppKitTestSupport.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/MenuPanelAppKitManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/PixelArtScalerAppKitManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/StatusChipAppKitManualTests.swift" \
+  "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/PlayfulLinesManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/PetBehaviorAppKitManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/PetCursorAppKitManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/HeadlessWindows.swift" \

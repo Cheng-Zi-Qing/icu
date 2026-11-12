@@ -9,10 +9,10 @@ enum WardrobeSlot: String, CaseIterable, Equatable {
 
     var title: String {
         switch self {
-        case .head: return "头顶"
-        case .mouth: return "嘴里"
-        case .neck: return "脖子"
-        case .face: return "脸上"
+        case .head: return TextCatalog.shared.text("wardrobe.slot.head")
+        case .mouth: return TextCatalog.shared.text("wardrobe.slot.mouth")
+        case .neck: return TextCatalog.shared.text("wardrobe.slot.neck")
+        case .face: return TextCatalog.shared.text("wardrobe.slot.face")
         }
     }
 }
@@ -25,12 +25,17 @@ enum WardrobeRarity: String, Equatable {
 struct WardrobeItem: Equatable {
     let id: String
     let slot: WardrobeSlot
+    /// 配置里写的名字；显示时先按 id 找文案（`wardrobe.item.<id>`）
     let name: String
     let rarity: WardrobeRarity
     /// 一开始就有（橙子、草帽）
     let isDefaultOwned: Bool
     /// 戴上后用哪套帧（`assets/pets/<pet>/outfits/<spriteSet>/`）；nil = 画在默认帧里
     let spriteSet: String?
+
+    var displayName: String {
+        TextCatalog.shared.text("wardrobe.item.\(id)", fallback: name)
+    }
 }
 
 /// 套装：一键换上几件；缺件时锁着
@@ -38,6 +43,10 @@ struct WardrobeSuit: Equatable {
     let id: String
     let name: String
     let items: [WardrobeSlot: String]
+
+    var displayName: String {
+        TextCatalog.shared.text("wardrobe.suit.\(id)", fallback: name)
+    }
 }
 
 /// 装扮表（`config/wardrobe.json`）：有哪些装扮、哪些一开始就有、有哪些套装。
@@ -48,12 +57,12 @@ struct WardrobeCatalog: Equatable {
 
     static let builtIn = WardrobeCatalog(
         items: [
-            WardrobeItem(id: "orange", slot: .head, name: "橙子", rarity: .common, isDefaultOwned: true, spriteSet: nil),
-            WardrobeItem(id: "straw_hat", slot: .head, name: "草帽", rarity: .common, isDefaultOwned: true, spriteSet: "straw_hat"),
+            WardrobeItem(id: "orange", slot: .head, name: "", rarity: .common, isDefaultOwned: true, spriteSet: nil),
+            WardrobeItem(id: "straw_hat", slot: .head, name: "", rarity: .common, isDefaultOwned: true, spriteSet: "straw_hat"),
         ],
         suits: [
-            WardrobeSuit(id: "default", name: "默认", items: [.head: "orange"]),
-            WardrobeSuit(id: "summer", name: "夏天", items: [.head: "straw_hat"]),
+            WardrobeSuit(id: "default", name: "", items: [.head: "orange"]),
+            WardrobeSuit(id: "summer", name: "", items: [.head: "straw_hat"]),
         ]
     )
 

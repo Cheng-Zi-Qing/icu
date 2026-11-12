@@ -13,6 +13,8 @@
 
 - A pet that lives on your desktop: pixel-art capybara, idle / working / focus / break states,
   frame-by-frame animation, gaze tracking, head pats, naps and random idle bits.
+  Poke it and it reacts to where you poked: a ticklish belly, impatient paws, a sneezy nose,
+  a jumpy back, and it turns its back on you if you keep poking.
 - Health reminders while you work: eye care (20-20-20 by default) and hydration, computed from
   your weight, cup size and work hours.
 - Claude Code awareness: it plays a small scene for whatever your agent is doing, and pokes you
@@ -44,23 +46,29 @@ Signing, notarization and the release env template: [`docs/macos-shell-release.m
 
 ## Day to day
 
-Menu bar: 显示桌宠 · 衣柜 · 设置… · 接入 / 断开 Claude Code · 退出
+The UI ships in Chinese and English; `Settings… → Language` switches between them, no relaunch
+needed. Menu labels below are the English ones.
+
+Menu bar: `Show Pet` · `Wardrobe` · `Settings…` · `Connect Claude Code` / `Disconnect Claude Code` · `Quit`
 
 Right-click the pet:
 
-- 待机 → 开始工作
-- 工作中 → 进入专注 · 暂离 · 下班
-- 专注 / 暂离 → 回来工作 · 下班
-- any state → 衣柜 · 设置… · 隐藏桌宠 · 退出
+- not at work → `I'm Starting Work`
+- at work → `I Need to Focus` · `Stepping Away` · `Done for Today`
+- focusing / away → `I'm Back` · `Done for Today`
+- any state → `Wardrobe` · `Settings…` · `Hide Pet` · `Quit`
 
-开始工作 arms the eye-care and hydration reminders, 进入专注 and 暂离 pause them, 下班 stops
-everything. The reminder cards are short and dismissible — eye care counts down the rest,
-hydration shows 第 x/y 杯. 设置… holds your weight, cup size, work hours and eye-care preset
-(20-20-20 / 每小时歇歇 / 自定义) and shows the hydration plan that follows from them.
+The menu is you talking; the chip under the pet is the capybara talking (Chilling / With you /
+Staying quiet / Waiting). Starting work arms the eye-care and hydration reminders, focusing
+and stepping away pause them, and finishing for the day stops everything. Reminders pop up as a card in the middle of the screen while
+the capybara acts along (sipping from a cup, looking far away) — hydration shows `Cup x/y`; for eye
+care, `Start rest` covers every screen with a night scene and counts down, and you can end early. `Settings…` holds your weight, cup size, work hours and
+eye-care preset (`20-20-20 Rec` / `Hourly Break` / `Custom`) and shows the hydration plan that
+follows from them.
 
 ## Claude Code integration
 
-Pick 接入 Claude Code in the menu bar or the pet menu:
+Pick `Connect Claude Code` in the menu bar or the pet menu:
 
 - `icu-hook` is copied to `<App Support>/ICU/bin/icu-hook` and registered in
   `~/.claude/settings.json` (`CLAUDE_CONFIG_DIR` is respected). Your file is backed up before the
@@ -95,7 +103,7 @@ quotes.
   film.
 - **[A field study of supplementary rest breaks for data-entry operators](https://pubmed.ncbi.nlm.nih.gov/10877480/)**
   (Galinsky et al., *Ergonomics* 43(5):622, 2000) — supplementary 15-min breaks reduced both
-  musculoskeletal discomfort and eyestrain without lowering output; this is the 每小时歇歇 preset.
+  musculoskeletal discomfort and eyestrain without lowering output; this is the `Hourly Break` preset.
 
 ### Stretch — sedentary work
 

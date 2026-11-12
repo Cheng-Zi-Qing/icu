@@ -40,7 +40,14 @@ final class PetEdgeDockController {
     /// 探着头被碰到：换成吓一跳的那一帧（随后缩回边后）
     var onPeekFlinch: (() -> Void)?
 
-    private(set) var dock: EdgeDock = .none
+    /// 贴的边变了（含离开边）
+    var onDockChanged: ((EdgeDock) -> Void)?
+
+    private(set) var dock: EdgeDock = .none {
+        didSet {
+            if dock != oldValue { onDockChanged?(dock) }
+        }
+    }
     private(set) var isHidden = false
     private(set) var isPeeking = false
     private var isMoving = false

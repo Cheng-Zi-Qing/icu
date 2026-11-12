@@ -205,10 +205,28 @@ func testGazeTrackerDoesNotChangeTheOriginal() throws {
 
 func testIdleActionScheduleWeighsYuzuWobbleOverBirdVisits() throws {
     let picks = stride(from: 0.0, to: 1.0, by: 0.01).map { PetIdleActionSchedule.pick(random: $0) }
-    let wobbles = picks.filter { $0 == .yuzuWobble }.count
-    let birds = picks.filter { $0 == .birdVisit }.count
-    try expect(wobbles + birds == picks.count, "only idle actions are picked")
-    try expect(wobbles > birds && birds > 0, "yuzu wobble is the common one, the bird visit the rarer treat (\(wobbles) vs \(birds))")
+    let count = { (clip: PetActionClip) in picks.filter { $0 == clip }.count }
+    let idleActs: [PetActionClip] = [.yuzuWobble, .birdVisit, .sunbathe, .bath]
+    try expect(idleActs.map(count).reduce(0, +) == picks.count, "only idle actions are picked")
+    for rarer in [PetActionClip.birdVisit, .sunbathe, .bath] {
+        try expect(count(.yuzuWobble) > count(rarer) && count(rarer) > 0, "yuzu wobble is the common one, \(rarer) a rarer treat (\(count(.yuzuWobble)) vs \(count(rarer)))")
+    }
+}
+
+/// 晒太阳、泡澡：idle_act/ 下 8 帧一轮，慢慢放（4 fps）多放几遍，不是一闪而过
+func testSunbathingAndBathingAreSlowIdleActs() throws {
+    for (clip, name) in [(PetActionClip.sunbathe, "sunbathe"), (.bath, "bath")] {
+        try expect(clip.directory == "idle_act" && !clip.loops && !clip.isPokeReaction, "\(name) is an idle act")
+        try expect(clip.frameNames == (0..<8).map { "\(name)_\($0).png" }, "\(name) has the 8 frames the pipeline draws")
+        try expect(clip.framesPerSecond == 4 && clip.duration == 6, "\(name) plays slowly, three rounds (got \(clip.duration)s)")
+    }
+    let capybara = inferredManualTestRepoRootURL().appendingPathComponent("assets/pets/capybara", isDirectory: true)
+    let outfits = (try? FileManager.default.contentsOfDirectory(atPath: capybara.appendingPathComponent("outfits").path)) ?? []
+    for root in [capybara] + outfits.map({ capybara.appendingPathComponent("outfits/\($0)", isDirectory: true) }) {
+        let files = Set((try? FileManager.default.contentsOfDirectory(atPath: root.appendingPathComponent("idle_act").path)) ?? [])
+        let missing = (PetActionClip.sunbathe.frameNames + PetActionClip.bath.frameNames).filter { !files.contains($0) }
+        try expect(missing.isEmpty, "\(root.lastPathComponent)/idle_act is missing \(missing)")
+    }
 }
 
 func testIdleActionScheduleSpacesActionsOut() throws {
@@ -220,4 +238,97 @@ func testIdleActionScheduleSpacesActionsOut() throws {
         )
     }
     try expect(PetIdleActionSchedule.delayRange.lowerBound >= 20, "small actions should not be constant fidgeting")
+}
+
+// MARK: - 戳一下
+
+func testPokeZonesFollowTheSittingCapybara() throws {
+    // 侧身坐姿、脸朝左的 32×32 素材格子
+    let cases: [(CGFloat, CGFloat, PetPokeZone, String)] = [
+        (2, 12, .nose, "the snout"),
+        (11, 10, .head, "the forehead"),
+        (10, 2, .head, "the orange on its head"),
+        (14, 22, .belly, "the round tummy"),
+        (25, 18, .back, "the back"),
+        (26, 25, .back, "the bottom"),
+        (11, 29, .legs, "a front paw"),
+        (19, 30, .legs, "a hind foot"),
+    ]
+    for (x, y, expected, part) in cases {
+        let zone = PetPokeZone.zone(spriteX: x, spriteY: y)
+        try expect(zone == expected, "poking \(part) at (\(x), \(y)) should be \(expected) (got \(zone))")
+    }
+}
+
+func testPokeZoneMapsViewPointsAndMirrorsWhenFacingRight() throws {
+    let imageRect = CGRect(x: 0, y: 24, width: 128, height: 128)
+    // 素材格子 (2, 12)：脸朝左时是鼻子；视图 y 向上，所以从顶边往下数
+    let point = CGPoint(x: 2.5 * 4, y: imageRect.maxY - 12.5 * 4)
+    try expect(PetPokeZone.zone(at: point, imageRect: imageRect, facingRight: false) == .nose, "the snout on the left")
+    try expect(
+        PetPokeZone.zone(at: point, imageRect: imageRect, facingRight: true) == .back,
+        "facing right the picture is mirrored: the left edge is its back"
+    )
+    try expect(
+        PetPokeZone.zone(at: CGPoint(x: 64, y: 10), imageRect: imageRect, facingRight: false) == nil,
+        "below the picture is not the pet"
+    )
+}
+
+func testEveryPokeZoneHasItsOwnReaction() throws {
+    let reactions = PetPokeZone.allCases.map(\.reaction)
+    try expect(Set(reactions.map { "\($0)" }).count == PetPokeZone.allCases.count, "each part reacts differently")
+    try expect(PetPokeZone.belly.reaction == .tickled, "the belly is ticklish")
+    try expect(PetPokeZone.legs.reaction == .annoyed, "poking its legs is annoying")
+    try expect(PetPokeZone.nose.reaction == .sneezed, "poking its nose makes it sneeze")
+    try expect(PetPokeZone.back.reaction == .startled, "poking its back makes it jump")
+}
+
+func testPokeTrackerGetsGrumpyAfterTooManyPokesInAShortTime() throws {
+    var tracker = PetPokeTracker()
+    var results: [Bool] = []
+    for index in 0..<PetPokeTracker.overdoneCount {
+        let (next, overdone) = tracker.registering(at: 100 + Double(index) * 0.5)
+        tracker = next
+        results.append(overdone)
+    }
+    try expect(results == Array(repeating: false, count: PetPokeTracker.overdoneCount - 1) + [true], "the \(PetPokeTracker.overdoneCount)th quick poke is one too many (got \(results))")
+    let (_, again) = tracker.registering(at: 103)
+    try expect(!again, "after getting cross it starts counting from zero")
+}
+
+func testPokeTrackerForgetsPokesSpreadOut() throws {
+    var tracker = PetPokeTracker()
+    for index in 0..<(PetPokeTracker.overdoneCount * 2) {
+        let (next, overdone) = tracker.registering(at: Double(index) * (PetPokeTracker.window / 2 + 0.1))
+        tracker = next
+        try expect(!overdone, "an occasional poke never makes it cross (poke \(index))")
+    }
+}
+
+func testPokeTrackerDoesNotChangeTheOriginal() throws {
+    let original = PetPokeTracker()
+    let (next, _) = original.registering(at: 1)
+    try expect(next != original && original == PetPokeTracker(), "registering returns a new tracker")
+}
+
+/// App 里写死的帧数要和像素生成器（poke-reactions.mjs）生成的一致，每套装扮都有
+func testPokeReactionFramesExistInTheRepoAssets() throws {
+    let capybara = inferredManualTestRepoRootURL()
+        .appendingPathComponent("assets/pets/capybara", isDirectory: true)
+    let outfits = (try? FileManager.default.contentsOfDirectory(atPath: capybara.appendingPathComponent("outfits").path)) ?? []
+    let roots = [capybara] + outfits.map { capybara.appendingPathComponent("outfits/\($0)", isDirectory: true) }
+    let reactions = PetActionClip.allCases.filter(\.isPokeReaction)
+    try expect(reactions.count == 5, "five poke reactions")
+    for root in roots {
+        let react = root.appendingPathComponent("react", isDirectory: true)
+        let files = Set((try? FileManager.default.contentsOfDirectory(atPath: react.path)) ?? [])
+        for clip in reactions {
+            let missing = clip.frameNames.filter { !files.contains($0) }
+            try expect(missing.isEmpty, "\(react.path) is missing \(missing)")
+            let prefix = String(clip.frameNames[0].dropLast("0.png".count))
+            let generated = files.filter { $0.hasPrefix(prefix) }.count
+            try expect(generated == clip.frameNames.count, "\(clip) plays \(clip.frameNames.count) frames but \(generated) were generated in \(react.lastPathComponent)")
+        }
+    }
 }

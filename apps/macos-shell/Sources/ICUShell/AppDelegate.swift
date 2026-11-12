@@ -18,6 +18,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var healthTracker: HealthSessionTracker?
     private let fullscreenMonitor = FullscreenMonitor()
     private var usageRecorder: UsageRecorder?
+    private var dutyClock: Timer?
+    private var sleepObservers: [NSObjectProtocol] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupStatusBarMenu()
@@ -35,6 +37,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let sessionController = try WorkSessionController(store: store)
             let healthMetricsStore = try HealthMetricsStore(appPaths: paths)
             let healthTracker = HealthSessionTracker(store: healthMetricsStore)
+            // 上次被强退 / 崩溃时还在上班：补上下班打卡（启动后回到发呆，要接着上班就再点「我要上班」）
+            do {
+                let closed = try healthTracker.closeInterruptedShifts()
+                if closed > 0 { NSLog("[ICUShell] closed \(closed) shift(s) left open by an unexpected quit") }
+            } catch {
+                NSLog("[ICUShell] failed to close shifts left open by an unexpected quit: \(error.localizedDescription)")
+            }
             setenv("ICU_APP_SUPPORT_ROOT", paths.rootURL.path, 1)
             TextCatalog.installShared(try TextCatalog.live(appPaths: paths, repoRootURL: assetLocator.repoRootURL))
             let themeManager = ThemeManager()
@@ -92,17 +101,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     self?.todaySummary()
                 },
                 todayReportProvider: { [weak self] in
-                    self?.todayDayReport()
-                },
-                cupsGoalProvider: { [weak self] in
-                    // AppDelegate 没了就用默认目标（和桌宠那边的默认值一致）
-                    self?.cupsGoal() ?? HydrationPlan(profile: HealthProfile.default).cups
+                    self?.todayReportContent()
                 }
             )
             petWindowController?.setOutfit(wardrobe.outfitID)
             configureClaudeCode(paths: paths)
             configureFullscreenQuiet()
             configureUsageRecording(paths: paths)
+            configureDutyClock()
             petWindowController?.showWindow(nil)
         } catch {
             NSLog("[ICUShell] failed to bootstrap runtime: \(error.localizedDescription)")
@@ -111,6 +117,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        dutyClock?.invalidate()
+        sleepObservers.forEach { NSWorkspace.shared.notificationCenter.removeObserver($0) }
+        // 还在上班就退出：当成下班，把最后一段记上
+        do {
+            try healthTracker?.endSession(at: .now)
+        } catch {
+            NSLog("[ICUShell] failed to settle the work day on quit: \(error.localizedDescription)")
+        }
         fullscreenMonitor.stop()
         reminderScheduler?.stop()
         petWindowController?.close()
@@ -143,16 +157,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// 「今日报告…」：今天一条记录都没有就只让桌宠说一句，不弹面板
     private func presentTodayReport() {
-        guard let button = statusItem?.button, let report = todayDayReport() else {
+        guard let button = statusItem?.button, let content = todayReportContent() else {
             return
         }
 
-        guard report.hasActivity else {
-            petWindowController?.showMessage("今天还没有记录")
+        guard content.hasActivity else {
+            petWindowController?.showMessage(TextCatalog.shared.text("app.report_empty"))
             return
         }
 
-        statusMenuController?.presentTodayReport(from: button, report: report, cupsGoal: cupsGoal())
+        statusMenuController?.presentTodayReport(from: button, content: content)
     }
 
     private func handleStatusMenuAction(_ action: StatusItemMenuAction) {
@@ -171,6 +185,43 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             setClaudeConnected(false)
         case .quitApp:
             quit()
+        }
+    }
+
+    // MARK: - 上班时长
+
+    /// 上班时长每分钟入一次账（报告里总是最新的，意外退出最多丢一分钟）；电脑睡着的时间不算上班
+    private func configureDutyClock() {
+        let timer = Timer(timeInterval: 60, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.checkpointDuty() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        dutyClock = timer
+
+        let center = NSWorkspace.shared.notificationCenter
+        sleepObservers = [
+            center.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.suspendDuty() }
+            },
+            center.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.healthTracker?.resume(at: .now) }
+            },
+        ]
+    }
+
+    private func checkpointDuty() {
+        do {
+            try healthTracker?.checkpoint(at: .now)
+        } catch {
+            NSLog("[ICUShell] failed to record work time: \(error.localizedDescription)")
+        }
+    }
+
+    private func suspendDuty() {
+        do {
+            try healthTracker?.suspend(at: .now)
+        } catch {
+            NSLog("[ICUShell] failed to record work time before sleep: \(error.localizedDescription)")
         }
     }
 
@@ -234,17 +285,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             if connect {
                 guard let binary = ClaudeHookInstaller.bundledHookBinary else { throw ClaudeHookInstallerError.missingHookBinary }
                 try claudeInstaller.install(hookBinary: binary, now: .now)
-                petWindowController?.showMessage("接上 Claude Code 了，新开的会话就能看到")
+                petWindowController?.showMessage(TextCatalog.shared.text("app.claude_connected"))
             } else {
                 try claudeInstaller.uninstall(now: .now)
-                petWindowController?.showMessage("和 Claude Code 断开了")
+                petWindowController?.showMessage(TextCatalog.shared.text("app.claude_disconnected"))
             }
             agentMonitor?.reload()
         } catch let error as ClaudeHookInstallerError {
             petWindowController?.showMessage(error.userMessage, duration: 4)
         } catch {
             NSLog("[ICUShell] Claude Code hook \(connect ? "install" : "uninstall") failed: \(error.localizedDescription)")
-            petWindowController?.showMessage("没弄成，稍后再试试", duration: 4)
+            petWindowController?.showMessage(TextCatalog.shared.text("app.action_failed"), duration: 4)
         }
     }
 
@@ -257,11 +308,30 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         guard let settingsStore else { return }
         let form = SettingsForm(profile: settingsStore.loadHealthProfile(), timers: settingsStore.loadReminderTimerSettings())
-        let controller = SettingsWindowController(form: form, decoration: wardrobe?.decoration) { [weak self] form in
+        let controller = SettingsWindowController(
+            form: form,
+            language: settingsStore.loadLanguage(),
+            decoration: wardrobe?.decoration,
+            onSelectLanguage: { [weak self] language in
+                self?.applyLanguage(language)
+            }
+        ) { [weak self] form in
             try self?.applySettings(form)
         }
         settingsWindowController = controller
         controller.present()
+    }
+
+    /// 换了界面语言：写进 settings.json，重读文案，再把已经开着的窗口重画一遍
+    private func applyLanguage(_ language: AppLanguage) {
+        do {
+            try settingsStore?.saveLanguage(language)
+            try TextCatalog.reloadShared(appPaths: appPaths, repoRootURL: PetAssetLocator.inferredRepoRoot())
+            settingsWindowController?.reloadCopy()
+        } catch {
+            NSLog("[ICUShell] failed to switch language: \(error.localizedDescription)")
+            settingsWindowController?.reloadCopy()
+        }
     }
 
     /// 存进 settings.json，并让正在计时的提醒按新间隔重新计时
@@ -279,6 +349,34 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func todaySummary() -> MenuTodaySummary? {
         guard let day = todayDayReport() else { return nil }
         return MenuTodaySummary(day: day, cupsGoal: cupsGoal())
+    }
+
+    /// 今日报告：今天的数 + 结论 + 本机累计；读不到今天的统计就没有
+    private func todayReportContent() -> TodayReportContent? {
+        guard let healthTracker, let day = todayDayReport() else { return nil }
+        let lifetime: HealthLifetimeSummary?
+        do {
+            lifetime = try healthTracker.lifetimeReport(at: .now)
+        } catch {
+            NSLog("[ICUShell] failed to read lifetime work totals: \(error.localizedDescription)")
+            lifetime = nil
+        }
+        let week: HealthWeekSummary?
+        do {
+            week = try healthTracker.weekReport(containing: .now)
+        } catch {
+            NSLog("[ICUShell] failed to read this week's work totals: \(error.localizedDescription)")
+            week = nil
+        }
+        let profile = settingsStore?.loadHealthProfile() ?? .default
+        return TodayReportContent(
+            day: day,
+            lifetime: lifetime,
+            cupsGoal: HydrationPlan(profile: profile).cups,
+            workHours: profile.workHours,
+            isOnDuty: (workSessionController?.state ?? .idle) != .idle,
+            week: week
+        )
     }
 
     private func todayDayReport() -> HealthDaySummary? {

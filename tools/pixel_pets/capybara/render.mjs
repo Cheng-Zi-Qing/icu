@@ -1,9 +1,10 @@
 // 参数 → 像素帧。浏览器编辑器和命令行构建共用这一份渲染逻辑。
-import { Grid, SIDES, canvasPixel, partMask } from './raster.mjs';
+import { Grid, SIDES, canvasPixel, partMask, partTag } from './raster.mjs';
 import { renderFrontPeek, renderFrontUpright } from './front-peek.mjs';
 import { HEADWEAR, itemIcon, sideHeadwear } from './headwear.mjs';
 import { workFrames } from './front-work.mjs';
-import { renderFrontSit } from './front-sit.mjs';
+import { pokeFrames } from './poke-reactions.mjs';
+import { IDLE_EXTRA_RENDER, idleExtraOptions } from './idle-extras.mjs';
 
 export const CANVAS_HEIGHT = 32;
 
@@ -17,9 +18,13 @@ const PATTERNS = {
   eyeUp: { outline: [[0, 0], [1, 0]], shade: [[0, 1], [1, 1]] },
   // 被摸头时眯成一道往上弯的缝（^）
   eyeHappy: { outline: [[0, 1], [1, 0], [2, 1]] },
+  // 不耐烦地斜着眼（¬_¬）：眼皮压下来一道粗线，底下只露一点眼珠
+  eyeFlat: { outline: [[-1, 0], [0, 0], [1, 0], [2, 0], [1, 1]] },
   blush: [[0, 0], [1, 0], [0, 1], [1, 1]],
   highlight: [[0, 0], [1, 0], [2, 0], [3, 0]],
   mouth: [[[0, 0], [1, 0]], [[0, 0], [1, 1]]],
+  // 哈哈大笑 / 打喷嚏时张开的嘴
+  mouthOpen: [[0, 0], [1, 0], [0, 1], [1, 1]],
   grass: [
     [[0, 0], [0, 1], [-1, 2], [-1, 3], [-2, 4], [0, 3]],
     [[0, 0], [-1, 1], [-1, 2], [-2, 3], [-2, 2], [0, 2]],
@@ -145,16 +150,16 @@ function adjustedPart(part, opts, pose) {
 
 // ---------- 绘制 ----------
 
-function drawPart(grid, part, transform) {
+function drawPart(grid, part, transform, tag = partTag(part.id)) {
   const mask = partMask(part, transform);
-  const filled = grid.fill(part.ink, mask, part.onlyOver ?? null);
+  const filled = grid.fill(part.ink, mask, part.onlyOver ?? null, tag);
   if (!part.edge) return filled;
   return filled.edged(mask, SIDES[part.edge] ?? SIDES.below);
 }
 
 function drawHead(grid, head, transform, opts) {
   const parts = head.parts.map((part) => (part.id === 'ear' && opts.earTwitch ? { ...part, cx: part.cx + 1 } : part));
-  const filled = parts.reduce((g, part) => drawPart(g, part, transform), grid);
+  const filled = parts.reduce((g, part) => drawPart(g, part, transform, 'head'), grid);
   return drawFaceMarks(filled, head.marks, transform, opts);
 }
 
@@ -165,6 +170,7 @@ function drawFaceMarks(grid, marks, transform, opts) {
     squeeze: PATTERNS.eyeSqueeze,
     dizzy: PATTERNS.eyeDizzy,
     happy: PATTERNS.eyeHappy,
+    flat: PATTERNS.eyeFlat,
   }[opts.face] ?? (opts.blink ? PATTERNS.eyeClosed : opts.eyes === 'up' ? PATTERNS.eyeUp : PATTERNS.eyeOpen);
   const earInner = at(marks.earInner);
 
@@ -173,7 +179,7 @@ function drawFaceMarks(grid, marks, transform, opts) {
     .dots('dark', [opts.earTwitch ? [earInner[0] + 1, earInner[1]] : earInner])
     .dots('blush', offsetPoints(at(marks.blush), PATTERNS.blush))
     .dots('outline', [at(marks.nostril)])
-    .dots('outline', offsetPoints(at(marks.mouth), PATTERNS.mouth[opts.chewPhase === 1 ? 1 : 0]))
+    .dots('outline', offsetPoints(at(marks.mouth), opts.mouth === 'open' ? PATTERNS.mouthOpen : PATTERNS.mouth[opts.chewPhase === 1 ? 1 : 0]))
     .dots('shade', offsetPoints(eyeAnchor, eye.shade ?? []))
     .dots('outline', offsetPoints(eyeAnchor, eye.outline ?? []));
 }
@@ -204,8 +210,9 @@ function headwearLayer(width, transform, anchorMark, kind) {
 
 /**
  * 渲染一帧。opts:
- *   blink, inhale, earTwitch, chewPhase(0|1), face('squeeze'|'dizzy'|'happy'),
- *   tilt(-2...2), twinkle(0|1), dust(0|1), reach, props(柚子 + 草，默认跟姿势走),
+ *   blink, inhale, earTwitch, chewPhase(0|1), face('squeeze'|'dizzy'|'happy'|'flat'), mouth('open'),
+ *   grassOffset([dx, dy] 嘴里的草挪开几格), squeezeSweat(false 时眯紧眼不带汗),
+ *   tilt(-2...2), twinkle(0|1), dust(0|1), reach, props(柚子 + 草，默认跟姿势走), grass(false 时不叼草),
  *   nod(打盹低头一格), heart(HEART_PATH 下标), zzz(ZZZ_PATH 下标), bang(醒来的感叹号),
  *   eyes('up' 抬眼), yuzuShift(头顶装扮左右偏几格), bird({ pose: 'sit'|'wingsUp'|'wingsDown', at: [x, y] }),
  *   headwear(头顶戴什么，见 headwear.mjs；默认橙子), yuzuLift(头顶装扮比头高出几格),
@@ -223,8 +230,13 @@ export function renderPose(model, name, opts = {}) {
  */
 function renderDerived(model, pose, opts) {
   const source = model.poses[pose.from];
-  const base = pose.headOnly ? { ...source, parts: source.parts.filter((part) => part.shape === 'head'), marks: [] } : source;
-  let grid = renderBase(model, base, { ...opts, reach: false, width: undefined }).rotatedQuarter(pose.turn ?? 0);
+  const kept = new Set(pose.keepParts ?? []);
+  // extraParts 画在头下面（比如探头时伸进屏幕边的脖子）
+  const base = pose.headOnly
+    ? { ...source, parts: [...(pose.extraParts ?? []), ...source.parts.filter((part) => part.shape === 'head' || kept.has(part.id))], marks: [] }
+    : source;
+  const grass = pose.grass ?? opts.grass;
+  let grid = renderBase(model, base, { ...opts, grass, reach: false, width: undefined }).rotatedQuarter(pose.turn ?? 0);
   if (pose.flipY) grid = grid.flippedVertically();
   const width = opts.width ?? pose.width ?? 32;
   const poke = opts.reach ? pose.reachPixels ?? 0 : 0;
@@ -251,12 +263,15 @@ function renderBase(model, pose, opts) {
   grid = grid.outlined();
 
   if (props) {
-    const grass = canvasPixel(head, model.head.marks.grass.x, model.head.marks.grass.y);
+    // grassOffset：打喷嚏时嘴里的草被喷出去几格
+    const [grassDx, grassDy] = opts.grassOffset ?? [0, 0];
+    const grass = canvasPixel(head, model.head.marks.grass.x + grassDx, model.head.marks.grass.y + grassDy);
+    if (opts.grass !== false) grid = grid.dots('grass', offsetPoints(grass, PATTERNS.grass[opts.chewPhase === 1 ? 1 : 0]));
     grid = grid
-      .dots('grass', offsetPoints(grass, PATTERNS.grass[opts.chewPhase === 1 ? 1 : 0]))
       .overlaid(headwearLayer(width, head, { ...model.head.marks.yuzu, x: model.head.marks.yuzu.x + (opts.yuzuShift ?? 0), y: model.head.marks.yuzu.y - (opts.yuzuLift ?? 0) }, opts.headwear));
   }
-  if (opts.face === 'squeeze') grid = grid.dots('sweat', OVERLAYS.sweat);
+  // 眯紧眼默认带一滴汗（被拎着难受）；打喷嚏也眯眼，但不出汗
+  if (opts.face === 'squeeze' && opts.squeezeSweat !== false) grid = grid.dots('sweat', OVERLAYS.sweat);
   if (opts.face === 'dizzy') grid = grid.dots('star', OVERLAYS.stars[opts.twinkle ? 1 : 0]);
   if (opts.dust !== undefined && opts.dust !== null) grid = grid.dots('dust', OVERLAYS.dust[opts.dust]);
   const stamps = [
@@ -363,11 +378,17 @@ export function allFrames(model, { headwear = HEADWEAR[0] } = {}) {
     frames.push([`drag/dizzy_grounded_${twinkle}.png`, pose('sit', { face: 'dizzy', twinkle })]);
   }
   pettedOptions().forEach((o, i) => frames.push([`react/petted_${i}.png`, pose('sit', o)]));
+  // 被戳不同部位的反应（肚子痒、腿不耐烦、鼻子打喷嚏、背上吓一跳、戳多了生气）
+  frames.push(...pokeFrames(headwear, model));
   frames.push(['sleep/doze_0.png', pose('sit', { blink: true, nod: true, chewPhase: 0 })]);
   napOptions().forEach((o, i) => frames.push([`sleep/nap_${i}.png`, pose('sit', o)]));
   frames.push(['sleep/wake_0.png', pose('sit', { chewPhase: 0, bang: true })]);
   yuzuWobbleOptions().forEach((o, i) => frames.push([`idle_act/wobble_${i}.png`, pose('sit', o)]));
   birdVisitOptions().forEach((o, i) => frames.push([`idle_act/bird_${i}.png`, pose('sit', o)]));
+  // 发呆时的晒太阳、泡澡（idle-extras.mjs）
+  for (const [name, options] of Object.entries(idleExtraOptions())) {
+    options.forEach((o, i) => frames.push([`idle_act/${name}_${i}.png`, IDLE_EXTRA_RENDER[name]({ ...o, headwear, model })]));
+  }
   // 贴边：平时正面探头；时不时把头转成侧面（就是原来侧身转 90° 那个造型）
   frames.push(['edge/peek_0.png', front({})]);
   frames.push(['edge/peek_1.png', front({ blink: true })]);
@@ -375,8 +396,6 @@ export function allFrames(model, { headwear = HEADWEAR[0] } = {}) {
   frames.push(['edge/peek_3.png', front({ flinch: true })]);
   frames.push(['edge/turn_0.png', pose('peek', {})]);
   frames.push(['edge/turn_1.png', pose('peek', { blink: true })]);
-  // 转身那一下先正脸对着你（侧面 → 正面 → 另一侧）
-  frames.push(['turn/front.png', renderFrontSit({ headwear })]);
   // 设置 / 衣柜窗口标题栏上趴着的那只（正面，爪子压在画布底边）
   frames.push(['ui/bar_peek.png', renderFrontUpright({ headwear })]);
   for (const kind of HEADWEAR) frames.push([`ui/item_${kind}.png`, itemIcon(kind)]);
@@ -386,4 +405,4 @@ export function allFrames(model, { headwear = HEADWEAR[0] } = {}) {
 }
 
 /** 素材里按帧重新生成的目录（写之前清空，避免旧帧残留） */
-export const GENERATED_DIRECTORIES = ['idle/main', 'idle/chew', 'drag', 'edge', 'react', 'sleep', 'idle_act', 'ui', 'work', 'turn'];
+export const GENERATED_DIRECTORIES = ['idle/main', 'idle/chew', 'drag', 'edge', 'react', 'sleep', 'idle_act', 'ui', 'work'];

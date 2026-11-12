@@ -37,8 +37,10 @@ enum PixelFont {
         registeredName.flatMap { NSFont(name: $0, size: pointSize) } != nil
     }
 
-    static func font() -> NSFont {
-        registeredName.flatMap { NSFont(name: $0, size: pointSize) }
-            ?? .monospacedSystemFont(ofSize: pointSize, weight: .medium)
+    /// `scale` 倍大的像素字（整数倍才清晰）：提醒卡标题用 2 倍，全屏休息的倒计时用 5 倍
+    static func font(scale: Int = 1) -> NSFont {
+        let size = pointSize * CGFloat(max(1, scale))
+        return registeredName.flatMap { NSFont(name: $0, size: size) }
+            ?? .monospacedSystemFont(ofSize: size, weight: .medium)
     }
 }

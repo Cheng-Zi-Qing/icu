@@ -1,59 +1,17 @@
 import AppKit
 
-/// 转头看鼠标时的转身：侧面 → 正脸对着你停一下 → 另一侧。瞬间镜像太突兀，像突然翻了个面。
-/// 没有正面帧的宠物直接镜像。贴边、追球、放下时的转向不走这里（见 setFacingRight）
+/// 转头看鼠标：原地蹦一格，同时换到另一边。瞬间镜像太突兀，蹦一下就像它自己转过身来。
+/// 以前中间先闪一张正面坐姿，用户嫌正面干坐着光秃秃的不可爱（2026-11-11），改成蹦。
+/// 贴边、追球、放下时的转向不蹦（见 setFacingRight）
 extension DesktopPetView {
-    /// 正面停多久
-    static let turnFrontDuration: TimeInterval = 0.2
-
-    var isTurning: Bool { turnTarget != nil }
+    static let turnHopPixels = 1
+    static let turnHopDuration: CFTimeInterval = 0.24
 
     func turn(toFacingRight facingRight: Bool) {
-        guard !isTurning, facingRight != isFacingRight else { return }
-        guard let front = turnSprites?.image(named: "front.png"), !isShowingDragPose, !isPeeking else {
-            setFacingRight(facingRight)
-            return
+        guard facingRight != isFacingRight else { return }
+        if !isShowingDragPose && !isPeeking {
+            animationEngine.hop(pixels: Self.turnHopPixels, duration: Self.turnHopDuration)
         }
-        turnTarget = facingRight
-        turnImage = front
-        present(restingImage)
-        let timer = Timer(timeInterval: Self.turnFrontDuration, repeats: false) { [weak self] _ in
-            self?.finishTurn()
-        }
-        RunLoop.main.add(timer, forMode: .common)
-        turnTimer = timer
-    }
-
-    func finishTurnForTesting() {
-        finishTurn()
-    }
-
-    /// 停掉正在进行的转身（不换朝向）；返回刚才是不是在转
-    @discardableResult
-    func cancelTurn() -> Bool {
-        let wasTurning = isTurning
-        turnTimer?.invalidate()
-        turnTimer = nil
-        turnTarget = nil
-        turnImage = nil
-        return wasTurning
-    }
-
-    /// 正面帧撤下后换回该显示的画面（中途被拎起 / 探头时它们自己的画面已经在上面了）
-    func presentAfterTurn() {
-        present(isShowingDragPose || isPeeking ? presentedSource : restingImage)
-    }
-
-    private func finishTurn() {
-        guard let target = turnTarget else { return }
-        cancelTurn()
-        // 转到一半被拎起来、探头了：那边自己管朝向，这一下就不转了
-        guard !isShowingDragPose, !isPeeking else {
-            presentAfterTurn()
-            return
-        }
-        isFacingRight = target
-        presentAfterTurn()
-        layoutStatusChip()
+        setFacingRight(facingRight)
     }
 }

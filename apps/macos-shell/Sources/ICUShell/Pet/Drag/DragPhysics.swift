@@ -5,8 +5,8 @@ import Foundation
 struct DragPhysicsConfig {
     /// 按下后移动超过该距离才算拖拽，否则视为点击
     var dragThreshold: CGFloat = 3
-    /// 拎着不动时的麻糬拉长量（相对原高度）
-    var holdStretch: CGFloat = 0.14
+    /// 拎着不动时的麻糬拉长量（相对原高度）：拎起来整只往下坠，拉得长一点才像被提溜着
+    var holdStretch: CGFloat = 0.32
     /// 甩得快时额外拉长的上限
     var maxExtraStretch: CGFloat = 0.16
     /// 每 1pt/s 指针速度（任意方向）带来的额外拉长

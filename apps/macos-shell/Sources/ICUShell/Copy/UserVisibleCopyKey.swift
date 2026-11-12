@@ -1,6 +1,6 @@
 import Foundation
 
-enum UserVisibleCopyKey: String {
+enum UserVisibleCopyKey: String, CaseIterable {
     case menuShowPet = "menu.show_pet"
     case menuTodayReport = "menu.today_report"
     case menuQuitApp = "menu.quit_app"
@@ -26,15 +26,15 @@ extension UserVisibleCopyKey {
         case .menuQuitApp:
             return "退出"
         case .menuStartWork:
-            return "开始工作"
+            return "我要上班"
         case .menuEnterFocus:
-            return "进入专注"
+            return "我要专注"
         case .menuTakeBreak:
-            return "暂离"
+            return "我离开一下"
         case .menuResumeWorking:
-            return "回来工作"
+            return "我回来了"
         case .menuStopWork:
-            return "下班"
+            return "我下班了"
         case .menuHidePet:
             return "隐藏桌宠"
         case .menuOpenSettings:

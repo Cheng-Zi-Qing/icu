@@ -343,3 +343,229 @@ func testStateStoreCreatesICUDirectoriesAndDefaultsToIdle() throws {
     try expect(FileManager.default.fileExists(atPath: paths.stateDirectory.path), "state directory should exist")
     try expect(current.state == .idle, "default state should be idle")
 }
+
+// MARK: - 中英双语文案
+
+private func repoCatalog(language: AppLanguage) throws -> TextCatalog {
+    try TextCatalog.live(repoRootURL: inferredManualTestRepoRootURL(), language: language)
+}
+
+private func containsCJK(_ text: String) throws -> Bool {
+    let range = NSRange(text.startIndex..<text.endIndex, in: text)
+    return try NSRegularExpression(pattern: "[\u{4e00}-\u{9fff}]").firstMatch(in: text, options: [], range: range) != nil
+}
+
+private func collectCopyKeys(
+    repoRootURL: URL,
+    patterns: [String],
+    fileManager: FileManager = .default
+) throws -> Set<String> {
+    let sourcesURL = repoRootURL
+        .appendingPathComponent("apps", isDirectory: true)
+        .appendingPathComponent("macos-shell", isDirectory: true)
+        .appendingPathComponent("Sources", isDirectory: true)
+        .appendingPathComponent("ICUShell", isDirectory: true)
+
+    guard let enumerator = fileManager.enumerator(at: sourcesURL, includingPropertiesForKeys: nil) else {
+        throw TestFailure(message: "failed to enumerate Swift source files for copy integrity check")
+    }
+
+    var keys: Set<String> = []
+    for case let fileURL as URL in enumerator {
+        guard fileURL.pathExtension == "swift" else { continue }
+        let source = try String(contentsOf: fileURL, encoding: .utf8)
+        for pattern in patterns {
+            keys.formUnion(try regexMatches(in: source, pattern: pattern))
+        }
+    }
+    return keys
+}
+
+private func loadFlattenedCopyKeys(from url: URL) throws -> Set<String> {
+    let data = try Data(contentsOf: url)
+    guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+        throw TestFailure(message: "\(url.lastPathComponent) should decode to a JSON object")
+    }
+    return try collectKeys(object: object, prefix: nil)
+}
+
+private func collectKeys(object: Any, prefix: String?) throws -> Set<String> {
+    var keys: Set<String> = []
+    switch object {
+    case let dictionary as [String: Any]:
+        for (key, value) in dictionary {
+            keys.formUnion(try collectKeys(object: value, prefix: prefix.map { "\($0).\(key)" } ?? key))
+        }
+    case let array as [Any]:
+        guard let prefix else { throw TestFailure(message: "a top-level JSON array cannot be copy") }
+        for (index, value) in array.enumerated() {
+            keys.formUnion(try collectKeys(object: value, prefix: "\(prefix).\(index)"))
+        }
+    default:
+        if let prefix { keys.insert(prefix) }
+    }
+    return keys
+}
+
+/// `en.json` 必须把 `base.json` 的每个 key 都翻掉：漏一个就会掉回中文
+func testEnglishCopyCatalogTranslatesEveryBaseKey() throws {
+    let chinese = try repoCatalog(language: .chinese)
+    let english = try repoCatalog(language: .english)
+
+    let missingKeys = Set(chinese.keys).subtracting(english.keys).sorted()
+    try expect(missingKeys.isEmpty, "en.json is missing keys: \(missingKeys.joined(separator: ", "))")
+
+    let untranslated = try english.keys.filter { try containsCJK(english.text($0)) }
+    try expect(
+        untranslated.isEmpty,
+        "en.json still falls back to Chinese for: \(untranslated.joined(separator: ", "))"
+    )
+    try expect(english.text(.menuStartWork) == "I'm Starting Work", "the English catalog reads English")
+}
+
+func testUserVisibleCopyKeysExistInBothCatalogs() throws {
+    let chinese = try repoCatalog(language: .chinese)
+    let english = try repoCatalog(language: .english)
+    for (name, catalog) in [("base.json", chinese), ("en.json", english)] {
+        let catalogKeys = Set(catalog.keys)
+        let missing = UserVisibleCopyKey.allCases.map(\.rawValue).filter { !catalogKeys.contains($0) }
+        try expect(missing.isEmpty, "\(name) is missing menu copy keys: \(missing.joined(separator: ", "))")
+    }
+}
+
+/// 衣柜的装扮和套装名字是按 id 现查文案的，配置里有的都得有对应 key
+func testWardrobeCopyKeysExistInBothCatalogs() throws {
+    let wardrobeURL = inferredManualTestRepoRootURL()
+        .appendingPathComponent("config", isDirectory: true)
+        .appendingPathComponent("wardrobe.json", isDirectory: false)
+    let object = try JSONSerialization.jsonObject(with: Data(contentsOf: wardrobeURL)) as? [String: Any]
+    let itemIDs = (object?["items"] as? [[String: Any]] ?? []).compactMap { $0["id"] as? String }
+    let suitIDs = (object?["suits"] as? [[String: Any]] ?? []).compactMap { $0["id"] as? String }
+    try expect(!itemIDs.isEmpty && !suitIDs.isEmpty, "the wardrobe config should list items and suits")
+
+    let keys = itemIDs.map { "wardrobe.item.\($0)" }
+        + suitIDs.map { "wardrobe.suit.\($0)" }
+        + WardrobeSlot.allCases.map { "wardrobe.slot.\($0.rawValue)" }
+    for (name, catalog) in [("base.json", try repoCatalog(language: .chinese)), ("en.json", try repoCatalog(language: .english))] {
+        let catalogKeys = Set(catalog.keys)
+        let missing = keys.filter { !catalogKeys.contains($0) }
+        try expect(missing.isEmpty, "\(name) is missing wardrobe copy keys: \(missing.joined(separator: ", "))")
+    }
+}
+
+/// 带占位符和文案池的 key 也得不漏：现有自查只认 `text("…"` 那种写法
+func testBaseCopyCatalogContainsFormattedAndPoolKeys() throws {
+    let repoRootURL = inferredManualTestRepoRootURL()
+    let baseKeys = try loadFlattenedCopyKeys(from: repoRootURL
+        .appendingPathComponent("config", isDirectory: true)
+        .appendingPathComponent("copy", isDirectory: true)
+        .appendingPathComponent("base.json", isDirectory: false))
+    let formattedKeys = try collectCopyKeys(
+        repoRootURL: repoRootURL,
+        patterns: [#"\.format\(\s*"([a-z_]+(?:\.[a-z0-9_]+)+)""#]
+    )
+    let poolPrefixes = try collectCopyKeys(
+        repoRootURL: repoRootURL,
+        patterns: [#"\.texts\(\s*"([a-z_]+(?:\.[a-z0-9_]+)+)""#]
+    )
+    let poolKeys = poolPrefixes.map { "\($0).0" }
+    let missing = formattedKeys.union(poolKeys).subtracting(baseKeys).sorted()
+    try expect(missing.isEmpty, "base copy catalog is missing formatted or pool keys: \(missing.joined(separator: ", "))")
+}
+
+func testChineseCatalogKeepsMenuAndReminderWording() throws {
+    let original = TextCatalog.shared
+    defer { TextCatalog.installShared(original) }
+    TextCatalog.installShared(try repoCatalog(language: .chinese))
+
+    try expect(StatusItemMenuAction.showTodayReport.title == "今日报告…", "menu bar report entry")
+    try expect(DesktopPetMenuAction.startWork.title == "我要上班", "pet menu start work: you say it, not the pet")
+    try expect(isLine(DesktopPetCopy.statusText(for: .working), of: .working), "the chip under the pet speaks for the pet")
+    try expect(DesktopPetMenuAction.openWardrobe.title == "衣柜", "pet menu wardrobe")
+    try expect(DesktopPetCopy.eyeReminderMessage() == "看看远处，护护眼。", "eye reminder message")
+    try expect(isLine(AgentActivity.statusText(tool: nil), of: .think), "agent thinking label")
+    try expect(ReminderQuips.nope.first == "我就不", "signature skip line")
+
+    let card = ReminderCardContent(
+        payload: ReminderPresentationPayload(id: UUID(), type: .hydration, text: "x", restSeconds: 0),
+        cups: CupProgress(done: 3, goal: 6),
+        pick: { _ in 0 }
+    )
+    try expect(card.detail(remaining: 0) == "第 4/6 杯", "cup progress wording (got \(card.detail(remaining: 0)))")
+}
+
+func testEnglishCatalogDrivesMenuAndReminderWording() throws {
+    let original = TextCatalog.shared
+    defer { TextCatalog.installShared(original) }
+    TextCatalog.installShared(try repoCatalog(language: .english))
+
+    try expect(StatusItemMenuAction.showTodayReport.title == "Today's Report…", "menu bar report entry")
+    try expect(DesktopPetMenuAction.startWork.title == "I'm Starting Work", "pet menu start work: you say it, not the pet")
+    try expect(isLine(DesktopPetCopy.statusText(for: .working), of: .working), "the chip under the pet speaks for the pet")
+    try expect(DesktopPetMenuAction.openWardrobe.title == "Wardrobe", "pet menu wardrobe")
+    try expect(DesktopPetCopy.eyeReminderMessage() == "Look far away, rest your eyes.", "eye reminder message")
+    try expect(isLine(AgentActivity.statusText(tool: nil), of: .think) && !AgentActivity.statusText(tool: nil).contains("思"), "agent thinking label")
+    try expect(ReminderQuips.hydration.lines.count == 8, "the English quip pool keeps all lines")
+
+    let card = ReminderCardContent(
+        payload: ReminderPresentationPayload(id: UUID(), type: .hydration, text: "x", restSeconds: 0),
+        cups: CupProgress(done: 3, goal: 6),
+        pick: { _ in 0 }
+    )
+    try expect(card.detail(remaining: 0) == "Cup 4/6", "cup progress wording (got \(card.detail(remaining: 0)))")
+    try expect(!textContainsCJK(card.title), "the card title is English (got \(card.title))")
+}
+
+private func textContainsCJK(_ text: String) -> Bool {
+    (try? containsCJK(text)) ?? false
+}
+
+func testAppSettingsStoreSavesLanguageWithoutDroppingOtherKeys() throws {
+    let root = try makeTemporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let configDir = root.appendingPathComponent("config", isDirectory: true)
+    try FileManager.default.createDirectory(at: configDir, withIntermediateDirectories: true)
+    let settingsURL = configDir.appendingPathComponent("settings.json", isDirectory: false)
+    try writeTextFile(#"{"edge_snap": {"enabled": false}}"#, to: settingsURL)
+
+    let store = AppSettingsStore(repoRootURL: root)
+    try expect(store.loadLanguage() == .chinese, "no language key yet reads as Chinese")
+    try store.saveLanguage(.english)
+    try expect(store.loadLanguage() == .english, "the chosen language round-trips")
+    try expect(store.loadEdgeSnapSettings().isEnabled == false, "other sections are kept")
+
+    try writeTextFile(#"{"language": "fr"}"#, to: settingsURL)
+    try expect(store.loadLanguage() == .chinese, "an unknown language falls back to Chinese")
+}
+
+/// 切语言走的就是这条路：写 settings.json → 重读文案 → 发通知
+func testReloadSharedFollowsTheLanguageInSettings() throws {
+    let original = TextCatalog.shared
+    defer { TextCatalog.installShared(original) }
+
+    let root = try makeTemporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let copyDir = root.appendingPathComponent("config/copy", isDirectory: true)
+    try FileManager.default.createDirectory(at: copyDir, withIntermediateDirectories: true)
+    try writeTextFile(#"{"menu": {"start_work": "开始工作"}}"#, to: copyDir.appendingPathComponent("base.json"))
+    try writeTextFile(#"{"menu": {"start_work": "Start Work"}}"#, to: copyDir.appendingPathComponent("en.json"))
+
+    let store = AppSettingsStore(repoRootURL: root)
+    TextCatalog.installShared(try TextCatalog.live(repoRootURL: root))
+    try expect(DesktopPetMenuAction.startWork.title == "开始工作", "no language key yet reads Chinese")
+
+    try store.saveLanguage(.english)
+    var notified = 0
+    let observer = NotificationCenter.default.addObserver(forName: .icuCopyDidChange, object: nil, queue: nil) { _ in
+        notified += 1
+    }
+    defer { NotificationCenter.default.removeObserver(observer) }
+
+    try TextCatalog.reloadShared(repoRootURL: root)
+    try expect(DesktopPetMenuAction.startWork.title == "Start Work", "switching to English picks up en.json")
+    try expect(notified == 1, "reloading the copy posts one change notification (got \(notified))")
+
+    try store.saveLanguage(.chinese)
+    try TextCatalog.reloadShared(repoRootURL: root)
+    try expect(DesktopPetMenuAction.startWork.title == "开始工作", "switching back reads Chinese again")
+}

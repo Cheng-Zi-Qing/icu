@@ -63,6 +63,9 @@ export function validateModel(model) {
       if (![-1, 0, 1, 2].includes(pose.turn ?? 0)) fail(`poses.${name}.turn`, 'must be -1, 0, 1 or 2 (quarter turns)');
       if (pose.flipY !== undefined && typeof pose.flipY !== 'boolean') fail(`poses.${name}.flipY`, 'must be true or false');
       if (pose.headOnly !== undefined && typeof pose.headOnly !== 'boolean') fail(`poses.${name}.headOnly`, 'must be true or false');
+      if (pose.extraParts !== undefined && !Array.isArray(pose.extraParts)) fail(`poses.${name}.extraParts`, 'must be a list of parts');
+      if (pose.grass !== undefined && typeof pose.grass !== 'boolean') fail(`poses.${name}.grass`, 'must be true or false');
+      if (pose.keepParts !== undefined && !(Array.isArray(pose.keepParts) && pose.keepParts.every((id) => typeof id === 'string'))) fail(`poses.${name}.keepParts`, 'must be a list of part ids');
       continue;
     }
     checkTransform(pose.head, `poses.${name}.head`);

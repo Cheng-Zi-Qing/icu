@@ -4,27 +4,40 @@ import AppKit
 final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     private let settingsView: SettingsView
     private let onChange: (SettingsForm) throws -> Void
+    private let onSelectLanguage: (AppLanguage) -> Void
     private(set) var form: SettingsForm
 
     /// - Parameter onChange: 保存并应用新设置；抛错时窗口底部显示一句提示，表单保持新值方便再试
-    init(form: SettingsForm, decoration: NSImage?, onChange: @escaping (SettingsForm) throws -> Void) {
+    /// - Parameter onSelectLanguage: 换了界面语言：写配置 + 重读文案
+    init(
+        form: SettingsForm,
+        language: AppLanguage = .chinese,
+        decoration: NSImage?,
+        onSelectLanguage: @escaping (AppLanguage) -> Void = { _ in },
+        onChange: @escaping (SettingsForm) throws -> Void
+    ) {
         self.form = form
         self.onChange = onChange
+        self.onSelectLanguage = onSelectLanguage
         var step: ((SettingsForm.Field, Int) -> Void)?
         var select: ((EyeCareMode) -> Void)?
+        var selectLanguage: ((AppLanguage) -> Void)?
         settingsView = SettingsView(
             form: form,
+            language: language,
             decoration: decoration,
             onStep: { field, direction in step?(field, direction) },
-            onSelectMode: { mode in select?(mode) }
+            onSelectMode: { mode in select?(mode) },
+            onSelectLanguage: { language in selectLanguage?(language) }
         )
 
-        let window = PixelWindow(size: SettingsView.preferredSize(), title: "ICU 设置", content: settingsView)
+        let window = PixelWindow(size: SettingsView.preferredSize(), title: TextCatalog.shared.text("settings.title"), content: settingsView)
         super.init(window: window)
         window.delegate = self
 
         step = { [weak self] field, direction in self?.step(field, by: direction) }
         select = { [weak self] mode in self?.select(eyeMode: mode) }
+        selectLanguage = { [weak self] language in self?.select(language: language) }
         settingsView.closeButton.target = self
         settingsView.closeButton.action = #selector(closeSettings)
     }
@@ -48,6 +61,18 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         apply(form.with(eyeMode: eyeMode))
     }
 
+    func select(language: AppLanguage) {
+        guard language != settingsView.language else { return }
+        settingsView.language = language
+        onSelectLanguage(language)
+    }
+
+    /// 文案换了（语言切换）：标题栏、行标签、模式名、说明都重画
+    func reloadCopy() {
+        window?.title = TextCatalog.shared.text("settings.title")
+        settingsView.reloadCopy()
+    }
+
     private func apply(_ next: SettingsForm) {
         guard next != form else { return }
         form = next
@@ -57,7 +82,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
             settingsView.message = nil
         } catch {
             NSLog("[Settings] failed to save settings: \(error.localizedDescription)")
-            settingsView.message = "没存上，再点一次试试"
+            settingsView.message = TextCatalog.shared.text("common.save_failed")
         }
     }
 

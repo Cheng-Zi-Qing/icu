@@ -76,8 +76,26 @@ enum PixelPaint {
         (text as NSString).size(withAttributes: [.font: font])
     }
 
-    /// 在矩形里垂直居中画字；`align` 0 左、0.5 中、1 右。像素字关掉抗锯齿
+    /// 字比给它的框宽时调一下（测试用它把「英文超出框」的句子都抓出来）；平时没人听
+    static var overflowObserver: ((_ text: String, _ textWidth: CGFloat, _ room: CGFloat) -> Void)?
+
+    /// 放得下原样返回；放不下就从后面截掉，补「…」，保证不画出框
+    static func fitted(_ text: String, width: CGFloat, font: NSFont = PixelFont.font()) -> String {
+        guard textSize(text, font: font).width > width else { return text }
+        let characters = Array(text)
+        let shortened = (0..<characters.count).reversed().lazy
+            .map { String(characters[..<$0]).trimmingCharacters(in: .whitespaces) + "…" }
+            .first { textSize($0, font: font).width <= width }
+        return shortened ?? ""
+    }
+
+    /// 在矩形里垂直居中画字；`align` 0 左、0.5 中、1 右。像素字关掉抗锯齿。
+    /// 一行字放不下时截短补「…」，不会画出框（同时报给 `overflowObserver`）
     static func text(_ text: String, in rect: NSRect, color: NSColor = PixelPalette.outline, align: CGFloat = 0, font: NSFont = PixelFont.font()) {
+        let fullWidth = textSize(text, font: font).width
+        let overflows = fullWidth > rect.width + 0.5
+        if overflows { overflowObserver?(text, fullWidth, rect.width) }
+        let text = overflows ? fitted(text, width: rect.width, font: font) : text
         let size = textSize(text, font: font)
         let origin = NSPoint(x: (rect.minX + (rect.width - size.width) * align).rounded(), y: (rect.midY - size.height / 2).rounded())
         guard let context = NSGraphicsContext.current else { return }

@@ -21,7 +21,7 @@ final class WardrobeWindowController: NSWindowController, NSWindowDelegate {
             onEquip: { id in equip?(id) },
             onWearSuit: { suit in wear?(suit) }
         )
-        let window = PixelWindow(size: WardrobeView.preferredSize(for: catalog), title: "衣柜", content: wardrobeView)
+        let window = PixelWindow(size: WardrobeView.preferredSize(for: catalog), title: TextCatalog.shared.text("wardrobe.title"), content: wardrobeView)
         super.init(window: window)
         window.delegate = self
 
@@ -60,7 +60,7 @@ final class WardrobeWindowController: NSWindowController, NSWindowDelegate {
             wardrobeView.update(state: next)
         } catch {
             NSLog("[Wardrobe] failed to save wardrobe: \(error.localizedDescription)")
-            wardrobeView.message = "没存上，再点一次试试"
+            wardrobeView.message = TextCatalog.shared.text("common.save_failed")
         }
     }
 

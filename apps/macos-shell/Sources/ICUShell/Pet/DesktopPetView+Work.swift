@@ -6,13 +6,23 @@ extension DesktopPetView {
     var scene: PetScene? { workPlayer.scene }
     var workActivity: AgentActivity? { workPlayer.activity }
 
-    /// nil = 不演了，回到平时的画面
-    func setScene(_ scene: PetScene?) {
-        workPlayer.play(scene)
+    /// nil = 不演了，回到平时的画面；`preferring` 指定演法（往回跑的路上接着放追球），不给就抽一种
+    func setScene(_ scene: PetScene?, preferring variant: String? = nil) {
+        workPlayer.play(scene, preferring: variant)
     }
 
     func setWorkActivity(_ activity: AgentActivity?) {
         setScene(activity.map(PetScene.work))
+    }
+
+    /// 屏幕中央的提醒卡上那只水豚：和桌宠同一套帧、同一个动作，从头放起
+    func sceneImage(_ scene: PetScene, after elapsed: TimeInterval) -> NSImage? {
+        workPlayer.scenes?.image(for: scene, after: elapsed)
+    }
+
+    /// 全屏休息时陪着打盹的那只
+    func napImage(after elapsed: TimeInterval) -> NSImage? {
+        PetActionClip.nap.frameName(after: elapsed).flatMap { actionSprites[PetActionClip.nap.directory]?.image(named: $0) }
     }
 
     func makeWorkPlayer() -> PetWorkScenePlayer {

@@ -9,8 +9,8 @@ final class WardrobeItemCell: NSControl {
     }
 
     static let size = NSSize(width: 80, height: 76)
-    static let lockedHint = "完成任务掉落"
-    static let lockedAccessibilityLabel = "还没拿到，完成提醒有机会掉落"
+    static var lockedHint: String { TextCatalog.shared.text("wardrobe.locked_hint") }
+    static var lockedAccessibilityLabel: String { TextCatalog.shared.text("wardrobe.locked_accessibility") }
     private static let iconScale: CGFloat = 3
 
     let itemID: String
@@ -27,7 +27,7 @@ final class WardrobeItemCell: NSControl {
 
     init(item: WardrobeItem, icon: NSImage?, look: Look) {
         itemID = item.id
-        name = item.name
+        name = item.displayName
         self.icon = icon
         self.look = look
         super.init(frame: NSRect(origin: .zero, size: Self.size))
@@ -81,7 +81,7 @@ final class WardrobeItemCell: NSControl {
     private func refreshState() {
         isEnabled = look != .locked
         setAccessibilityLabel(look == .locked ? Self.lockedAccessibilityLabel : name)
-        setAccessibilityValue(look == .equipped ? "穿着" : nil)
+        setAccessibilityValue(look == .equipped ? TextCatalog.shared.text("wardrobe.wearing") : nil)
         toolTip = look == .locked ? Self.lockedAccessibilityLabel : nil
         needsDisplay = true
     }

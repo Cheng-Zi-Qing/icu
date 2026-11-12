@@ -12,7 +12,7 @@ class DesktopPetView: NSView {
     enum OverlayLayoutMode {
         case compact
         case transientBubble
-        case reminderCard
+        case card
     }
 
     enum LayoutMetrics {
@@ -20,30 +20,44 @@ class DesktopPetView: NSView {
         static let petCanvasHeight: CGFloat = 128
         /// 形象上方的留白：悬停放大、点击弹跳时头顶的柚子不会被窗口裁掉
         static let petHeadroom: CGFloat = 24
-        static let petStageHeight: CGFloat = petCanvasHeight + petHeadroom
+        /// 脚下给状态字留的一条：字在水豚下面，不压在身上
+        static let statusChipBand: CGFloat = 26
+        static let petStageHeight: CGFloat = statusChipBand + petCanvasHeight + petHeadroom
+        /// 宽场景（追球、冲浪、趴着钓鱼……）最宽能放多宽：平时的两倍（64 格），够得着管线里最宽的 50 格
+        static let widestSceneWidth: CGFloat = petCanvasWidth * 2
         static let transientBubbleMaxHeight: CGFloat = 56
         static let transientBubbleTailSize: CGFloat = 8
         static let transientBubbleGap: CGFloat = 6
         static let transientBubbleTopInset: CGFloat = 8
-        static let reminderCardHeight: CGFloat = ReminderCardView.maximumHeight
-        static let reminderGap: CGFloat = 8
-        static let reminderTopInset: CGFloat = 8
+        /// 头顶卡片（在等你）的高度；健康提醒不在这里，在屏幕中央（见 ReminderStagePresenter）
+        static let cardHeight: CGFloat = AgentWaitCardView.height
+        static let cardGap: CGFloat = 8
+        static let cardTopInset: CGFloat = 8
         static let statusChipMargin: CGFloat = 8
+        /// 窗口露在屏幕上的部分比这窄（藏边探头），浮层就不按它摆
+        static let minimumOnScreenOverlayWidth: CGFloat = 64
         /// Core Animation 按深度给同级图层排序：桌宠图层一旦带上 3D 变换（比如以前的悬停偏头，
         /// 前倾半边能凸出约 15pt）就会盖住状态标签。浮层固定放在更靠前的深度
         static let overlayZPosition: CGFloat = 100
     }
 
+    /// 干活场景按这个尺寸放大：宽度留足最宽的场景，倍数只由高度定。
+    /// 32 格的帧照样放大 8 倍（128 点）；38–50 格宽的场景也是 8 倍，不会因为宽被缩小（窗口跟着放宽，见 PetWindowWidth）
+    static let workSceneCanvasSize = NSSize(
+        width: LayoutMetrics.widestSceneWidth,
+        height: LayoutMetrics.petCanvasHeight
+    )
+
     static let compactContentSize = NSSize(
         width: LayoutMetrics.petCanvasWidth,
         height: LayoutMetrics.petStageHeight
     )
-    static let reminderExpandedContentSize = NSSize(
+    static let cardExpandedContentSize = NSSize(
         width: LayoutMetrics.petCanvasWidth,
         height: LayoutMetrics.petStageHeight
-            + LayoutMetrics.reminderGap
-            + LayoutMetrics.reminderCardHeight
-            + LayoutMetrics.reminderTopInset
+            + LayoutMetrics.cardGap
+            + LayoutMetrics.cardHeight
+            + LayoutMetrics.cardTopInset
     )
     static let transientBubbleExpandedContentSize = NSSize(
         width: LayoutMetrics.petCanvasWidth,
@@ -61,7 +75,6 @@ class DesktopPetView: NSView {
     var transientBubbleContainer: NSView!
     var transientBubbleLabel: NSTextField!
     var transientBubbleTail: NSView!
-    var reminderCardView: ReminderCardView!
     var waitCardView: AgentWaitCardView!
     var currentImage: NSImage?
     let assetLocator: PetAssetLocator
@@ -82,17 +95,13 @@ class DesktopPetView: NSView {
     var isShowingDragPose = false
     /// 贴左边时镜像，让脸朝屏幕里
     var isFacingRight = false
-    /// 转身那一下的正面帧（`<pet>/turn/front.png`）；没有这张就直接镜像
-    var turnSprites: PetPoseSprites?
-    /// 正在转身：正面帧上屏、转到哪边、什么时候转完（见 DesktopPetView+Turn）
-    var turnImage: NSImage?
-    var turnTarget: Bool?
-    var turnTimer: Timer?
     /// 拎在半空时用的大画框（第一次拎起时才创建）
     var liftWindow: PetLiftWindow?
     /// 当前上屏图的原图（未镜像）与实际上屏的图
     var presentedSource: NSImage?
     var presentedImage: NSImage?
+    /// 上屏这张要多宽（平时 = 形象画布宽；宽场景更宽），变了报 `onPresentedWidthChanged`
+    var presentedWidth: CGFloat = LayoutMetrics.petCanvasWidth
     /// 身体不透明区域（归一化、未镜像），每个形象算一次
     var normalizedBodyBounds: CGRect?
     /// 贴边探头
@@ -104,6 +113,8 @@ class DesktopPetView: NSView {
     var shownPeekFrame: PetPeekFrame?
     /// 鼠标是否在形象不透明的像素上（透明区域不算，避免靠近屏幕边就误触发探出来）
     var isPointerOverPet = false
+    /// 贴在屏幕左右边上（状态条收起来，鼠标放上去才露）
+    var isDockedToSide = false
     /// 摸头 / 打盹 / 待机小动作的逐帧片段（盖在待机动画上，让位给拖拽和探头）
     var actionSprites: [String: PetPoseSprites] = [:]
     var actionImage: NSImage?
@@ -118,6 +129,10 @@ class DesktopPetView: NSView {
     /// 鼠标真正在屏幕上的位置（测试里换掉）；用来识别 AppKit 补发的过期鼠标事件
     var pointerLocation: () -> CGPoint = { NSEvent.mouseLocation }
     var isPressingPet = false
+    /// 按下鼠标的位置：松手时没拖动就算戳了这儿一下（见 DesktopPetView+Poke）
+    var pokePressPoint: NSPoint?
+    /// 被戳出了反应（哪段、是不是从右边戳的）；生气要扭过身去，朝向归窗口控制器管（贴边时不转）
+    var onPokeReaction: ((PetActionClip, _ pokedFromRight: Bool) -> Void)?
     lazy var behavior = makeBehaviorCoordinator()
 
     var onPetDragStarted: (() -> Void)?
@@ -128,11 +143,16 @@ class DesktopPetView: NSView {
     var onPetDragEnded: (() -> Void)?
     /// 只放一遍的场景（干完了、出错了）放完了
     var onSceneFinished: ((PetScene) -> Void)?
+    /// 上屏的画面变宽 / 变回平时的宽度：窗口跟着放宽 / 收窄
+    var onPresentedWidthChanged: ((CGFloat) -> Void)?
+    /// 开始 / 放完一段摸头、打盹、待机小动作（状态条的字跟着换）
+    var onActionClipChanged: ((PetActionClip?) -> Void)?
+    /// 上次报过的那段片段
+    var reportedActionClip: PetActionClip?
     var isDraggingPet: Bool { dragController.isDragging }
     var completedVariantLoops = 0
     var variantRotationTicksRemaining = 0
     var persistentStatusText = DesktopPetCopy.statusText(for: .idle)
-    var activeReminderTooltip: String?
     var transientBubbleDismissTimer: Timer?
     var animationTimer: DispatchSourceTimer?
     var themeObserver: NSObjectProtocol?
@@ -192,7 +212,6 @@ class DesktopPetView: NSView {
         _ = behavior
         loadAnimation(for: .idle)
         setupTransientBubble()
-        setupReminderCard()
         setupWaitCard()
         setupStatusLabel()
         applyTheme()
@@ -230,13 +249,17 @@ class DesktopPetView: NSView {
         transientBubbleContainer = NSView(frame: .zero)
         transientBubbleContainer.identifier = NSUserInterfaceItemIdentifier("desktopPet.transientBubbleContainer")
         transientBubbleContainer.wantsLayer = true
+        transientBubbleContainer.clipsToBounds = true
         transientBubbleContainer.isHidden = true
 
         transientBubbleLabel = NSTextField(labelWithString: "")
         transientBubbleLabel.identifier = NSUserInterfaceItemIdentifier("desktopPet.transientBubbleLabel")
         transientBubbleLabel.alignment = .center
         transientBubbleLabel.lineBreakMode = .byWordWrapping
-        transientBubbleLabel.maximumNumberOfLines = 2
+        // 行数由气泡最大高度管；真放不下，最后一行收成「…」，字不出气泡
+        transientBubbleLabel.maximumNumberOfLines = 0
+        transientBubbleLabel.cell?.truncatesLastVisibleLine = true
+        transientBubbleLabel.clipsToBounds = true
         transientBubbleLabel.drawsBackground = false
         transientBubbleContainer.addSubview(transientBubbleLabel)
 
@@ -249,14 +272,7 @@ class DesktopPetView: NSView {
         addOverlaySubview(transientBubbleTail)
     }
 
-    func setupReminderCard() {
-        reminderCardView = ReminderCardView(frame: .zero)
-        reminderCardView.identifier = NSUserInterfaceItemIdentifier("desktopPet.reminderCard")
-        reminderCardView.isHidden = true
-        addOverlaySubview(reminderCardView)
-    }
-
-    /// 浮在桌宠上面的东西（状态标签、气泡、提醒卡片）：深度上永远在桌宠前面
+    /// 浮在桌宠上面的东西（状态标签、气泡、在等你的卡片）：深度上永远在桌宠前面
     func addOverlaySubview(_ overlay: NSView) {
         overlay.wantsLayer = true
         overlay.layer?.zPosition = LayoutMetrics.overlayZPosition
@@ -307,8 +323,6 @@ class DesktopPetView: NSView {
     }
 
     func showTransientMessage(_ text: String, duration: TimeInterval = 3) {
-        activeReminderTooltip = nil
-        reminderCardView.isHidden = true
         transientBubbleDismissTimer?.invalidate()
         transientBubbleLabel.stringValue = text
         layoutTransientBubble()
@@ -327,34 +341,6 @@ class DesktopPetView: NSView {
         RunLoop.main.add(timer, forMode: .common)
     }
 
-    func showReminderCard(_ payload: ReminderPresentationPayload) {
-        showReminderCard(payload, onAction: nil)
-    }
-
-    func showReminderCard(
-        _ payload: ReminderPresentationPayload,
-        cups: CupProgress? = nil,
-        onAction: ((HealthReminderOutcome) -> Void)? = nil
-    ) {
-        transientBubbleDismissTimer?.invalidate()
-        hideTransientBubble(notifyLayoutChange: false)
-        reminderCardView.configure(with: payload, cups: cups, onAction: onAction)
-        activeReminderTooltip = payload.text
-        layoutReminderCard()
-        reminderCardView.isHidden = false
-        notifyOverlayLayoutModeChanged()
-        updateToolTipForVisibleContent()
-    }
-
-    func dismissReminderCard() {
-        // 收起后倒计时不能接着走，按钮也不能再报结果（被「在等你」收起的卡之后会重新弹）
-        reminderCardView.deactivate()
-        activeReminderTooltip = nil
-        reminderCardView.isHidden = true
-        notifyOverlayLayoutModeChanged()
-        updateToolTipForVisibleContent()
-    }
-
     // MARK: - 拖拽传递给 window
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
@@ -365,17 +351,13 @@ class DesktopPetView: NSView {
         super.layout()
         layoutPetChrome()
         layoutTransientBubble()
-        layoutReminderCard()
         layoutWaitCard()
         animationEngine.layoutShadow(petCanvasBounds: petCanvasRect)
     }
 
-    /// 窗口为提醒卡变高时立刻把卡片挪到桌宠上方，不等下一次布局（否则会先盖住桌宠闪一下）
+    /// 窗口为头顶的卡片变高时立刻把卡片挪到桌宠上方，不等下一次布局（否则会先盖住桌宠闪一下）
     override func setFrameSize(_ newSize: NSSize) {
         super.setFrameSize(newSize)
-        if reminderCardView != nil, !reminderCardView.isHidden {
-            layoutReminderCard()
-        }
         if waitCardView != nil, !waitCardView.isHidden {
             layoutWaitCard()
         }
@@ -416,6 +398,11 @@ class DesktopPetView: NSView {
     }
 
     var activeActionClipForTesting: PetActionClip? { behavior.activeClip }
+
+    /// 气泡里正显示的那句话；没显示气泡时为 nil
+    var visibleTransientMessageForTesting: String? {
+        transientBubbleContainer.isHidden ? nil : transientBubbleLabel.stringValue
+    }
 
     func advanceAnimationFrameForTesting() {
         advanceAnimationFrame()

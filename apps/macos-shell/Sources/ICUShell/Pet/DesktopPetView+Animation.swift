@@ -55,8 +55,8 @@ extension DesktopPetView {
         if normalizedBodyBounds == nil {
             normalizedBodyBounds = PixelArtScaler.opaqueBounds(of: image)
         }
-        // 拖拽姿势 / 贴边探头 / 转身 / 干活小场景 / 摸头打盹片段显示期间，动画帧照常推进，但先不上屏
-        if !isShowingDragPose && !isPeeking && turnImage == nil && workImage == nil && actionImage == nil {
+        // 拖拽姿势 / 贴边探头 / 干活小场景 / 摸头打盹片段显示期间，动画帧照常推进，但先不上屏
+        if !isShowingDragPose && !isPeeking && workImage == nil && actionImage == nil {
             present(image)
         }
     }
@@ -66,9 +66,14 @@ extension DesktopPetView {
         let shown = isFacingRight ? image.map(PixelArtScaler.mirroredHorizontally) : image
         presentedImage = shown
         imageView?.image = shown
+        updateImageScaling()
         if liftWindow?.isVisible == true {
             liftWindow?.setImage(shown)
         }
+        let width = PetWindowWidth.width(for: shown, normal: LayoutMetrics.petCanvasWidth)
+        guard width != presentedWidth else { return }
+        presentedWidth = width
+        onPresentedWidthChanged?(width)
     }
 
     func scheduleAnimationIfNeeded() {
@@ -216,5 +221,13 @@ extension DesktopPetView {
 
     var shouldScheduleAnimationTimer: Bool {
         animationPlayer.shouldAnimate || currentAnimationFamily.count > 1
+    }
+
+    /// 比窗口还宽的帧（贴着边、窗口没放宽时的宽场景）不缩小：水豚一样大，两边的道具超出就裁掉
+    func updateImageScaling() {
+        guard let imageView else { return }
+        let overflows = (imageView.image?.size.width ?? 0) > imageView.bounds.width + 0.5
+        let scaling: NSImageScaling = overflows ? .scaleNone : .scaleProportionallyUpOrDown
+        if imageView.imageScaling != scaling { imageView.imageScaling = scaling }
     }
 }
