@@ -6,6 +6,8 @@ struct ReminderPresentationPayload {
     let text: String
     /// 护眼提醒要休息多久（全屏休息倒计时用）
     var restSeconds: TimeInterval = 20
+    /// 这条提醒之前已经推迟过几次（推迟后再出来的那条 +1）
+    var snoozeCount = 0
 }
 
 @MainActor

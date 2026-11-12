@@ -16,7 +16,8 @@
     "today": "Today",
     "today_accessibility": "Today: water %@, eye breaks %@, work %@",
     "cups_count": "%d/%d cups",
-    "eye_count": "%d×"
+    "eye_count": "%d×",
+    "open_backpack": "Backpack"
   },
   "pet": {
     "status_idle": "Chilling",
@@ -276,8 +277,8 @@
     "suits": "Suits",
     "wearing": "Wearing",
     "suit_locked": "Missing pieces",
-    "locked_hint": "Task drop",
-    "locked_accessibility": "Not unlocked yet. Finishing reminders can drop it",
+    "locked_hint": "Chest drop",
+    "locked_accessibility": "Not unlocked yet. Chests can drop it",
     "slot": {
       "head": "Head",
       "mouth": "Mouth",
@@ -607,5 +608,67 @@
       "I'm mad now!",
       "Not talking."
     ]
+  },
+  "loot": {
+    "title": "Backpack",
+    "incubator": "Hatching",
+    "slot_empty": "Empty",
+    "minutes_left": "%d min left",
+    "queued": "%d queued",
+    "shards": "Shards %d/%d",
+    "codex": "Codex %d/%d",
+    "unknown": "???",
+    "count": "×%d",
+    "new": "New",
+    "hint": "Finish reminders for chests; they hatch while you work",
+    "earned": "New %@! It hatches while you work",
+    "earned_gray": "A %@ for the collection",
+    "earned_black": "Rough day yesterday. Here's a %@",
+    "shard": "Chests full today: shard %d/%d",
+    "shard_exchanged": "Enough shards for a wooden chest",
+    "hatched": "Your %@ hatched: %@",
+    "hatched_outfit": "An outfit fell out: %@!",
+    "chest": {
+      "wood": "wooden chest",
+      "iron": "iron chest",
+      "gold": "gold chest",
+      "gray_box": "gray box",
+      "black_box": "black box"
+    },
+    "tier": {
+      "black": "Black",
+      "gray": "Gray",
+      "white": "White",
+      "blue": "Blue",
+      "purple": "Purple"
+    },
+    "material": {
+      "dew": "Dewdrop",
+      "warm_sip": "Warm sip",
+      "tea_stem": "Tea stem",
+      "ice_cube": "Ice cube",
+      "first_raindrop": "First raindrop",
+      "window_cloud": "Window cloud",
+      "slant_sunbeam": "Slant sunbeam",
+      "distant_bird": "Distant bird",
+      "fallen_leaf": "Fallen leaf",
+      "pebble": "Pebble",
+      "shoelace": "Shoelace",
+      "stair_echo": "Stair echo",
+      "draft_wind": "Draft",
+      "quiet_spell": "Quiet spell",
+      "pendulum": "Pendulum",
+      "spark": "Spark",
+      "stardust": "Stardust",
+      "dream_shard": "Dream shard",
+      "cold_water": "Cold water",
+      "unblinked_eye": "Dry eye",
+      "stiff_shoulder": "Stiff shoulder",
+      "snoozed_alarm": "Snoozed alarm",
+      "midnight_moon": "Midnight moon",
+      "small_hours_glow": "3am glow",
+      "anxious_yarn": "Anxious yarn",
+      "unread_dot": "Unread dot"
+    }
   }
 }

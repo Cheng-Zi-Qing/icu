@@ -17,6 +17,10 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
     /// Claude Code 接上了没有（菜单里显示「接入 / 断开」）；nil = 没法接，不显示
     var claudeConnection: () -> Bool? = { nil }
     var onClaudeConnectionChange: (Bool) -> Void = { _ in }
+    /// 掉落开着时右键菜单里有「背包」
+    var showsBackpack = false
+    var onOpenBackpackRequested: () -> Void = {}
+    private var isFullscreen = false
     private(set) var agentSummary = AgentSummary.idle
     /// 干活小场景：一段至少演 20 秒，工具之间的「在想」空档不换（见 AgentSceneHold）
     private var sceneHold = AgentSceneHold.none
@@ -253,7 +257,16 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
 
     /// 全屏（看视频、演示）时除了「在等你」都先压着
     func setFullscreen(_ fullscreen: Bool) {
+        isFullscreen = fullscreen
         attention.fullscreenChanged(fullscreen)
+    }
+
+    /// 宝箱的提示能不能现在冒：全屏、专注、卡片挂着、桌宠藏起来时都先攒着
+    var canShowLootNotice: Bool {
+        !isFullscreen
+            && workSessionController.state != .focus
+            && !petView.isShowingWaitCard
+            && window?.isVisible == true
     }
 
     private func configureAttention() {
@@ -336,7 +349,7 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
     }
 
     private func currentMenuModel() -> DesktopPetMenuModel {
-        DesktopPetMenuModel(state: workSessionController.state, claudeConnection: claudeConnection())
+        DesktopPetMenuModel(state: workSessionController.state, claudeConnection: claudeConnection(), showsBackpack: showsBackpack)
     }
 
     /// Agent 状态变了：状态条优先显示它（在等你、干完了……），没事时回到平时的状态
@@ -476,6 +489,9 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
             case .openWardrobe:
                 onOpenWardrobeRequested()
                 return
+            case .openBackpack:
+                onOpenBackpackRequested()
+                return
             // 「今日报告…」在 ContextMenuPanelController 里就被拦下弹了报告面板，走不到这里；
             // Swift 要求 switch 穷尽，只能在这里占个位
             case .showTodayReport:
@@ -521,7 +537,8 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
                 id: UUID(),
                 type: payload.type,
                 text: payload.text,
-                restSeconds: payload.restSeconds
+                restSeconds: payload.restSeconds,
+                snoozeCount: payload.snoozeCount + 1
             )
             reminderScheduler.scheduleSnooze(for: followUpPayload)
         }

@@ -32,6 +32,12 @@ final class AppSettingsStore {
         ReminderTimerSettings(settingsObject: loadRootObjectOrEmpty(section: "timers"))
     }
 
+    /// 宝箱掉落开没开（`loot_enabled`）；没写就是开着。关掉后提醒和今日报告照旧，背包存档不动
+    func loadLootEnabled() -> Bool {
+        let root = (try? loadRootObject()) ?? [:]
+        return root["loot_enabled"] as? Bool ?? true
+    }
+
     /// 界面语言；读不到就是中文
     func loadLanguage() -> AppLanguage {
         let root = (try? loadRootObject()) ?? [:]

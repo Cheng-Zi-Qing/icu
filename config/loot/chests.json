@@ -1,0 +1,22 @@
+{
+  "rules": {
+    "incubator_slots": 3,
+    "chest_storage": 10,
+    "daily_positive_chest_cap": 12,
+    "daily_gray_chest_cap": 4,
+    "overflow_shards_per_chest": 10,
+    "focus_min_minutes": 15,
+    "break_min_minutes": 5,
+    "snoozes_for_gray_box": 3,
+    "outfit_drop_chance": 0.12,
+    "outfit_pity_threshold": 10,
+    "max_outfit_drops_per_day": 2
+  },
+  "chests": [
+    { "kind": "wood", "name": "木宝箱", "hatch_minutes": 10, "rolls": 1, "tiers": { "white": 70, "blue": 25, "purple": 5 } },
+    { "kind": "iron", "name": "铁宝箱", "hatch_minutes": 25, "rolls": 2, "tiers": { "white": 50, "blue": 38, "purple": 12 } },
+    { "kind": "gold", "name": "金宝箱", "hatch_minutes": 60, "rolls": 3, "tiers": { "blue": 60, "purple": 40 } },
+    { "kind": "gray_box", "name": "灰匣", "hatch_minutes": 15, "rolls": 1, "tiers": { "gray": 100 } },
+    { "kind": "black_box", "name": "黑匣", "hatch_minutes": 15, "rolls": 1, "tiers": { "black": 100 } }
+  ]
+}

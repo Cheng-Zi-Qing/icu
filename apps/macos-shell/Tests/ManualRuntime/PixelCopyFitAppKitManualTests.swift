@@ -134,6 +134,28 @@ private func drawPixelPopups() throws {
     let wardrobe = WardrobeWindowController(catalog: catalog, state: .initial(for: catalog), art: art) { _ in }
     if let view = wardrobe.window?.contentView { draw(view) }
     wardrobe.close()
+
+    // 背包：孵化位排满（最长的宝箱名）、也有空位；图鉴全拿到，数量两位数
+    let loot = LootConfig(
+        chestsJSON: try JSONSerialization.jsonObject(with: Data(contentsOf: fitRepoRoot.appendingPathComponent("config/loot/chests.json"))),
+        materialsJSON: try JSONSerialization.jsonObject(with: Data(contentsOf: fitRepoRoot.appendingPathComponent("config/loot/materials.json")))
+    )
+    let every = Set(loot.materials.map(\.id))
+    for kinds in [ChestKind.allCases.map { $0 }, [ChestKind.gold]] {
+        let state = LootState.empty.with { state in
+            state.incubating = kinds.prefix(loot.rules.incubatorSlots).map {
+                IncubatingChest(chest: Chest(id: UUID(), kind: $0, task: nil, earnedAt: fitMorning), progressSeconds: 30)
+            }
+            state.storage = Array(repeating: Chest(id: UUID(), kind: .wood, task: nil, earnedAt: fitMorning), count: 10)
+            state.shards = 9
+            state.discovered = every
+            state.unseen = every
+            state.materials = Dictionary(uniqueKeysWithValues: every.map { ($0, 99) })
+        }
+        let backpack = BackpackWindowController(content: BackpackContent(state: state, config: loot))
+        if let view = backpack.window?.contentView { draw(view) }
+        backpack.close()
+    }
 }
 
 @MainActor
