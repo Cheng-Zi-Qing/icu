@@ -18,9 +18,11 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
     var claudeConnection: () -> Bool? = { nil }
     var onClaudeConnectionChange: (Bool) -> Void = { _ in }
     private(set) var agentSummary = AgentSummary.idle
-    /// 干活小场景：换场景至少隔 3 秒（见 AgentSceneHold）
+    /// 干活小场景：一段至少演 20 秒，工具之间的「在想」空档不换（见 AgentSceneHold）
     private var sceneHold = AgentSceneHold.none
     private var sceneRecheck: DispatchWorkItem?
+    /// 这一段画面说的那句：开演时定下（Write、WebFetch 这类有自己那组话的按当时的工具挑），换画面才换
+    private var heldAgentText: (activity: AgentActivity, text: String)?
     /// 搜索时追着球跑来跑去（见 PetChaseRunner）
     private var chaseRunner: PetChaseRunner?
     var isChasing: Bool { chaseRunner?.isRunning == true }
@@ -120,6 +122,14 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
             self?.updateWindowSize(for: mode)
             self?.edgeDock?.overlayVisibilityChanged(mode != .compact)
         }
+        petView.onActionClipChanged = { [weak self] _ in
+            guard let self else { return }
+            self.petView.setStatusText(self.statusText(for: self.workSessionController.state))
+        }
+        petView.onPresentedWidthChanged = { [weak self] _ in
+            guard let self else { return }
+            self.updateWindowSize(for: self.petView.currentOverlayLayoutMode)
+        }
 
         window.menuModelProvider = { [weak self] in
             self?.currentMenuModel() ?? DesktopPetMenuModel(state: .idle)
@@ -197,6 +207,11 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
         edgeDock.onPeekChanged = { [weak petView] peeking in
             petView?.setEdgePeek(peeking)
         }
+        edgeDock.onDockChanged = { [weak self] dock in
+            guard let self else { return }
+            self.petView.setDockedToSide(dock.horizontal != nil)
+            self.updateWindowSize(for: self.petView.currentOverlayLayoutMode)
+        }
         edgeDock.onPeekFlinch = { [weak petView] in
             petView?.flinchPeek()
         }
@@ -243,7 +258,6 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
 
     private func configureAttention() {
         attention.onReminderReady = { [weak self] payload in self?.showReminder(payload) }
-        attention.onReminderWithdrawn = { [weak self] in self?.putReminderAway() }
         attention.onDigest = { [weak self] message in
             // 卡片上已经写着谁在等你了，不再冒一句盖住它
             guard let self, !self.petView.isShowingWaitCard else { return }
@@ -289,16 +303,17 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
         )
     }
 
-    /// 提醒被「在等你」盖过：卡片收起来，桌宠不再跟着做动作（之后会重新弹）
+    /// 关桌宠窗口时收起提醒卡和全屏休息，桌宠不再跟着做动作
     private func putReminderAway() {
         reminderStage.dismiss()
         eyeRest.cancel()
         reminderScene = nil
     }
 
-    /// 现在该演的场景：健康提醒挂着就跟着做动作，否则按 Agent 的状态来
+    /// 现在该演的场景：健康提醒挂着就跟着做动作，否则按 Agent 的状态来；都没有、又在休息，就演休息
     private func sceneToShow(work: AgentActivity?) -> PetScene? {
         reminderScene ?? attention.stage.scene(work: work)
+            ?? (workSessionController.state == .breakState ? .rest : nil)
     }
 
     func setPetID(_ petID: String) {
@@ -311,6 +326,8 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
     }
 
     func windowDidMove(_ notification: Notification) {
+        // 贴边 / 藏边后窗口一部分在屏幕外：状态条、气泡、卡片挪回看得见的地方
+        petView.layoutOverlaysForWindowPosition()
         // 拖拽中每个事件都会移动窗口，等松手（onPetDragEnded）再落盘；
         // 吸边 / 藏边动画的中间位置也不保存（贴好后由 onDockedOriginSettled 保存）
         // 追球时跑来跑去的位置也不保存（停下会回原位）
@@ -326,7 +343,7 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
     func setAgentSummary(_ summary: AgentSummary) {
         guard summary != agentSummary else { return }
         agentSummary = summary
-        // 先让打扰分级收起被盖过的提醒卡、挑好场景，再挂在等你的卡片
+        // 先让打扰分级挑好场景（挂着的提醒卡不动），再挂在等你的卡片
         attention.agentChanged(summary)
         updateWaitCard()
     }
@@ -375,13 +392,7 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
         sceneRecheck = nil
         let (hold, recheckAfter) = sceneHold.updated(desired: agentSummary.activity, at: ProcessInfo.processInfo.systemUptime)
         sceneHold = hold
-        updateChase()
-        // 不追了但还在往回跑：接着放跑步帧，到家再换
-        if chaseRunner?.isReturning == true, let chasedActivity {
-            petView.setScene(.work(chasedActivity))
-        } else {
-            petView.setScene(sceneToShow(work: hold.shown))
-        }
+        showDesiredScene()
         // 字跟着画面换（画面要停够 3 秒，字也一样）；字没变时 setStatusText 什么都不做
         petView.setStatusText(statusText(for: workSessionController.state))
         guard let recheckAfter else { return }
@@ -390,10 +401,28 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + recheckAfter, execute: recheck)
     }
 
+    /// 演该演的场景（停够了的 Agent 活儿、健康提醒、休息），追球那种演法就跑起来
+    private func showDesiredScene() {
+        let desired = sceneToShow(work: sceneHold.shown)
+        // 要换场景了：先停下往回跑（这样换上来的画面不会先闪一下别的）
+        if isChasing && desired != petView.scene {
+            chaseRunner?.stop()
+        }
+        // 往回跑的路上接着放跑步帧，到家再换
+        if chaseRunner?.isReturning == true, let chasedActivity, desired != .work(chasedActivity) {
+            petView.setScene(.work(chasedActivity), preferring: PetScene.work(chasedActivity).name)
+        } else {
+            petView.setScene(desired)
+        }
+        // 开演时抽到追球那种演法才跑
+        updateChase()
+    }
+
     /// 正在演追球（搜索）就让窗口跑起来；贴在边上、藏起来、被拎着时不跑。停下小跑回原位，到家再朝回屏幕中间
     private func updateChase() {
-        // 健康提醒挂着时在原地做动作，不追球
-        let chasing = reminderScene == nil && (sceneHold.shown.map { petView.workPlayer.scenes?.chases(.work($0)) == true } ?? false)
+        // 正在演的就是该演的、而且抽到的是追球那种；健康提醒挂着时在原地做动作，不追球
+        let chasing = reminderScene == nil && petView.workPlayer.chases
+            && petView.scene == sceneToShow(work: sceneHold.shown)
         let free = edgeDock.map { $0.dock == .none && !$0.isHidden } ?? true
         let shouldRun = chasing && free && !petView.isDraggingPet
         guard shouldRun != isChasing, let window else { return }
@@ -508,17 +537,34 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
 
     private func applyCurrentStateToView(showBubble: Bool = false) {
         petView.setWorkState(workSessionController.state)
+        // 进出休息时换上 / 收起休息的场景
+        showDesiredScene()
         petView.setStatusText(statusText(for: workSessionController.state), showBubble: showBubble)
     }
 
+    /// 字跟着画面走：抽到另外画的演法（冲浪、翻箱子、钓鱼……）或者在做待机小动作（晒太阳、看小鸟……）就说它那组话
     private func statusText(for state: ShellWorkState) -> String {
-        agentStatusText ?? DesktopPetCopy.statusText(for: state)
+        if case let .remind(type)? = reminderScene, let line = SceneLinePool.line(reminder: type) {
+            return line
+        }
+        if let variant = petView.workPlayer.variant, variant.isAlternative, let line = SceneLinePool.line(variant: variant.name) {
+            return line
+        }
+        if petView.scene == nil, let line = SceneLinePool.line(clip: petView.behavior.activeClip) {
+            return line
+        }
+        return agentStatusText ?? DesktopPetCopy.statusText(for: state)
     }
 
-    /// 干活时字跟着画面：画面还停在上一种活（不到 3 秒）就说上一种活；同一种活里换了工具，字马上换
+    /// 干活时字跟着画面：画面停着字也停着（同一种活里换了工具也不换），画面换了才换一句
     private var agentStatusText: String? {
-        guard let shown = sceneHold.shown else { return agentSummary.statusText }
-        guard agentSummary.activity == shown, let text = agentSummary.statusText else { return shown.label }
+        guard let shown = sceneHold.shown else {
+            heldAgentText = nil
+            return agentSummary.statusText
+        }
+        if let held = heldAgentText, held.activity == shown { return held.text }
+        let text = agentSummary.activity == shown ? (agentSummary.statusText ?? shown.label) : shown.label
+        heldAgentText = (shown, text)
         return text
     }
 
@@ -549,20 +595,24 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
         case .card:
             targetSize = DesktopPetView.cardExpandedContentSize
         }
-        guard window.contentView?.frame.size != targetSize else {
+        // 宽场景时左右对称放宽（水豚在屏幕上不挪），高度照旧往上长。
+        // 贴在左右边上不放宽：贴边位置是按窗口原点记的，宽度一变就对不上了（宽的帧在窗口里不缩小，道具超出边裁掉）
+        let dockedToSide = edgeDock?.dock.horizontal != nil
+        let width = dockedToSide ? targetSize.width : max(targetSize.width, petView.presentedWidth)
+        var frame = PetWindowWidth.frame(window.frame, fittingWidth: width)
+        frame.size.height = targetSize.height
+        guard frame != window.frame else {
             return
         }
-
-        var frame = window.frame
-        frame.size = targetSize
         window.setFrame(frame, display: true)
     }
 
+    /// 存平时宽度时的位置：正演着宽场景（窗口左右各放宽了一截）也按收回来的位置存，下次打开不会偏
     private func persistCurrentWindowPlacement() {
-        guard let origin = window?.frame.origin else {
+        guard let frame = window?.frame else {
             return
         }
-        persistWindowPlacement(origin)
+        persistWindowPlacement(PetWindowWidth.frame(frame, fittingWidth: DesktopPetView.compactContentSize.width).origin)
     }
 
     private func persistWindowPlacement(_ origin: CGPoint) {

@@ -103,13 +103,11 @@ func testFullscreenDetectorSpotsAFrontmostWindowCoveringAScreen() throws {
 private final class AttentionProbe {
     var clock: TimeInterval = 1000
     var reminders: [String] = []
-    var withdrawn = 0
     var messages: [String] = []
     var stageChanges = 0
     lazy var coordinator: PetAttentionCoordinator = {
         let coordinator = PetAttentionCoordinator(now: { [unowned self] in self.clock }, schedulesRecheck: false)
         coordinator.onReminderReady = { [unowned self] in self.reminders.append($0.text) }
-        coordinator.onReminderWithdrawn = { [unowned self] in self.withdrawn += 1 }
         coordinator.onDigest = { [unowned self] in self.messages.append($0) }
         coordinator.onStageChanged = { [unowned self] in self.stageChanges += 1 }
         return coordinator
@@ -125,17 +123,23 @@ func testPetAttentionCoordinatorQueuesRemindersBehindAWaitingAgent() throws {
     let probe = AttentionProbe()
     let attention = probe.coordinator
 
-    attention.reminderDue(reminder(.hydration, "喝水"))
+    let water = reminder(.hydration, "喝水")
+    attention.reminderDue(water)
     try expect(probe.reminders == ["喝水"], "nothing in the way: shown")
     attention.agentChanged(summary(.waiting, session("a", "PermissionRequest")))
-    try expect(probe.withdrawn == 1, "an agent waiting for you takes over from the reminder card")
+    try expect(attention.showingReminderID == water.id, "a card already on screen stays: the wait card goes on the pet, the reminder keeps the middle of the screen")
     attention.reminderDue(reminder(.eyeCare, "看远处"))
-    try expect(probe.reminders == ["喝水"], "and new reminders wait")
+    try expect(probe.reminders == ["喝水"], "but new reminders wait")
 
-    attention.agentChanged(summary(.working, session("a", "PreToolUse")))
-    try expect(probe.reminders == ["喝水", "喝水"], "once it stops waiting the first held reminder comes back (got \(probe.reminders))")
+    // Claude 干活时每次要权限都会「在等你」一下，批了又接着干：卡片不能跟着一闪一闪
+    for step in 0..<3 {
+        attention.agentChanged(summary(.working, session("a", "PostToolUse", at: Double(step * 2 + 2))))
+        attention.agentChanged(summary(.waiting, session("a", "PermissionRequest", at: Double(step * 2 + 3))))
+    }
+    attention.agentChanged(summary(.working, session("a", "PreToolUse", at: 9)))
+    try expect(probe.reminders == ["喝水"] && attention.showingReminderID == water.id, "the card on screen is neither taken away nor shown twice (got \(probe.reminders))")
     attention.reminderClosed(attention.showingReminderID)
-    try expect(probe.reminders == ["喝水", "喝水", "看远处"], "then the next one (got \(probe.reminders))")
+    try expect(probe.reminders == ["喝水", "看远处"], "closing it lets the held one out (got \(probe.reminders))")
     attention.reminderClosed(attention.showingReminderID)
 
     let stale = reminder(.hydration, "旧的")
@@ -225,7 +229,7 @@ func testPetAttentionLetsAStartedRestFinishBeforeAWaitingAgent() throws {
     try expect(!attention.isResting, "only the card on screen can start a rest")
     attention.reminderRestStarted(eye.id)
     attention.agentChanged(summary(.waiting, session("a", "PermissionRequest")))
-    try expect(probe.withdrawn == 0 && attention.isResting, "a rest that already started is not cut short")
+    try expect(attention.isResting, "a rest that already started is not cut short")
     try expect(attention.showingReminderID == eye.id, "the reminder is still the one on screen")
 
     attention.reminderClosed(eye.id)

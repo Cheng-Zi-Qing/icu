@@ -20,7 +20,11 @@ class DesktopPetView: NSView {
         static let petCanvasHeight: CGFloat = 128
         /// 形象上方的留白：悬停放大、点击弹跳时头顶的柚子不会被窗口裁掉
         static let petHeadroom: CGFloat = 24
-        static let petStageHeight: CGFloat = petCanvasHeight + petHeadroom
+        /// 脚下给状态字留的一条：字在水豚下面，不压在身上
+        static let statusChipBand: CGFloat = 26
+        static let petStageHeight: CGFloat = statusChipBand + petCanvasHeight + petHeadroom
+        /// 宽场景（追球、冲浪、趴着钓鱼……）最宽能放多宽：平时的两倍（64 格），够得着管线里最宽的 50 格
+        static let widestSceneWidth: CGFloat = petCanvasWidth * 2
         static let transientBubbleMaxHeight: CGFloat = 56
         static let transientBubbleTailSize: CGFloat = 8
         static let transientBubbleGap: CGFloat = 6
@@ -30,10 +34,19 @@ class DesktopPetView: NSView {
         static let cardGap: CGFloat = 8
         static let cardTopInset: CGFloat = 8
         static let statusChipMargin: CGFloat = 8
+        /// 窗口露在屏幕上的部分比这窄（藏边探头），浮层就不按它摆
+        static let minimumOnScreenOverlayWidth: CGFloat = 64
         /// Core Animation 按深度给同级图层排序：桌宠图层一旦带上 3D 变换（比如以前的悬停偏头，
         /// 前倾半边能凸出约 15pt）就会盖住状态标签。浮层固定放在更靠前的深度
         static let overlayZPosition: CGFloat = 100
     }
+
+    /// 干活场景按这个尺寸放大：宽度留足最宽的场景，倍数只由高度定。
+    /// 32 格的帧照样放大 8 倍（128 点）；38–50 格宽的场景也是 8 倍，不会因为宽被缩小（窗口跟着放宽，见 PetWindowWidth）
+    static let workSceneCanvasSize = NSSize(
+        width: LayoutMetrics.widestSceneWidth,
+        height: LayoutMetrics.petCanvasHeight
+    )
 
     static let compactContentSize = NSSize(
         width: LayoutMetrics.petCanvasWidth,
@@ -87,6 +100,8 @@ class DesktopPetView: NSView {
     /// 当前上屏图的原图（未镜像）与实际上屏的图
     var presentedSource: NSImage?
     var presentedImage: NSImage?
+    /// 上屏这张要多宽（平时 = 形象画布宽；宽场景更宽），变了报 `onPresentedWidthChanged`
+    var presentedWidth: CGFloat = LayoutMetrics.petCanvasWidth
     /// 身体不透明区域（归一化、未镜像），每个形象算一次
     var normalizedBodyBounds: CGRect?
     /// 贴边探头
@@ -98,6 +113,8 @@ class DesktopPetView: NSView {
     var shownPeekFrame: PetPeekFrame?
     /// 鼠标是否在形象不透明的像素上（透明区域不算，避免靠近屏幕边就误触发探出来）
     var isPointerOverPet = false
+    /// 贴在屏幕左右边上（状态条收起来，鼠标放上去才露）
+    var isDockedToSide = false
     /// 摸头 / 打盹 / 待机小动作的逐帧片段（盖在待机动画上，让位给拖拽和探头）
     var actionSprites: [String: PetPoseSprites] = [:]
     var actionImage: NSImage?
@@ -126,6 +143,12 @@ class DesktopPetView: NSView {
     var onPetDragEnded: (() -> Void)?
     /// 只放一遍的场景（干完了、出错了）放完了
     var onSceneFinished: ((PetScene) -> Void)?
+    /// 上屏的画面变宽 / 变回平时的宽度：窗口跟着放宽 / 收窄
+    var onPresentedWidthChanged: ((CGFloat) -> Void)?
+    /// 开始 / 放完一段摸头、打盹、待机小动作（状态条的字跟着换）
+    var onActionClipChanged: ((PetActionClip?) -> Void)?
+    /// 上次报过的那段片段
+    var reportedActionClip: PetActionClip?
     var isDraggingPet: Bool { dragController.isDragging }
     var completedVariantLoops = 0
     var variantRotationTicksRemaining = 0

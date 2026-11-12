@@ -140,12 +140,12 @@ func testAgentBoardDropsFinishedSessionsOnceYouHaveSeenThem() throws {
 
 func testAgentSummaryStatusText() throws {
     let one = try session("PermissionRequest")
-    try expect(AgentSummary(kind: .waiting, count: 1, lead: one).statusText == "在等你", "single waiting")
+    try expect(AgentSummary(kind: .waiting, count: 1, lead: one).statusText.map { isLine($0, of: .waiting) } == true, "single waiting")
     try expect(AgentSummary(kind: .waiting, count: 3, lead: one).statusText == "3 个在等你", "several waiting show a count")
     let reading = AgentSession(record: ["v": 1, "session": "r", "event": "PreToolUse", "tool": "Read", "at": 1.0])
-    try expect(AgentSummary(kind: .working, count: 2, lead: reading).statusText == "读取中", "working says what it is doing, no count")
-    try expect(AgentSummary(kind: .working, count: 1, lead: nil).statusText == "思考中", "working without a tool is thinking")
-    try expect(AgentSummary(kind: .done, count: 1, lead: one).statusText == "干完了", "done")
-    try expect(AgentSummary(kind: .failed, count: 1, lead: one).statusText == "出错了", "failed")
+    try expect(AgentSummary(kind: .working, count: 2, lead: reading).statusText.map { isLine($0, of: .read) } == true, "working says what it is doing, no count")
+    try expect(AgentSummary(kind: .working, count: 1, lead: nil).statusText.map { isLine($0, of: .think) } == true, "working without a tool is thinking")
+    try expect(AgentSummary(kind: .done, count: 1, lead: one).statusText.map { isLine($0, of: .done) } == true, "done")
+    try expect(AgentSummary(kind: .failed, count: 1, lead: one).statusText.map { isLine($0, of: .failed) } == true, "failed")
     try expect(AgentSummary.idle.statusText == nil, "idle leaves the normal status alone")
 }

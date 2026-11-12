@@ -19,6 +19,8 @@ final class PetAnimationEngine {
     var onDragPoseChanged: ((DragPose) -> Void)?
     /// 拎在半空时实际显示桌宠的图层（拎起窗口里的那张）；nil 表示还在原窗口里画
     var liftedLayer: (() -> CALayer?)?
+    /// 拎起窗口里脖子以下那一层：只有它被往下拉长（脑袋不拉）
+    var liftedBodyLayer: (() -> CALayer?)?
 
     var groundShadowLayer: CALayer { groundShadow.shadowLayer }
 
@@ -84,6 +86,7 @@ final class PetAnimationEngine {
         CATransaction.setDisableActions(true)
         if drag.pose.isLifted, let lifted = liftedLayer?() {
             lifted.transform = Self.liftedTransform(drag: drag, layerBounds: lifted.bounds, anchorPoint: lifted.anchorPoint)
+            liftedBodyLayer?()?.transform = Self.liftedBodyTransform(stretchY: drag.stretchY)
             layer.transform = CATransform3DIdentity
         } else {
             layer.transform = Self.composedTransform(base: base, drag: drag, layerBounds: layer.bounds, anchorPoint: layer.anchorPoint)
@@ -120,17 +123,25 @@ final class PetAnimationEngine {
         return CATransform3DConcat(lifted, CATransform3DMakeTranslation(0, drag.fallOffset, 0))
     }
 
-    /// 拎在半空：先以后颈（头顶中点）为轴往下拉长，再绕后颈按摆角甩出去。
+    /// 拎着时身子收多细：横向缩成 1 / 拉长量^这个数。0.5 是体积不变，再大一点就是往下坠成细长条，不圆鼓鼓
+    static let liftedSlimming: CGFloat = 0.85
+    /// 拎着时脖子以下占画布多高（从底下算）：拎起来的帧里脑袋占上面 19 行（量过 hold 帧，下巴在第 18 行），身体是下面 13 行
+    static let liftedBodyShare: CGFloat = 13.0 / 32.0
+
+    /// 拎在半空：整只绕后颈（头顶中点）按摆角甩出去；拉长只拉脖子以下（见 liftedBodyTransform），脑袋不变形。
     /// 摆角为负 = 下半身往左（图层坐标 y 向上，逆时针转脚往右，所以角度直接用）
     static func liftedTransform(drag: DragOutput, layerBounds: CGRect, anchorPoint: CGPoint) -> CATransform3D {
         let anchor = CGPoint(x: layerBounds.width * anchorPoint.x, y: layerBounds.height * anchorPoint.y)
         let scruff = CGPoint(x: layerBounds.width / 2 - anchor.x, y: layerBounds.height - anchor.y)
-        let stretchY = max(drag.stretchY, 0.01)
-        let stretch = LayerTransform(scaleX: 1 / stretchY.squareRoot(), scaleY: stretchY)
-        let swing = CATransform3DMakeRotation(drag.swingDegrees * .pi / 180, 0, 0, 1)
-        let hanging = CATransform3DConcat(pivoted(stretch.caTransform, around: scruff), pivoted(swing, around: scruff))
+        let hanging = pivoted(CATransform3DMakeRotation(drag.swingDegrees * .pi / 180, 0, 0, 1), around: scruff)
         // 离地抬高放最后一手：摆动的支点（后颈）跟着身体一起抬，视觉上是整只被拎高
         return CATransform3DConcat(hanging, CATransform3DMakeTranslation(0, drag.fallOffset, 0))
+    }
+
+    /// 脖子以下那一层：以脖子（它的上沿，图层锚点放在那儿）为轴往下拉长、横向收细
+    static func liftedBodyTransform(stretchY: CGFloat) -> CATransform3D {
+        let stretch = max(stretchY, 0.01)
+        return LayerTransform(scaleX: 1 / pow(stretch, liftedSlimming), scaleY: stretch).caTransform
     }
 
     private static func pivoted(_ transform: CATransform3D, around pivot: CGPoint) -> CATransform3D {

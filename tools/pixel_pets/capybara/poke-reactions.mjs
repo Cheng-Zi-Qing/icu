@@ -76,12 +76,7 @@ const LEAN_PIVOT_ROW = 22;
 
 function leaned(grid, pixels) {
   if (!pixels) return grid;
-  const cells = grid.cells.map((_, i) => {
-    const x = i % grid.width;
-    const y = Math.floor(i / grid.width);
-    return grid.get(x - Math.round((pixels * Math.max(0, LEAN_PIVOT_ROW - y)) / LEAN_PIVOT_ROW), y);
-  });
-  return new Grid(grid.width, grid.height, cells);
+  return grid.sampled(grid.width, grid.height, (x, y) => [x - Math.round((pixels * Math.max(0, LEAN_PIVOT_ROW - y)) / LEAN_PIVOT_ROW), y]);
 }
 
 function pokeFrame(model, headwear, { tilt, paw, pawUp, lean, ...options }) {

@@ -348,6 +348,201 @@
       ],
       "fps": 4,
       "once": true
+    },
+    "think_dots": {
+      "frames": [
+        "think_dots_0.png",
+        "think_dots_1.png",
+        "think_dots_2.png",
+        "think_dots_3.png"
+      ],
+      "order": [
+        0,
+        1,
+        2,
+        3,
+        0,
+        1,
+        2,
+        3,
+        0,
+        1,
+        2,
+        3
+      ],
+      "variantOf": "think",
+      "side": true
+    },
+    "think_bulb": {
+      "frames": [
+        "think_bulb_0.png",
+        "think_bulb_1.png",
+        "think_bulb_2.png"
+      ],
+      "order": [
+        0,
+        0,
+        1,
+        1,
+        1,
+        2,
+        2,
+        2,
+        2,
+        2,
+        0,
+        0
+      ],
+      "variantOf": "think",
+      "side": true
+    },
+    "button": {
+      "frames": [
+        "button_0.png",
+        "button_1.png",
+        "button_2.png",
+        "button_3.png"
+      ],
+      "order": [
+        0,
+        0,
+        0,
+        1,
+        2,
+        2,
+        3,
+        3,
+        0,
+        0,
+        0,
+        0
+      ],
+      "variantOf": "eat",
+      "side": true
+    },
+    "surf": {
+      "frames": [
+        "surf_0.png",
+        "surf_1.png"
+      ],
+      "order": [
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1
+      ],
+      "variantOf": "eat",
+      "side": true
+    },
+    "rummage": {
+      "frames": [
+        "rummage_0.png",
+        "rummage_1.png",
+        "rummage_2.png",
+        "rummage_3.png"
+      ],
+      "order": [
+        0,
+        1,
+        2,
+        3,
+        0,
+        0,
+        1,
+        2,
+        3,
+        0,
+        0,
+        0
+      ],
+      "variantOf": "search",
+      "side": true
+    },
+    "paper": {
+      "frames": [
+        "paper_0.png",
+        "paper_1.png",
+        "paper_2.png",
+        "paper_3.png",
+        "paper_4.png"
+      ],
+      "order": [
+        0,
+        1,
+        0,
+        1,
+        2,
+        3,
+        2,
+        3,
+        4,
+        4,
+        4,
+        4
+      ],
+      "variantOf": "read",
+      "side": true
+    },
+    "fall": {
+      "frames": [
+        "fall_0.png",
+        "fall_1.png",
+        "fall_2.png",
+        "fall_3.png"
+      ],
+      "order": [
+        0,
+        0,
+        1,
+        2,
+        1,
+        2,
+        1,
+        2,
+        3,
+        3,
+        3
+      ],
+      "fps": 4,
+      "once": true,
+      "variantOf": "fail",
+      "side": true
+    },
+    "rest_fish": {
+      "frames": [
+        "rest_fish_0.png",
+        "rest_fish_1.png",
+        "rest_fish_2.png",
+        "rest_fish_3.png"
+      ],
+      "order": [
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        2,
+        2,
+        3,
+        3,
+        3,
+        3
+      ],
+      "variantOf": "rest",
+      "side": true
     }
   }
 }

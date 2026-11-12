@@ -8,7 +8,8 @@ import AppKit
 /// `order` 是关键帧下标，按 fps 一拍一个，放完从头循环。场景名见 `PetScene.name`。
 /// 场景可以有自己的 `fps`；`"motion": "chase"` 表示边演边把窗口左右来回挪（搜索时追球）；
 /// `"once": true` 表示只放一遍；
-/// `"hop": { "atBeat", "pixels", "beats" }` 在第几拍把整只往上抛几格、抛几拍。
+/// `"hop": { "atBeat", "pixels", "beats" }` 在第几拍把整只往上抛几格、抛几拍；
+/// `"variantOf": "eat"` 表示它是 eat 的另一种演法（开演时在几种里抽一种）；`"side": true` 表示侧身演。
 final class PetWorkScenes {
     private struct Manifest: Decodable {
         struct Hop: Decodable {
@@ -24,6 +25,8 @@ final class PetWorkScenes {
             let motion: String?
             let once: Bool?
             let hop: Hop?
+            let variantOf: String?
+            let side: Bool?
         }
 
         let fps: Double
@@ -50,164 +53,87 @@ final class PetWorkScenes {
         sprites = PetPoseSprites(directory: directory, canvasPointSize: canvasPointSize, fileManager: fileManager)
     }
 
-    /// 这只宠物有没有这个场景的素材（「在想事情」没有，就用平时的待机）
-    func hasScene(for scene: PetScene) -> Bool {
-        scenes[scene.name]?.order.isEmpty == false
+    // MARK: - 几种演法
+
+    /// 这个场景能怎么演：它自己（就算没有素材，比如「在想」就是平时的待机），加上标了 `variantOf` 的另几种
+    func variants(for scene: PetScene) -> [PetSceneVariant] {
+        let others = scenes.filter { $0.value.variantOf == scene.name }.keys.sorted()
+        return ([scene.name] + others).map { PetSceneVariant(scene: scene, name: $0) }
     }
 
-    func framesPerSecond(for scene: PetScene) -> Double {
-        guard let fps = scenes[scene.name]?.fps, fps > 0 else { return defaultFramesPerSecond }
+    /// 侧身演（可以转头看鼠标）
+    func isSide(_ variant: PetSceneVariant) -> Bool {
+        scenes[variant.name]?.side == true
+    }
+
+    // MARK: - 按演法查
+
+    func hasFrames(_ variant: PetSceneVariant) -> Bool {
+        scenes[variant.name]?.order.isEmpty == false
+    }
+
+    func framesPerSecond(_ variant: PetSceneVariant) -> Double {
+        guard let fps = scenes[variant.name]?.fps, fps > 0 else { return defaultFramesPerSecond }
         return fps
     }
 
-    /// 这个场景要不要边演边把窗口左右来回挪
-    func chases(_ scene: PetScene) -> Bool {
-        scenes[scene.name]?.motion == "chase"
+    /// 这种演法要不要边演边把窗口左右来回挪
+    func chases(_ variant: PetSceneVariant) -> Bool {
+        scenes[variant.name]?.motion == "chase"
     }
 
-    func playsOnce(_ scene: PetScene) -> Bool {
-        scenes[scene.name]?.once == true
-    }
-
-    /// 只放一遍的场景放完了没有（循环的永远放不完）。干完了 / 出错了就算 manifest 忘了写 once 也只放一遍，
+    /// 只放一遍的演法放完了没有（循环的永远放不完）。干完了 / 出错了就算 manifest 忘了写 once 也只放一遍，
     /// 不然会一直挡着打盹、后面的动作也排不上
-    func isFinished(_ scene: PetScene, after elapsed: TimeInterval) -> Bool {
-        guard playsOnce(scene) || scene.isOneShot, let count = scenes[scene.name]?.order.count else { return false }
-        return beat(for: scene, after: elapsed) >= count
+    func isFinished(_ variant: PetSceneVariant, after elapsed: TimeInterval) -> Bool {
+        let once = scenes[variant.name]?.once == true || variant.scene.isOneShot
+        guard once, let count = scenes[variant.name]?.order.count else { return false }
+        return beat(variant, after: elapsed) >= count
     }
 
-    /// 这个场景在第几拍往上抛、抛多高多久；没有就是 nil
-    func hop(for scene: PetScene) -> PetSceneHop? {
-        guard let hop = scenes[scene.name]?.hop, hop.pixels > 0, hop.beats > 0 else { return nil }
-        let beat = 1 / framesPerSecond(for: scene)
+    /// 这种演法在第几拍往上抛、抛多高多久；没有就是 nil
+    func hop(_ variant: PetSceneVariant) -> PetSceneHop? {
+        guard let hop = scenes[variant.name]?.hop, hop.pixels > 0, hop.beats > 0 else { return nil }
+        let beat = 1 / framesPerSecond(variant)
         return PetSceneHop(startsAfter: Double(hop.atBeat) * beat, pixels: hop.pixels, duration: Double(hop.beats) * beat)
     }
 
-    /// 开始演 `elapsed` 秒后该显示的帧名；没有这个场景、只放一遍的已经放完、或者顺序里的下标不对时为 nil
-    func frameName(for scene: PetScene, after elapsed: TimeInterval) -> String? {
-        guard let entry = scenes[scene.name], !entry.order.isEmpty, !isFinished(scene, after: elapsed) else { return nil }
-        let index = entry.order[beat(for: scene, after: elapsed) % entry.order.count]
+    /// 开始演 `elapsed` 秒后该显示的帧名；没有素材、只放一遍的已经放完、或者顺序里的下标不对时为 nil
+    func frameName(_ variant: PetSceneVariant, after elapsed: TimeInterval) -> String? {
+        guard let entry = scenes[variant.name], !entry.order.isEmpty, !isFinished(variant, after: elapsed) else { return nil }
+        let index = entry.order[beat(variant, after: elapsed) % entry.order.count]
         return entry.frames.indices.contains(index) ? entry.frames[index] : nil
     }
 
-    func image(for scene: PetScene, after elapsed: TimeInterval) -> NSImage? {
-        frameName(for: scene, after: elapsed).flatMap(sprites.image(named:))
+    func image(_ variant: PetSceneVariant, after elapsed: TimeInterval) -> NSImage? {
+        frameName(variant, after: elapsed).flatMap(sprites.image(named:))
     }
 
-    private func beat(for scene: PetScene, after elapsed: TimeInterval) -> Int {
-        Int((max(0, elapsed) * framesPerSecond(for: scene)).rounded(.down))
+    private func beat(_ variant: PetSceneVariant, after elapsed: TimeInterval) -> Int {
+        Int((max(0, elapsed) * framesPerSecond(variant)).rounded(.down))
     }
+
+    // MARK: - 按场景查（它自己那种演法）
+
+    func hasScene(for scene: PetScene) -> Bool { hasFrames(.plain(scene)) }
+    func framesPerSecond(for scene: PetScene) -> Double { framesPerSecond(.plain(scene)) }
+    func chases(_ scene: PetScene) -> Bool { chases(.plain(scene)) }
+    func playsOnce(_ scene: PetScene) -> Bool { scenes[scene.name]?.once == true }
+    func isFinished(_ scene: PetScene, after elapsed: TimeInterval) -> Bool { isFinished(.plain(scene), after: elapsed) }
+    func hop(for scene: PetScene) -> PetSceneHop? { hop(.plain(scene)) }
+    func frameName(for scene: PetScene, after elapsed: TimeInterval) -> String? { frameName(.plain(scene), after: elapsed) }
+    func image(for scene: PetScene, after elapsed: TimeInterval) -> NSImage? { image(.plain(scene), after: elapsed) }
 }
 
-/// 播放某个场景；`onImageChanged(nil)` 表示不演了，视图回到平时的画面。
-/// 只放一遍的场景放完后报 `onFinished`；带「抛起来」的场景到那一拍报 `onHop`
-final class PetWorkScenePlayer {
-    var onImageChanged: ((NSImage?) -> Void)?
-    var onHop: ((PetSceneHop) -> Void)?
-    var onFinished: ((PetScene) -> Void)?
-    private(set) var scene: PetScene?
-    private(set) var image: NSImage?
-    private(set) var scenes: PetWorkScenes?
-    private let now: () -> TimeInterval
-    private let startsTimer: Bool
-    private var startedAt: TimeInterval = 0
-    private var shownFrame: String?
-    /// 开始演 / 换装之后报过画面没有
-    private var hasReported = false
-    private var hasHopped = false
-    private var timer: Timer?
+/// 一个场景的某一种演法：`name` 是 scenes.json 里的场景名（它自己，或者标了 variantOf 的另一种）
+struct PetSceneVariant: Equatable {
+    let scene: PetScene
+    let name: String
 
-    var activity: AgentActivity? { scene?.activity }
-
-    init(now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }, startsTimer: Bool = true) {
-        self.now = now
-        self.startsTimer = startsTimer
+    /// 场景自己那种演法
+    static func plain(_ scene: PetScene) -> PetSceneVariant {
+        PetSceneVariant(scene: scene, name: scene.name)
     }
 
-    deinit {
-        timer?.invalidate()
-    }
-
-    /// 换装后换一套帧，正在演的接着演
-    func reload(scenes: PetWorkScenes?) {
-        self.scenes = scenes
-        shownFrame = nil
-        hasReported = false
-        showCurrentFrame()
-        if scene != nil && timer == nil {
-            startTimer()
-        }
-    }
-
-    func play(_ next: PetScene?) {
-        guard next != scene else { return }
-        scene = next
-        startedAt = now()
-        shownFrame = nil
-        hasReported = false
-        hasHopped = false
-        timer?.invalidate()
-        timer = nil
-        guard next != nil else {
-            image = nil
-            onImageChanged?(nil)
-            return
-        }
-        showCurrentFrame()
-        // 第一帧就放完了的话，onFinished 里可能已经换了下一段（还开了它的计时器）
-        guard scene == next else { return }
-        startTimer()
-    }
-
-    func tick() {
-        showCurrentFrame()
-    }
-
-    /// 测试用：当作这一段已经放完
-    func finishForTesting() {
-        guard let scene else { return }
-        finish(scene)
-    }
-
-    private func showCurrentFrame() {
-        guard let scene else { return }
-        let elapsed = now() - startedAt
-        let missing = scenes?.hasScene(for: scene) != true
-        if (missing && scene.isOneShot) || scenes?.isFinished(scene, after: elapsed) == true {
-            finish(scene)
-            return
-        }
-        hopIfDue(scene, after: elapsed)
-        let name = scenes?.frameName(for: scene, after: elapsed)
-        // 没有这段素材时只报一次「没画面」，之后不再刷新
-        guard name != shownFrame || (name == nil && image != nil) || !hasReported else { return }
-        hasReported = true
-        shownFrame = name
-        // 没有这段素材：当作没在演，视图照常显示平时的画面
-        image = scenes?.image(for: scene, after: elapsed)
-        onImageChanged?(image)
-    }
-
-    private func hopIfDue(_ scene: PetScene, after elapsed: TimeInterval) {
-        guard !hasHopped, let hop = scenes?.hop(for: scene), elapsed >= hop.startsAfter else { return }
-        hasHopped = true
-        onHop?(hop)
-    }
-
-    private func finish(_ finished: PetScene) {
-        play(nil)
-        onFinished?(finished)
-    }
-
-    private func startTimer() {
-        timer?.invalidate()
-        timer = nil
-        guard startsTimer, let scene, let scenes, scenes.hasScene(for: scene) else { return }
-        let fps = scenes.framesPerSecond(for: scene)
-        let timer = Timer(timeInterval: 1 / fps, repeats: true) { [weak self] _ in
-            self?.tick()
-        }
-        RunLoop.main.add(timer, forMode: .common)
-        self.timer = timer
-    }
+    /// 是不是另外画的那几种（不是场景自己）
+    var isAlternative: Bool { name != scene.name }
 }

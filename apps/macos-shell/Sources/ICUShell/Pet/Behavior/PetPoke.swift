@@ -86,7 +86,7 @@ enum PetPokeCopy {
         case .sneezed: return TextCatalog.shared.texts("poke.sneeze")
         case .startled: return TextCatalog.shared.texts("poke.startled")
         case .grumpy: return TextCatalog.shared.texts("poke.grumpy")
-        case .petted, .doze, .nap, .wake, .yuzuWobble, .birdVisit: return []
+        case .petted, .doze, .nap, .wake, .yuzuWobble, .birdVisit, .sunbathe, .bath: return []
         }
     }
 

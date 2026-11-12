@@ -7,7 +7,7 @@ extension DesktopPetView {
 
     /// 能不能转头看鼠标：探头、被拎着、正在打盹 / 被摸头时都不转
     var canTurnTowardCursor: Bool {
-        !isPeeking && !isDraggingPet && behavior.activeClip == nil && workPlayer.scene?.facesSideways != false
+        !isPeeking && !isDraggingPet && behavior.activeClip == nil && workPlayer.facesSideways
     }
 
     /// 没有拖拽 / 探头时该显示的画面：Agent 干活小场景 > 摸头打盹片段 > 待机动画帧
@@ -22,7 +22,7 @@ extension DesktopPetView {
         coordinator.isAvailable = { [weak self] in
             guard let self else { return false }
             return !self.isPeeking && !self.dragController.isDragging && self.currentOverlayLayoutMode == .compact
-                && self.workPlayer.scene == nil
+                && self.isFreeForIdleActs
         }
         coordinator.onImageChanged = { [weak self] image in
             self?.applyActionImage(image)
@@ -30,8 +30,19 @@ extension DesktopPetView {
         return coordinator
     }
 
+    /// 没在演场景；或者在休息、这次抽到的是平时坐着（没有休息的帧）：照常打盹、做小动作
+    var isFreeForIdleActs: Bool {
+        guard let scene = workPlayer.scene else { return true }
+        return scene == .rest && workPlayer.image == nil
+    }
+
     func applyActionImage(_ image: NSImage?) {
         actionImage = image
+        let clip = behavior.activeClip
+        if clip != reportedActionClip {
+            reportedActionClip = clip
+            onActionClipChanged?(clip)
+        }
         guard !isShowingDragPose && !isPeeking else { return }
         present(restingImage)
     }
@@ -54,6 +65,22 @@ extension DesktopPetView {
 
     var hasPeekPose: Bool { peekFrames != nil }
 
+    /// 贴在左右边上：窗口一半在屏幕外，状态条怎么摆都别扭，先收起来；鼠标放到身上再露出来
+    func setDockedToSide(_ docked: Bool) {
+        guard docked != isDockedToSide else { return }
+        isDockedToSide = docked
+        updateStatusChipVisibility()
+    }
+
+    /// 状态条：探头时不显示；贴在左右边上时只在鼠标放在身上时显示
+    func updateStatusChipVisibility() {
+        guard statusLabel != nil else { return }
+        let hidden = isPeeking || (isDockedToSide && !isPointerOverPet)
+        guard hidden != statusLabel.isHidden else { return }
+        statusLabel.isHidden = hidden
+        if !hidden { layoutStatusChip() }
+    }
+
     /// 切换贴边探头形象（藏边时由贴边控制器调用）
     func setEdgePeek(_ active: Bool) {
         guard active != isPeeking else { return }
@@ -62,14 +89,14 @@ extension DesktopPetView {
         guard active, peekFrames != nil else {
             isPeeking = false
             shownPeekFrame = nil
-            statusLabel.isHidden = false
+            updateStatusChipVisibility()
             present(restingImage)
             return
         }
 
         isPeeking = true
         // 只探出半个脑袋时，下面的状态标签会被屏幕边截断，先藏起来
-        statusLabel.isHidden = true
+        updateStatusChipVisibility()
         peekPlayback = .start
         showPeekFrame(peekPlayback.frame)
         let timer = Timer(timeInterval: 1 / PetPeekFrames.framesPerSecond, repeats: true) { [weak self] _ in
@@ -126,6 +153,10 @@ extension DesktopPetView {
             guard let lift = self?.liftWindow, lift.isVisible else { return nil }
             return lift.spriteLayer
         }
+        animationEngine.liftedBodyLayer = { [weak self] in
+            guard let lift = self?.liftWindow, lift.isVisible else { return nil }
+            return lift.bodyLayer
+        }
     }
 
     func reloadPoseSprites() {
@@ -136,7 +167,7 @@ extension DesktopPetView {
         cursorSet = PetCursorSet(directory: assetLocator.resolvePoseSpriteDirectory(for: petID, subdirectory: "cursor", outfit: outfitID))
         workPlayer.reload(scenes: PetWorkScenes(
             directory: assetLocator.resolvePoseSpriteDirectory(for: petID, subdirectory: "work", outfit: outfitID),
-            canvasPointSize: Self.compactContentSize
+            canvasPointSize: Self.workSceneCanvasSize
         ))
         actionSprites = Dictionary(uniqueKeysWithValues: actionDirectories.compactMap { name in
             assetLocator.resolvePoseSpriteDirectory(for: petID, subdirectory: name, outfit: outfitID).map {

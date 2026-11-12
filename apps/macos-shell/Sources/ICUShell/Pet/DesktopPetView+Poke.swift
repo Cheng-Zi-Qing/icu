@@ -9,9 +9,9 @@ extension DesktopPetView {
     /// 被戳时冒的那句话停多久
     static let pokeBubbleDuration: TimeInterval = 1.8
 
-    /// 平时坐着才有反应：探头、被拎着、Agent 干活 / 提醒小场景、头顶卡片在的时候点了只蹦一下
+    /// 平时坐着（休息时平时坐着也算）才有反应：探头、被拎着、Agent 干活 / 提醒小场景、头顶卡片在的时候点了只蹦一下
     var canReactToPoke: Bool {
-        !isPeeking && !isDraggingPet && !isShowingDragPose && workPlayer.scene == nil && waitCardView.isHidden
+        !isPeeking && !isDraggingPet && !isShowingDragPose && isFreeForIdleActs && waitCardView.isHidden
     }
 
     /// 视图里这一点戳到的是哪儿；不在形象上返回 nil

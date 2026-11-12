@@ -5,10 +5,12 @@ enum PetIdleActionSchedule {
     /// 两次小动作之间隔多久（秒）
     static let delayRange: ClosedRange<TimeInterval> = 25...60
 
-    /// 动作和权重：柚子摇摇常见，小鸟来访少见一点
+    /// 动作和权重：柚子摇摇常见，小鸟来访、晒太阳、泡澡少见一点
     static let weightedActions: [(clip: PetActionClip, weight: Double)] = [
         (.yuzuWobble, 2),
         (.birdVisit, 1),
+        (.sunbathe, 1),
+        (.bath, 1),
     ]
 
     /// - Parameter random: [0, 1) 之间的随机数

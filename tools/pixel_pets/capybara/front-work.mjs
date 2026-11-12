@@ -10,6 +10,7 @@
 import { Grid } from './raster.mjs';
 import { DEFAULT_MODEL } from './model.mjs';
 import { stateSceneDefinitions } from './state-scenes.mjs';
+import { variantSceneDefinitions } from './variant-scenes.mjs';
 import { chaseFrame, CHASE_BEATS } from './chase.mjs';
 import { HEADWEAR } from './headwear.mjs';
 import { frontFace, frontHead, frontHeadwearLayer, rect, FRONT_SIZE as N } from './front-head.mjs';
@@ -34,7 +35,7 @@ function headAt(c, faceOptions, headwear) {
 /** 一只小爪子：左上角 (x, y)，5×4，自己描边，下排两个脚趾 */
 const pawShape = ([x, y]) => [...rect(x + 1, y, x + 3, y), ...rect(x, y + 1, x + 4, y + 2), ...rect(x + 1, y + 3, x + 3, y + 3)];
 function paws(...anchors) {
-  return anchors.reduce((g, a) => g.dots('body', pawShape(a)), layer()).outlined()
+  return anchors.reduce((g, a) => g.dots('body', pawShape(a), 'paw'), layer()).outlined()
     .dots('light', anchors.map(([x, y]) => [x + 1, y + 1]))
     .dots('dark', anchors.flatMap(([x, y]) => [[x + 1, y + 3], [x + 3, y + 3]]));
 }
@@ -196,6 +197,8 @@ const SCENE_DEFINITIONS = {
   // 在想事情（还没调用工具）没有专门的场景：保持平时侧身坐着嚼草（用户 2026-11-08 定，正面干坐着太丑）
   // 派子 Agent 放小鸟、在等你 / 干完了 / 出错了、两段健康提醒：侧身坐姿（见 state-scenes.mjs）
   ...stateSceneDefinitions(),
+  // 同一种状态的另几种演法（冲浪、拍按钮、翻箱子、啃纸、摔跤、在想、休息钓鱼），见 variant-scenes.mjs
+  ...variantSceneDefinitions(),
 };
 
 export const WORK_SCENES = Object.keys(SCENE_DEFINITIONS);
@@ -209,7 +212,7 @@ export function workSceneFrames(name, headwear = HEADWEAR[0], model = DEFAULT_MO
 
 /** work/scenes.json：每个场景的帧率和播放顺序（关键帧下标） */
 export function workSceneManifest() {
-  const scenes = Object.fromEntries(Object.entries(SCENE_DEFINITIONS).map(([name, { keys, order, fps, motion, once, hop }]) => [
+  const scenes = Object.fromEntries(Object.entries(SCENE_DEFINITIONS).map(([name, { keys, order, fps, motion, once, hop, variantOf, side }]) => [
     name,
     {
       frames: keys.map((_, i) => `${name}_${i}.png`),
@@ -218,6 +221,8 @@ export function workSceneManifest() {
       ...(motion ? { motion } : {}),
       ...(once ? { once } : {}),
       ...(hop ? { hop } : {}),
+      ...(variantOf ? { variantOf } : {}),
+      ...(side ? { side } : {}),
     },
   ]));
   return { fps: WORK_FPS, scenes };

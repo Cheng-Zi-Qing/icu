@@ -480,10 +480,10 @@ func testChineseCatalogKeepsMenuAndReminderWording() throws {
 
     try expect(StatusItemMenuAction.showTodayReport.title == "今日报告…", "menu bar report entry")
     try expect(DesktopPetMenuAction.startWork.title == "我要上班", "pet menu start work: you say it, not the pet")
-    try expect(DesktopPetCopy.statusText(for: .working) == "陪你上班", "the chip under the pet speaks for the pet")
+    try expect(isLine(DesktopPetCopy.statusText(for: .working), of: .working), "the chip under the pet speaks for the pet")
     try expect(DesktopPetMenuAction.openWardrobe.title == "衣柜", "pet menu wardrobe")
     try expect(DesktopPetCopy.eyeReminderMessage() == "看看远处，护护眼。", "eye reminder message")
-    try expect(AgentActivity.statusText(tool: nil) == "思考中", "agent thinking label")
+    try expect(isLine(AgentActivity.statusText(tool: nil), of: .think), "agent thinking label")
     try expect(ReminderQuips.nope.first == "我就不", "signature skip line")
 
     let card = ReminderCardContent(
@@ -501,10 +501,10 @@ func testEnglishCatalogDrivesMenuAndReminderWording() throws {
 
     try expect(StatusItemMenuAction.showTodayReport.title == "Today's Report…", "menu bar report entry")
     try expect(DesktopPetMenuAction.startWork.title == "I'm Starting Work", "pet menu start work: you say it, not the pet")
-    try expect(DesktopPetCopy.statusText(for: .working) == "With you", "the chip under the pet speaks for the pet")
+    try expect(isLine(DesktopPetCopy.statusText(for: .working), of: .working), "the chip under the pet speaks for the pet")
     try expect(DesktopPetMenuAction.openWardrobe.title == "Wardrobe", "pet menu wardrobe")
     try expect(DesktopPetCopy.eyeReminderMessage() == "Look far away, rest your eyes.", "eye reminder message")
-    try expect(AgentActivity.statusText(tool: nil) == "Thinking", "agent thinking label")
+    try expect(isLine(AgentActivity.statusText(tool: nil), of: .think) && !AgentActivity.statusText(tool: nil).contains("思"), "agent thinking label")
     try expect(ReminderQuips.hydration.lines.count == 8, "the English quip pool keeps all lines")
 
     let card = ReminderCardContent(

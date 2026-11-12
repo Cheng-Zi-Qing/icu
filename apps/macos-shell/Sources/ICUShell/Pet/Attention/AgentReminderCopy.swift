@@ -10,8 +10,8 @@ enum AgentReminderCopy {
     static func text(for type: HealthReminderType, agentWorkingFor: TimeInterval?) -> String? {
         guard let agentWorkingFor, agentWorkingFor >= longTask else { return nil }
         switch type {
-        case .eyeCare: return TextCatalog.shared.text("agent.reminder_eye")
-        case .hydration: return TextCatalog.shared.text("agent.reminder_water")
+        case .eyeCare: return PlayfulLines.bubble.fresh(pool: BubbleLinePool.agentReminderEye.key, fallback: "agent.reminder_eye")
+        case .hydration: return PlayfulLines.bubble.fresh(pool: BubbleLinePool.agentReminderWater.key, fallback: "agent.reminder_water")
         }
     }
 }

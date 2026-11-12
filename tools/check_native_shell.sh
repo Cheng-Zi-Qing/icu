@@ -9,6 +9,8 @@ echo "[check_native_shell] Running manual runtime tests..."
 swiftc \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Copy/UserVisibleCopyKey.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Copy/TextCatalog.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Copy/PlayfulLines.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Copy/SceneLines.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Copy/UserFacingErrorCopy.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/AppPaths.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/RuntimeLaunchDiagnostics.swift" \
@@ -82,6 +84,7 @@ swiftc \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/AgentHookManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Agent/AgentBoard.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/AgentBoardManualTests.swift" \
+  "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/PlayfulLinesManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Agent/AgentActivity.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/AgentActivityManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Agent/AgentDirectoryReader.swift" \
@@ -108,6 +111,8 @@ echo "[check_native_shell] Running AppKit theme tests..."
 swiftc -framework AppKit \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Copy/UserVisibleCopyKey.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Copy/TextCatalog.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Copy/PlayfulLines.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Copy/SceneLines.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Copy/UserFacingErrorCopy.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/AppPaths.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/RuntimeLaunchDiagnostics.swift" \
@@ -174,6 +179,8 @@ swiftc -framework AppKit \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Runtime/UsageSamples.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Agent/AgentWaitCardContent.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Work/PetWorkScenes.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Work/PetWorkScenePlayer.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/PetWindowWidth.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Work/PetChase.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/DesktopPetView+Work.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/DesktopPetView+Turn.swift" \
@@ -237,11 +244,13 @@ swiftc -framework AppKit \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/PetLiftAppKitManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/AgentAppKitManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/PetWorkSceneAppKitManualTests.swift" \
+  "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/PetSceneVariantAppKitManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/PetStateSceneAppKitManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/AppKitTestSupport.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/MenuPanelAppKitManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/PixelArtScalerAppKitManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/StatusChipAppKitManualTests.swift" \
+  "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/PlayfulLinesManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/PetBehaviorAppKitManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/PetCursorAppKitManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/HeadlessWindows.swift" \

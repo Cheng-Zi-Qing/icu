@@ -5,32 +5,33 @@ enum DesktopPetCopy {
         TextCatalog.shared.text(key)
     }
 
+    /// 状态条上平时的字：每种状态一组话，进这个状态时抽一句，待在这个状态里不换
     static func statusText(for state: ShellWorkState) -> String {
         switch state {
         case .idle:
-            return text("pet.status_idle")
+            return PlayfulLines.workStatus.line(pool: WorkLinePool.idle.key, fallback: "pet.status_idle")
         case .working:
-            return text("pet.status_working")
+            return PlayfulLines.workStatus.line(pool: WorkLinePool.working.key, fallback: "pet.status_working")
         case .focus:
-            return text("pet.status_focus")
+            return PlayfulLines.workStatus.line(pool: WorkLinePool.focus.key, fallback: "pet.status_focus")
         case .breakState:
-            return text("pet.status_break")
+            return PlayfulLines.workStatus.line(pool: WorkLinePool.breakTime.key, fallback: "pet.status_break")
         }
     }
 
     static func focusSuggestionMessage(for suggestion: FocusEndSuggestion?) -> String? {
         switch suggestion {
         case .light:
-            return text("pet.focus_end_light")
+            return PlayfulLines.bubble.fresh(pool: BubbleLinePool.focusEndLight.key, fallback: "pet.focus_end_light")
         case .heavy:
-            return text("pet.focus_end_heavy")
+            return PlayfulLines.bubble.fresh(pool: BubbleLinePool.focusEndHeavy.key, fallback: "pet.focus_end_heavy")
         case nil:
             return nil
         }
     }
 
     static func stopWorkMessage() -> String {
-        text("pet.stop_work_message")
+        PlayfulLines.bubble.fresh(pool: BubbleLinePool.stopWork.key, fallback: "pet.stop_work_message")
     }
 
     static func eyeReminderMessage() -> String {

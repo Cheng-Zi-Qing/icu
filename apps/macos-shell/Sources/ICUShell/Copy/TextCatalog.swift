@@ -26,6 +26,11 @@ struct TextCatalog {
         self.values = values.merging(overrideValues) { _, override in override }
     }
 
+    /// 直接给一组已经展开好的 key（测试用）
+    static func inMemory(_ values: [String: String]) -> TextCatalog {
+        TextCatalog(values: values)
+    }
+
     static func installShared(_ catalog: TextCatalog) {
         installedShared = catalog
     }

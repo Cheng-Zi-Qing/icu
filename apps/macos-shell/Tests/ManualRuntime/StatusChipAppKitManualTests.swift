@@ -61,7 +61,11 @@ func testDesktopPetStatusChipHugsItsTextAndCentersUnderThePet() throws {
 func testDesktopPetStatusChipUsesAFontThatCoversChineseAndNeverTruncates() throws {
     let view = try makePeekablePetView()
     // 四种状态的标签（中英文都在 config/copy/ 里），桌宠底下的胶囊放得下、不出省略号
-    let labels = ["发呆中", "陪你上班", "安静陪着", "等你回来", "Chilling", "With you", "Staying quiet", "Waiting"]
+    // 状态条上会出现的每一句（平时状态 + Agent 状态的俏皮话，中英文）
+    let catalogs = try [AppLanguage.chinese, .english].map {
+        try TextCatalog.live(repoRootURL: inferredManualTestRepoRootURL(), language: $0)
+    }
+    let labels = catalogs.flatMap { catalog in PlayfulLines.statusPools.flatMap { catalog.texts($0) } }
     for text in labels + ["专注工作中"] {
         view.setStatusText(text)
         view.layoutSubtreeIfNeeded()
@@ -167,4 +171,33 @@ func testDesktopPetOverlaysStayInFrontOfATiltedPet() throws {
 private func require<T>(_ value: T?, _ message: String) throws -> T {
     guard let value else { throw TestFailure(message: message) }
     return value
+}
+
+/// 贴在屏幕右边：窗口透明的那一边被推到屏幕外。状态条、气泡、在等你的卡片都得留在看得见的地方，尾巴还指着身体
+@MainActor
+func testPetOverlaysStayOnScreenWhenDockedAgainstTheEdge() throws {
+    guard let screen = NSScreen.main else { return }
+    let view = try makePeekablePetView()
+    let window = NSWindow(contentRect: NSRect(origin: .zero, size: DesktopPetView.cardExpandedContentSize), styleMask: .borderless, backing: .buffered, defer: true)
+    window.contentView = view
+    let visible = screen.visibleFrame
+    // 窗口右边 40pt 伸出屏幕
+    window.setFrameOrigin(NSPoint(x: visible.maxX - window.frame.width + 40, y: visible.midY))
+    view.setStatusText("陪你上班中啦")
+    view.showTransientMessage("喝口水，慢慢来。")
+    let wait: [String: Any] = ["v": 1, "session": "s", "event": "PermissionRequest", "tool": "Bash", "at": 1.0, "project": "icu"]
+    let content = try require(AgentWaitCardContent(summary: AgentSummary(kind: .waiting, count: 1, lead: AgentSession(record: wait))), "wait card content")
+    view.showWaitCard(content, onJump: { _ in }, onDismiss: {})
+    view.layoutOverlaysForWindowPosition()
+
+    let onScreen = view.convert(window.convertFromScreen(visible), from: nil)
+    let chip = try requireStatusLabel(in: view)
+    let bubble = try require(allSubviews(in: view).first { $0.identifier?.rawValue == "desktopPet.transientBubbleContainer" }, "bubble")
+    let card = try require(allSubviews(in: view).first { $0.identifier?.rawValue == "desktopPet.waitCard" }, "wait card")
+    for (name, frame) in [("status chip", chip.frame), ("bubble", bubble.frame), ("wait card", card.frame)] {
+        try expect(frame.maxX <= onScreen.maxX + 0.5 && frame.minX >= onScreen.minX - 0.5, "\(name) stays on screen (frame \(frame), on screen \(onScreen))")
+    }
+    let tail = try require(allSubviews(in: view).first { $0.identifier?.rawValue == "desktopPet.transientBubbleTail" }, "tail")
+    try expect(tail.frame.midX >= bubble.frame.minX && tail.frame.midX <= bubble.frame.maxX, "the tail stays under the bubble")
+    window.close()
 }

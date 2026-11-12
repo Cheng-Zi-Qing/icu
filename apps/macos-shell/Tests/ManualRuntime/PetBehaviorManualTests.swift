@@ -205,10 +205,28 @@ func testGazeTrackerDoesNotChangeTheOriginal() throws {
 
 func testIdleActionScheduleWeighsYuzuWobbleOverBirdVisits() throws {
     let picks = stride(from: 0.0, to: 1.0, by: 0.01).map { PetIdleActionSchedule.pick(random: $0) }
-    let wobbles = picks.filter { $0 == .yuzuWobble }.count
-    let birds = picks.filter { $0 == .birdVisit }.count
-    try expect(wobbles + birds == picks.count, "only idle actions are picked")
-    try expect(wobbles > birds && birds > 0, "yuzu wobble is the common one, the bird visit the rarer treat (\(wobbles) vs \(birds))")
+    let count = { (clip: PetActionClip) in picks.filter { $0 == clip }.count }
+    let idleActs: [PetActionClip] = [.yuzuWobble, .birdVisit, .sunbathe, .bath]
+    try expect(idleActs.map(count).reduce(0, +) == picks.count, "only idle actions are picked")
+    for rarer in [PetActionClip.birdVisit, .sunbathe, .bath] {
+        try expect(count(.yuzuWobble) > count(rarer) && count(rarer) > 0, "yuzu wobble is the common one, \(rarer) a rarer treat (\(count(.yuzuWobble)) vs \(count(rarer)))")
+    }
+}
+
+/// 晒太阳、泡澡：idle_act/ 下 8 帧一轮，慢慢放（4 fps）多放几遍，不是一闪而过
+func testSunbathingAndBathingAreSlowIdleActs() throws {
+    for (clip, name) in [(PetActionClip.sunbathe, "sunbathe"), (.bath, "bath")] {
+        try expect(clip.directory == "idle_act" && !clip.loops && !clip.isPokeReaction, "\(name) is an idle act")
+        try expect(clip.frameNames == (0..<8).map { "\(name)_\($0).png" }, "\(name) has the 8 frames the pipeline draws")
+        try expect(clip.framesPerSecond == 4 && clip.duration == 6, "\(name) plays slowly, three rounds (got \(clip.duration)s)")
+    }
+    let capybara = inferredManualTestRepoRootURL().appendingPathComponent("assets/pets/capybara", isDirectory: true)
+    let outfits = (try? FileManager.default.contentsOfDirectory(atPath: capybara.appendingPathComponent("outfits").path)) ?? []
+    for root in [capybara] + outfits.map({ capybara.appendingPathComponent("outfits/\($0)", isDirectory: true) }) {
+        let files = Set((try? FileManager.default.contentsOfDirectory(atPath: root.appendingPathComponent("idle_act").path)) ?? [])
+        let missing = (PetActionClip.sunbathe.frameNames + PetActionClip.bath.frameNames).filter { !files.contains($0) }
+        try expect(missing.isEmpty, "\(root.lastPathComponent)/idle_act is missing \(missing)")
+    }
 }
 
 func testIdleActionScheduleSpacesActionsOut() throws {

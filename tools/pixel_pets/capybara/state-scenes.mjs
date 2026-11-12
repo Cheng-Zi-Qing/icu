@@ -13,7 +13,8 @@ export function raisedPawPose(sit, paw) {
     ...sit,
     parts: [
       ...parts,
-      { id: 'raisedLeg', label: '举起的前腿', shape: 'capsule', ink: 'body', x1: 10.5, y1: 23.5, x2: paw[0], y2: paw[1], r: 1.2 },
+      // 举的是靠近我们的那只手：从肚皮上方的肩膀起笔、横过肚皮，挡住一部分肚皮（外侧手伸出来就不该看到整个肚皮）
+      { id: 'raisedLeg', label: '举起的前腿', shape: 'capsule', ink: 'body', x1: 15, y1: 21.5, x2: paw[0], y2: paw[1], r: 1.3, edge: 'above' },
       { id: 'raisedPaw', label: '举起的爪子', shape: 'ellipse', ink: 'dark', cx: paw[0], cy: paw[1] - 0.6, rx: 1.3, ry: 1, rot: 0 },
     ],
   };

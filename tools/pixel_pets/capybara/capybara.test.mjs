@@ -101,8 +101,8 @@ test('default model is valid', () => {
 
 test('validation rejects bad numbers, inks and a missing head', () => {
   const bad = clone(DEFAULT_MODEL);
-  bad.poses.lie.parts[0].x1 = 'x';
-  assert.throws(() => validateModel(bad), /poses\.lie\.parts\[0\]\.x1/);
+  bad.poses.lie.parts[0].cx = 'x';
+  assert.throws(() => validateModel(bad), /poses\.lie\.parts\[0\]\.cx/);
 
   const badInk = clone(DEFAULT_MODEL);
   badInk.head.parts[0].ink = 'purple';

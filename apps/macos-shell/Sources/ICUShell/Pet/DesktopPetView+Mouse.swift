@@ -100,6 +100,7 @@ extension DesktopPetView {
         let isOver = point.map(isOpaquePetPixel(at:)) ?? false
         guard isOver != isPointerOverPet else { return }
         isPointerOverPet = isOver
+        updateStatusChipVisibility()
         if isOver {
             onPointerEntered?()
         } else {

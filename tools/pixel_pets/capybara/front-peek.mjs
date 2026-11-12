@@ -22,7 +22,7 @@ function head(dy, { blink, reach, flinch }) {
 /** 两只爪子搭在边上（画布底边），在下巴两侧：单独描边，跟脸分开 */
 function paws() {
   const paw = [...rect(6, N - 3, 10, N - 2), ...rect(7, N - 4, 9, N - 4), ...rect(7, N - 1, 9, N - 1)];
-  return Grid.empty(N, N).dots('body', both(paw)).outlined()
+  return Grid.empty(N, N).dots('body', both(paw), 'paw').outlined()
     .dots('light', both(rect(7, N - 3, 8, N - 3)))
     .dots('dark', both([[8, N - 1]]));
 }
@@ -34,8 +34,7 @@ export function renderFrontUpright({ blink = false, reach = false, flinch = fals
 }
 
 /** 逆时针转 90°：画布底边转到右边 */
-const turnedTowardRightEdge = (grid) =>
-  new Grid(N, N, Array.from({ length: N * N }, (_, i) => grid.get(N - 1 - Math.floor(i / N), i % N)));
+const turnedTowardRightEdge = (grid) => grid.sampled(N, N, (x, y) => [N - 1 - y, x]);
 
 /**
  * 正面贴边探头的一帧。

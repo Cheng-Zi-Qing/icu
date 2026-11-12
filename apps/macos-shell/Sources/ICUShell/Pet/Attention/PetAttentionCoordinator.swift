@@ -11,8 +11,6 @@ final class PetAttentionCoordinator {
     var onStageChanged: (() -> Void)?
     /// 弹这张提醒卡
     var onReminderReady: ((ReminderPresentationPayload) -> Void)?
-    /// 有 Agent 在等你，正挂着的提醒卡先收起来（之后再弹）
-    var onReminderWithdrawn: (() -> Void)?
     /// 回来时冒的那句话
     var onDigest: ((String) -> Void)?
 
@@ -22,7 +20,7 @@ final class PetAttentionCoordinator {
     /// 压着没弹的提醒，先来的先弹；同一种只留最新的
     private(set) var heldReminders: [ReminderPresentationPayload] = []
     private var showingReminder: ReminderPresentationPayload?
-    /// 已经点了「开始休息」、屏幕正被全屏休息盖着：这时来了「在等你」也不打断，歇完再说
+    /// 已经点了「开始休息」、屏幕正被全屏休息盖着
     private(set) var isResting = false
     /// 正挂着的提醒卡是哪一张
     var showingReminderID: UUID? { showingReminder?.id }
@@ -45,13 +43,8 @@ final class PetAttentionCoordinator {
         if context.userAway {
             digest = digest.recording(summary)
         }
-        if context.agentWaiting, !isResting, let showing = showingReminder {
-            // L3 盖过 L2：卡片收起来，排回队头
-            showingReminder = nil
-            context.reminderShowing = false
-            heldReminders = [showing] + heldReminders.filter { $0.type != showing.type }
-            onReminderWithdrawn?()
-        }
+        // 已经挂出来的提醒卡不收：它在屏幕中央，在等你的卡片在桌宠头顶，两个不打架。
+        // 收了的话，Claude 干活时每要一次权限卡片就闪没一次，批完又弹回来
         advance()
     }
 

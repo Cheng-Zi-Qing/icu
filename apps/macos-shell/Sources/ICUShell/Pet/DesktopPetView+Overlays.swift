@@ -2,12 +2,14 @@ import AppKit
 
 /// 桌宠周围的浮层布局（状态标签、气泡）与主题 / 文案刷新
 extension DesktopPetView {
+    /// 水豚画在哪：脚下留出状态字那一条，往上是形象本身
     var petCanvasRect: NSRect {
-        NSRect(
+        let band = min(LayoutMetrics.statusChipBand, bounds.height)
+        return NSRect(
             x: 0,
-            y: 0,
+            y: band,
             width: bounds.width,
-            height: min(LayoutMetrics.petCanvasHeight, bounds.height)
+            height: max(0, min(LayoutMetrics.petCanvasHeight, bounds.height - band))
         )
     }
 
@@ -44,23 +46,50 @@ extension DesktopPetView {
             return
         }
         imageView.frame = petCanvasRect
+        updateImageScaling()
         layoutStatusChip()
     }
 
-    /// 状态小胶囊：贴着文字的宽度，居中在身体下方，不超出窗口
+    /// 窗口里落在屏幕可见区域内的那一块。贴边时窗口透明的那一边被推到屏幕外（贴底时下沿压在 Dock 后面），
+    /// 浮层只能摆在这一块里，不然会被屏幕边截掉。露出来的太窄（藏边探头时）就按整个窗口算：浮层一出现就会先滑出来
+    var onScreenBounds: NSRect {
+        guard let window, let screen = window.screen ?? NSScreen.main else { return bounds }
+        let visible = convert(window.convertFromScreen(screen.visibleFrame), from: nil)
+        let clipped = bounds.intersection(visible)
+        return clipped.width >= LayoutMetrics.minimumOnScreenOverlayWidth ? clipped : bounds
+    }
+
+    /// 宽 `width` 的浮层尽量对准身体中线，但整块留在 `area` 里（左右各留 `inset`）
+    private func overlayX(width: CGFloat, in area: NSRect, inset: CGFloat) -> CGFloat {
+        let center = (petBodyRect ?? petCanvasRect).midX
+        let lower = area.minX + inset
+        let upper = area.maxX - inset - width
+        guard upper >= lower else { return lower.rounded() }
+        return min(max(center - width / 2, lower), upper).rounded()
+    }
+
+    /// 窗口挪了（贴边、藏边、拖动）：浮层按新的可见区域重新摆
+    func layoutOverlaysForWindowPosition() {
+        layoutStatusChip()
+        if transientBubbleContainer?.isHidden == false { layoutTransientBubble() }
+        if waitCardView?.isHidden == false { layoutWaitCard() }
+    }
+
+    /// 状态小胶囊：贴着文字的宽度，对准身体，摆在脚下那一条里；那一条被压到屏幕外（贴着屏幕底边）就往上挪进看得见的地方
     func layoutStatusChip() {
         guard statusLabel != nil else { return }
         if let themeFont = statusChipThemeFont {
             statusLabel.font = StatusChipCell.displayFont(for: statusLabel.stringValue, themeFont: themeFont)
         }
-        let petRect = petCanvasRect
+        let area = petCanvasRect.intersection(onScreenBounds)
         let margin = LayoutMetrics.statusChipMargin
-        let maxWidth = max(0, petRect.width - margin * 2)
+        let maxWidth = max(0, area.width - margin * 2)
         let size = (statusLabel.cell as? StatusChipCell)?.fittingChipSize(maxWidth: maxWidth)
             ?? NSSize(width: maxWidth, height: 18)
-        let centerX = (petBodyRect ?? petRect).midX
-        let x = min(max(centerX - size.width / 2, petRect.minX + margin), petRect.maxX - margin - size.width)
-        statusLabel.frame = NSRect(x: x.rounded(), y: margin, width: size.width, height: size.height)
+        let x = overlayX(width: size.width, in: area, inset: margin)
+        let inBand = max(1, (LayoutMetrics.statusChipBand - size.height) / 2)
+        let y = max(inBand, onScreenBounds.minY + inBand)
+        statusLabel.frame = NSRect(x: x, y: y.rounded(), width: size.width, height: size.height)
         statusLabel.wantsLayer = true
         statusLabel.layer?.cornerRadius = size.height / 2
     }
@@ -71,13 +100,14 @@ extension DesktopPetView {
         }
 
         let petRect = petCanvasRect
-        let maxBubbleWidth = max(72, petRect.width - 20)
+        let area = petRect.intersection(onScreenBounds)
+        let maxBubbleWidth = max(72, area.width - 20)
         let horizontalPadding: CGFloat = 10
         let verticalPadding: CGFloat = 7
         let textSize = transientBubbleTextSize(maxWidth: maxBubbleWidth - (horizontalPadding * 2))
         let bubbleWidth = min(maxBubbleWidth, textSize.width + (horizontalPadding * 2))
         let bubbleHeight = max(28, min(LayoutMetrics.transientBubbleMaxHeight, textSize.height + (verticalPadding * 2)))
-        let bubbleX = max(6, min(petRect.midX - (bubbleWidth / 2), petRect.width - bubbleWidth - 6))
+        let bubbleX = overlayX(width: bubbleWidth, in: area, inset: 6)
         let bubbleY: CGFloat
         if usesExpandedTransientBubbleLayout {
             bubbleY = petStageTop + LayoutMetrics.transientBubbleGap + LayoutMetrics.transientBubbleTailSize
@@ -98,8 +128,12 @@ extension DesktopPetView {
         } else {
             tailY = transientBubbleContainer.frame.minY - 6
         }
+        // 小尾巴指着身体；气泡被屏幕边推开时，尾巴别伸到气泡外面去
+        let bubbleFrame = transientBubbleContainer.frame
+        let bodyMidX = (petBodyRect ?? petRect).midX
+        let tailMidX = min(max(bodyMidX, bubbleFrame.minX + 10), bubbleFrame.maxX - 10)
         transientBubbleTail.frame = NSRect(
-            x: transientBubbleContainer.frame.midX - 4,
+            x: (tailMidX - 4).rounded(),
             y: tailY,
             width: 8,
             height: 8

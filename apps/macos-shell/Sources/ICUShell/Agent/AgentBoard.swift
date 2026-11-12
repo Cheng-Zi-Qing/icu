@@ -199,12 +199,13 @@ struct AgentSummary: Equatable {
         case .done:
             return count > 1
                 ? TextCatalog.shared.format("agent.done_count", count)
-                : TextCatalog.shared.text("agent.done")
-        case .failed: return TextCatalog.shared.text("agent.failed")
+                : PlayfulLines.agentStatus.line(pool: AgentLinePool.done.key, fallback: "agent.done")
+        case .failed:
+            return PlayfulLines.agentStatus.line(pool: AgentLinePool.failed.key, fallback: "agent.failed")
         case .waiting:
             return count > 1
                 ? TextCatalog.shared.format("agent.waiting_count", count)
-                : TextCatalog.shared.text("agent.waiting")
+                : PlayfulLines.agentStatus.line(pool: AgentLinePool.waiting.key, fallback: "agent.waiting")
         }
     }
 }

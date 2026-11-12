@@ -12,6 +12,8 @@ enum PetScene: Equatable {
     case failed
     /// 健康提醒挂着时跟着做：该喝水了捧杯子喝，该护眼了抬头望远处（循环到提醒关掉）
     case remind(HealthReminderType)
+    /// 休息（我离开一下）时：趴着钓鱼，或者就平时那样坐着（几种演法里抽）
+    case rest
 
     var name: String {
         switch self {
@@ -21,6 +23,7 @@ enum PetScene: Equatable {
         case .failed: return "fail"
         case .remind(.hydration): return "drink"
         case .remind(.eyeCare): return "look_away"
+        case .rest: return "rest"
         }
     }
 

@@ -24,7 +24,8 @@ const mirror = (points) => points.map(([x, y]) => [N - 1 - x, y]);
 export const both = (points) => [...points, ...mirror(points)];
 const ellipse = (ink, cx, cy, rx, ry) => ({ shape: 'ellipse', ink, cx, cy, rx, ry, rot: 0 });
 const roundBox = (ink, cx, cy, w, h, r) => ({ shape: 'rbox', ink, cx, cy, w, h, r, rot: 0 });
-const filled = (grid, part, onlyOver = null) => grid.fill(part.ink, partMask(part, null), onlyOver);
+// 正面头的每一块都标成头（体型检查按部位量）
+const filled = (grid, part, onlyOver = null) => grid.fill(part.ink, partMask(part, null), onlyOver, 'head');
 
 /** 相对头中心的各行（局部 y） */
 export const FRONT_ROWS = Object.freeze({ top: -8, eye: -3, nose: 2, cheek: 1, mouth: 5, chin: 7, hat: -8 });
@@ -97,11 +98,7 @@ export function frontFace(grid, c, { eyes = 'relaxed', look = 0, mouth = 'calm',
     }
   }
   if (glasses) {
-    // 圆框：去掉四个角，用比描边浅的深棕，眼睛还看得见
-    const rims = lefts.flatMap((x) => rect(x - 1, t - 1, x + 2, t + 2)
-      .filter(([px, py]) => px === x - 1 || px === x + 2 || py === t - 1 || py === t + 2)
-      .filter(([px, py]) => !((px === x - 1 || px === x + 2) && (py === t - 1 || py === t + 2))));
-    g = g.dots('dark', [...rims, ...rect(lefts[0] + 3, t, lefts[1] - 2, t)]);
+    g = swirlGlasses(g, lefts, t);
   }
   const cheek = c + FRONT_ROWS.cheek;
   const m = c + FRONT_ROWS.mouth;
@@ -118,6 +115,33 @@ export function frontFace(grid, c, { eyes = 'relaxed', look = 0, mouth = 'calm',
       .dots('leaf', [[11, m - 1], [8, m + 3]]);
   }
   return g;
+}
+
+/** 去掉四角的方框一圈（像素圆） */
+const ring = (x0, y0, x1, y1) => rect(x0, y0, x1, y1)
+  .filter(([px, py]) => px === x0 || px === x1 || py === y0 || py === y1)
+  .filter(([px, py]) => !((px === x0 || px === x1) && (py === y0 || py === y1)));
+
+/** 像素圆的一圈：(x0,y0)–(x1,y1) 框里离圆心约等于半径的格子（大圈去四角太方，按距离取才圆） */
+const circle = (x0, y0, x1, y1) => {
+  const cx = (x0 + x1) / 2;
+  const cy = (y0 + y1) / 2;
+  const r = (x1 - x0) / 2;
+  return rect(x0, y0, x1, y1).filter(([px, py]) => Math.abs(Math.hypot(px - cx, py - cy) - r) < 0.7);
+};
+
+/**
+ * 读书时的圈圈眼镜（2026-11-11 用户定：老学究那种，夸张、大、透明镜片、一圈圈圈）：
+ * 10×10 的像素圆粗框，比脸还宽；镜片透明，看得见脸和眼睛，眼睛外面一圈浅蓝的圈圈，左上角一点反光
+ */
+function swirlGlasses(grid, lefts, t) {
+  let g = grid;
+  for (const x of lefts) {
+    g = g.dots('sweat', ring(x - 1, t - 1, x + 2, t + 2))
+      .dots('white', [[x - 2, t - 2], [x - 3, t - 1]])
+      .dots('outline', circle(x - 4, t - 4, x + 5, t + 5));
+  }
+  return g.dots('outline', rect(lefts[0] + 6, t - 1, lefts[1] - 5, t - 1));
 }
 
 /** 头顶装扮的锚点：橙子坐在头顶；正面草帽帽身高，往下压到帽檐的描边正好在眼皮上面一行 */

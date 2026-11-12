@@ -13,6 +13,8 @@ import Foundation
 ///   sleep/wake_0.png           被吵醒：头上一个「!」
 ///   idle_act/wobble_<0...9>.png  待机小动作：柚子左右晃，抬眼看它
 ///   idle_act/bird_<0...17>.png   待机小动作：小鸟飞来落在额头上，歇一会儿飞走
+///   idle_act/sunbathe_<0...7>.png 待机小动作：戴墨镜往后一仰晒太阳（idle-extras.mjs）
+///   idle_act/bath_<0...7>.png     待机小动作：坐进木盆泡澡，头顶毛巾冒热气（idle-extras.mjs）
 ///
 /// 被戳的几段帧数、帧率和 tools/pixel_pets/capybara/poke-reactions.mjs 一致
 /// （testPokeReactionFramesExistInTheRepoAssets 会对着仓库里的素材查）
@@ -28,12 +30,14 @@ enum PetActionClip: Equatable, CaseIterable {
     case wake
     case yuzuWobble
     case birdVisit
+    case sunbathe
+    case bath
 
     var directory: String {
         switch self {
         case .petted, .tickled, .annoyed, .sneezed, .startled, .grumpy: return "react"
         case .doze, .nap, .wake: return "sleep"
-        case .yuzuWobble, .birdVisit: return "idle_act"
+        case .yuzuWobble, .birdVisit, .sunbathe, .bath: return "idle_act"
         }
     }
 
@@ -50,12 +54,14 @@ enum PetActionClip: Equatable, CaseIterable {
         case .wake: return ["wake_0.png"]
         case .yuzuWobble: return Self.numbered("wobble", count: 10)
         case .birdVisit: return Self.numbered("bird", count: 18)
+        case .sunbathe: return Self.numbered("sunbathe", count: 8)
+        case .bath: return Self.numbered("bath", count: 8)
         }
     }
 
     var framesPerSecond: Double {
         switch self {
-        case .doze, .nap, .wake: return 4
+        case .doze, .nap, .wake, .sunbathe, .bath: return 4
         case .petted, .yuzuWobble, .birdVisit, .grumpy: return 6
         case .tickled, .annoyed, .sneezed, .startled: return 8
         }
@@ -77,9 +83,13 @@ enum PetActionClip: Equatable, CaseIterable {
         }
     }
 
-    /// 不循环的片段放几遍（摸头放两遍，爱心冒两次）
+    /// 不循环的片段放几遍（摸头放两遍，爱心冒两次；晒太阳、泡澡一轮才 2 秒，多泡一会儿）
     private var playCount: Int {
-        self == .petted ? 2 : 1
+        switch self {
+        case .petted: return 2
+        case .sunbathe, .bath: return 3
+        default: return 1
+        }
     }
 
     /// 不循环的片段放完要多久

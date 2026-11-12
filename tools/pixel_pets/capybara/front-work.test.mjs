@@ -15,6 +15,8 @@ import { renderFrontUpright } from './front-peek.mjs';
 import { frontFace, frontHead } from './front-head.mjs';
 import { WORK_SCENES, workFrames, workSceneFrames, workSceneManifest } from './front-work.mjs';
 import { REMINDER_SCENES, SIDE_WORK_SCENES, STATE_SCENES } from './state-scenes.mjs';
+import { CHASE_WIDTH } from './chase.mjs';
+import { measure } from './measure.mjs';
 
 const opaqueBox = (grid, predicate = (ink) => ink !== 'clear') => {
   let minX = Infinity; let maxX = -Infinity; let minY = Infinity; let maxY = -Infinity;
@@ -25,10 +27,21 @@ const opaqueBox = (grid, predicate = (ink) => ink !== 'clear') => {
   return { width: maxX - minX + 1, height: maxY - minY + 1, minY, maxY };
 };
 
-test('every agent activity has a work scene except thinking, which keeps the normal side-view idle', () => {
-  // 用户 2026-11-08：正面坐着什么都不做太丑，在想事情就保持平时侧身坐着嚼草的样子
-  assert.deepEqual([...WORK_SCENES].sort(), ['delegate', 'done', 'drink', 'eat', 'fail', 'look_away', 'read', 'search', 'wait', 'write']);
+test('every agent activity has a work scene; thinking only has side-view variants on top of the normal idle', () => {
+  // 用户 2026-11-08：正面坐着什么都不做太丑，在想事情保持侧身坐着嚼草；2026-11-11 加了头顶转圈小点和灯泡两种演法
+  assert.deepEqual([...WORK_SCENES].filter((name) => !workSceneManifest().scenes[name].variantOf).sort(),
+    ['delegate', 'done', 'drink', 'eat', 'fail', 'look_away', 'read', 'search', 'wait', 'write']);
   assert.equal(workSceneManifest().scenes.think, undefined);
+});
+
+test('variants: each one names the scene it stands in for, and is played sideways', () => {
+  const { scenes } = workSceneManifest();
+  const variants = Object.entries(scenes).filter(([, scene]) => scene.variantOf);
+  assert.deepEqual(Object.fromEntries(variants.map(([name, scene]) => [name, scene.variantOf])), {
+    think_dots: 'think', think_bulb: 'think', button: 'eat', surf: 'eat', rummage: 'search', paper: 'read', fall: 'fail', rest_fish: 'rest',
+  });
+  for (const [name, scene] of variants) assert.equal(scene.side, true, `${name} is a side-view scene`);
+  assert.equal(scenes.fall.once, true, 'falling over plays once, like the plain failure');
 });
 
 test('agent states have their own scenes: waiting loops, done and failed play once', () => {
@@ -49,18 +62,23 @@ test('agent states have their own scenes: waiting loops, done and failed play on
 test('waiting raises a paw out in front of the body, so it reads at a glance', () => {
   // 平时坐姿左下角（胸口前面）是空的；举爪那几帧这里得有爪子
   const sitting = renderPose(DEFAULT_MODEL, 'sit', { chewPhase: 0 });
-  const pawInks = new Set(['body', 'dark']);
+  // 近侧的腿比身体深一号（muzzle），爪子是 dark
+  const pawInks = new Set(['body', 'muzzle', 'dark']);
   const front = (grid) => { let n = 0; for (let y = 17; y < 24; y += 1) for (let x = 0; x < 6; x += 1) if (pawInks.has(grid.get(x, y))) n += 1; return n; };
   for (const grid of workSceneFrames('wait')) assert.ok(front(grid) > front(sitting) + 3, 'the raised paw sticks out in front');
 });
 
-test('work scene frames are 32x32, like every other pose', () => {
+test('work scene frames are 32 rows; only side-view scenes may be wider, and a scene keeps one width', () => {
+  const { scenes } = workSceneManifest();
   for (const name of WORK_SCENES) {
-    for (const grid of workSceneFrames(name)) {
-      assert.equal(grid.width, 32);
-      assert.equal(grid.height, 32);
-    }
+    const widths = new Set(workSceneFrames(name).map((grid) => grid.width));
+    assert.equal(widths.size, 1, `${name}: every frame is as wide`);
+    const [width] = widths;
+    const side = scenes[name].side || name === 'search';
+    assert.ok(side ? width >= 32 && width <= 52 : width === 32, `${name} is ${width} wide`);
+    for (const grid of workSceneFrames(name)) assert.equal(grid.height, 32);
   }
+  assert.equal(workSceneFrames('search')[0].width, CHASE_WIDTH);
 });
 
 test('the manifest only points at frames that exist and plays each scene for a few seconds', () => {
@@ -87,7 +105,8 @@ test('the front head in work scenes is the same size as the edge peek head (thre
   const muzzleBox = (grid) => opaqueBox(grid, (ink) => ink === 'muzzle');
   const reference = muzzleBox(renderFrontUpright());
   // 追球、放小鸟、三段状态动作和两段健康提醒是侧身的，不比正面头
-  const sideways = new Set(['search', ...SIDE_WORK_SCENES, ...STATE_SCENES, ...REMINDER_SCENES]);
+  const variants = Object.entries(workSceneManifest().scenes).filter(([, scene]) => scene.side).map(([name]) => name);
+  const sideways = new Set(['search', ...SIDE_WORK_SCENES, ...STATE_SCENES, ...REMINDER_SCENES, ...variants]);
   for (const name of WORK_SCENES.filter((n) => !sideways.has(n))) {
     // 吃饭会把头埋进碗里，取整段里口鼻露得最全的那帧比
     const width = Math.max(...workSceneFrames(name).map((grid) => muzzleBox(grid).width));
@@ -108,14 +127,11 @@ test('work frames are part of every outfit and come with the manifest', () => {
 });
 
 test('the chase body stays inside the canvas: its outline is never cut off', () => {
-  // 身体已经拉到 32 格画布的右边缘，再往外就会被切掉（嘴里的草和坐姿一样本来就伸到边上，不算）
-  const bodyInks = new Set(['body', 'shade', 'light', 'dark']);
+  // 整只（头、身子、腿、爪）离画布四边至少留一格描边（嘴里的草是道具，本来就伸到边上，不算）
   for (const grid of workSceneFrames('search')) {
-    for (let i = 0; i < 32; i += 1) {
-      for (const [x, y] of [[0, i], [31, i], [i, 0], [i, 31]]) {
-        assert.ok(!bodyInks.has(grid.get(x, y)), `body touches the edge at (${x}, ${y})`);
-      }
-    }
+    const { figure } = measure(grid);
+    assert.ok(figure.left >= 1 && figure.top >= 1, `figure starts at (${figure.left}, ${figure.top})`);
+    assert.ok(figure.right <= grid.width - 2 && figure.bottom <= grid.height - 2, `figure ends at (${figure.right}, ${figure.bottom})`);
   }
 });
 
@@ -174,10 +190,12 @@ test('every whole-body pose is as big as the sitting one: side, lifted and trott
 });
 
 test('the head is the same size in every side pose, and every front pose shares one front head', () => {
-  // 侧面：口鼻那块深色的格数只跟头有关（头不缩放、不被身体挡），坐着、被拎着一样多
-  const muzzle = (grid) => grid.cells.filter((ink) => ink === 'muzzle').length;
-  const sit = muzzle(renderPose(DEFAULT_MODEL, 'sit', { chewPhase: 0 }));
-  assert.equal(muzzle(renderPose(DEFAULT_MODEL, 'hold', { tilt: 0 })), sit, 'lifted head = sitting head');
+  // 侧面：按部位量头（腿也是口鼻那个深色，不能按颜色数），坐着、被拎着、小跑一样大
+  const head = (grid) => measure(grid).head.area;
+  const sit = head(renderPose(DEFAULT_MODEL, 'sit', { chewPhase: 0 }));
+  // 头后面紧挨着的身子不同，描边会多吃 / 少吃一两格
+  assert.ok(Math.abs(head(renderPose(DEFAULT_MODEL, 'hold', { tilt: 0 })) - sit) <= 2, 'lifted head = sitting head');
+  assert.ok(Math.abs(head(workSceneFrames('search')[0]) - sit) <= 2, 'trotting head = sitting head');
   for (const pose of Object.values(DEFAULT_MODEL.poses)) {
     if (pose.head) assert.equal(pose.head.scale, 1, 'no pose scales the head');
   }

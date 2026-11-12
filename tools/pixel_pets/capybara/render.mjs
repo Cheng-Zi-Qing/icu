@@ -1,9 +1,10 @@
 // 参数 → 像素帧。浏览器编辑器和命令行构建共用这一份渲染逻辑。
-import { Grid, SIDES, canvasPixel, partMask } from './raster.mjs';
+import { Grid, SIDES, canvasPixel, partMask, partTag } from './raster.mjs';
 import { renderFrontPeek, renderFrontUpright } from './front-peek.mjs';
 import { HEADWEAR, itemIcon, sideHeadwear } from './headwear.mjs';
 import { workFrames } from './front-work.mjs';
 import { pokeFrames } from './poke-reactions.mjs';
+import { IDLE_EXTRA_RENDER, idleExtraOptions } from './idle-extras.mjs';
 
 export const CANVAS_HEIGHT = 32;
 
@@ -149,16 +150,16 @@ function adjustedPart(part, opts, pose) {
 
 // ---------- 绘制 ----------
 
-function drawPart(grid, part, transform) {
+function drawPart(grid, part, transform, tag = partTag(part.id)) {
   const mask = partMask(part, transform);
-  const filled = grid.fill(part.ink, mask, part.onlyOver ?? null);
+  const filled = grid.fill(part.ink, mask, part.onlyOver ?? null, tag);
   if (!part.edge) return filled;
   return filled.edged(mask, SIDES[part.edge] ?? SIDES.below);
 }
 
 function drawHead(grid, head, transform, opts) {
   const parts = head.parts.map((part) => (part.id === 'ear' && opts.earTwitch ? { ...part, cx: part.cx + 1 } : part));
-  const filled = parts.reduce((g, part) => drawPart(g, part, transform), grid);
+  const filled = parts.reduce((g, part) => drawPart(g, part, transform, 'head'), grid);
   return drawFaceMarks(filled, head.marks, transform, opts);
 }
 
@@ -384,6 +385,10 @@ export function allFrames(model, { headwear = HEADWEAR[0] } = {}) {
   frames.push(['sleep/wake_0.png', pose('sit', { chewPhase: 0, bang: true })]);
   yuzuWobbleOptions().forEach((o, i) => frames.push([`idle_act/wobble_${i}.png`, pose('sit', o)]));
   birdVisitOptions().forEach((o, i) => frames.push([`idle_act/bird_${i}.png`, pose('sit', o)]));
+  // 发呆时的晒太阳、泡澡（idle-extras.mjs）
+  for (const [name, options] of Object.entries(idleExtraOptions())) {
+    options.forEach((o, i) => frames.push([`idle_act/${name}_${i}.png`, IDLE_EXTRA_RENDER[name]({ ...o, headwear, model })]));
+  }
   // 贴边：平时正面探头；时不时把头转成侧面（就是原来侧身转 90° 那个造型）
   frames.push(['edge/peek_0.png', front({})]);
   frames.push(['edge/peek_1.png', front({ blink: true })]);

@@ -17,6 +17,8 @@ export const PALETTE = {
   bird: '#7FB2D9', birdWing: '#4F7FAE',
   // 干活场景里青菜的暗面
   leaf: '#3F7F34',
+  // 新场景的道具：按钮底座、鱼钩、针这类金属
+  metal: '#9AA3AD', metalDark: '#6B737C',
 };
 
 export const POSE_LABELS = {
@@ -60,8 +62,6 @@ export const DEFAULT_MODEL = Object.freeze({
       head: { x: 9.5, y: 12.5, rot: 0, scale: 1 },
       yuzu: true,
       parts: [
-        box('farFrontLeg', '远侧前腿', 'shade', 14, 27, 2, 8, 0),
-        box('nearFrontLeg', '近侧前腿', 'body', 11, 27, 2, 8, 0),
         ell('bellyShade', '腿间阴影', 'shade', 16, 26.5, 3, 3.6),
         box('hindFoot', '后脚', 'shade', 17.5, 30, 5, 2, 0),
         ell('hips', '臀部', 'body', 22.6, 22.6, 8, 7.6),
@@ -69,10 +69,13 @@ export const DEFAULT_MODEL = Object.freeze({
         ell('back', '背', 'body', 19.5, 15.5, 6, 4.6),
         ell('nape', '后颈', 'body', 18.2, 10.6, 3.6, 5),
         ell('belly', '圆肚子', 'body', 15.2, 23, 5.6, 4.6),
-        ell('tummy', '浅色肚皮', 'light', 14, 23.8, 3.4, 3.2, { onlyOver: 'body' }),
+        // 两只前腿都在肚皮前面，都描边，和肚皮分开。
+        // 腿和身体同色，只有脚是深色（2026-11-11 用户定，方案 B）
+        box('farFrontLeg', '远侧前腿', 'body', 14, 27, 2, 8, 0, { edge: 'inner' }),
+        box('nearFrontLeg', '近侧前腿', 'body', 11, 27, 2, 8, 0, { edge: 'inner' }),
         HEAD,
         box('nearPaw', '近侧前爪', 'dark', 11, 30, 2, 2, 0, { onlyOver: 'body' }),
-        box('farPaw', '远侧前爪', 'dark', 14, 30.5, 2, 1, 0, { onlyOver: 'shade' }),
+        box('farPaw', '远侧前爪', 'dark', 14, 30.5, 2, 1, 0, { onlyOver: 'body' }),
         box('hindPaw', '后爪', 'dark', 17, 30, 4, 2, 0, { onlyOver: 'shade' }),
       ],
       marks: [
@@ -82,25 +85,24 @@ export const DEFAULT_MODEL = Object.freeze({
     },
     lie: {
       width: 44,
-      head: { x: 9, y: 20.5, rot: 6, scale: 1 },
+      // 下巴贴地：头是最低的地方（2026-11-11 用户：原来那版不自然，头像搁在身子上）
+      head: { x: 9.5, y: 22.5, rot: 0, scale: 1 },
       yuzu: true,
       parts: [
-        // 照片 014 / 063 / g15：肚子贴地，身体又长又低，臀部略高；两条前腿平伸在下巴下面
-        cap('farFrontLeg', '远侧前腿（平伸）', 'shade', 15, 28, 5, 28.2, 1, { reach: true }),
-        ell('barrel', '身体', 'body', 25, 24, 12, 6.8),
-        ell('rump', '臀部', 'body', 32.5, 22.6, 7, 7.8),
-        ell('nape', '后颈（接头和背）', 'body', 18, 19.5, 6, 5),
-        ell('shoulder', '肩膀', 'body', 16, 24, 5.6, 5.6, { breathe: true }),
+        // 腿全收在身子底下：下巴底下露两个前爪尖，屁股后面露一点后脚
+        ell('farPaw', '远侧前爪', 'dark', 4.6, 29.9, 1.2, 0.8, { reach: true }),
+        // 一整条圆顶的身子，从后脑勺顺下来，中后段最高；不单独鼓一个屁股（像驼峰）
+        ell('barrel', '身体', 'body', 26.5, 24.2, 15, 7),
+        ell('rump', '臀部', 'body', 34.5, 24.4, 7.6, 6.8),
+        ell('shoulder', '肩膀', 'body', 18, 24.6, 6.4, 5.8, { breathe: true }),
+        ell('hindPaw', '后脚', 'shade', 39.5, 29.8, 2.2, 1),
         HEAD,
-        cap('nearFrontLeg', '近侧前腿（平伸）', 'body', 17, 29.6, 6, 29.8, 1.1, { edge: 'above', reach: true }),
-        ell('nearPaw', '近侧前爪', 'dark', 6, 29.8, 1.4, 1.1, { onlyOver: 'body', reach: true }),
-        ell('farPaw', '远侧前爪', 'dark', 5, 28.2, 1.3, 1, { onlyOver: 'shade', reach: true }),
-        box('hindPaw', '后爪', 'dark', 35, 30.5, 4, 1, 0.5, { onlyOver: 'body' }),
+        ell('nearPaw', '近侧前爪', 'dark', 7.5, 30, 1.5, 0.8, { reach: true }),
       ],
       marks: [
-        // 后腿大腿上沿的弧线
-        { ink: 'shade', points: [[29, 27], [30, 26], [31, 25], [32, 25], [33, 25], [34, 26], [35, 27]] },
-        { ink: 'light', points: [[24, 17], [25, 17], [26, 16], [27, 16]] },
+        // 收着的后腿：一道浅浅的弧线
+        { ink: 'shade', points: [[31, 28], [32, 27], [33, 26], [34, 26], [35, 26], [36, 27], [37, 28]] },
+        { ink: 'light', points: [[24, 18], [25, 18], [26, 18], [27, 18]] },
       ],
     },
     peek: {
@@ -127,18 +129,21 @@ export const DEFAULT_MODEL = Object.freeze({
       pivotRow: 17,
       tiltDegrees: 8,
       parts: [
-        // 身子和坐姿一样壮（见 capybara.test.mjs 的体量检查）：肚子、屁股各一团，垂下来不缩水
-        box('farHindLeg', '远侧后腿', 'shade', 15, 28.5, 2, 5, 0),
-        box('nearHindLeg', '近侧后腿', 'body', 21, 28.5, 2, 5, 0),
-        ell('neck', '后颈', 'body', 19.5, 16.5, 5.6, 4.6),
-        ell('rump', '屁股', 'body', 20.5, 23, 8, 6.6),
-        ell('belly', '圆肚子', 'body', 15.5, 22, 9.6, 7.4),
-        ell('tummy', '浅色肚皮', 'light', 12.8, 22.8, 4.8, 5, { onlyOver: 'body' }),
+        // 身子和坐姿一样壮（体型检查：坐姿的 95–105%）：肚子、屁股各一团，垂下来不缩水。
+        // 被拎起来时身子正对你，露出浅色肚皮（侧面姿势都不画肚皮，2026-11-11 用户定）
+        // 腿和身体同色，只有脚是深色
+        box('farHindLeg', '远侧后腿', 'body', 15, 28.5, 2, 5, 0),
+        box('nearHindLeg', '近侧后腿', 'body', 22, 28.5, 2, 5, 0),
+        ell('neck', '后颈', 'body', 19.5, 16.5, 6, 5),
+        ell('rump', '屁股', 'body', 21, 22.8, 9.2, 7.4),
+        ell('belly', '圆肚子', 'body', 15.5, 22.4, 10.6, 8.1),
+        ell('tummy', '浅色肚皮', 'light', 13, 23.4, 5.2, 5.2, { onlyOver: 'body' }),
         HEAD,
         cap('frontLeg', '前腿（垂在胸前）', 'body', 9.5, 19, 8.5, 22, 1.4, { edge: 'inner' }),
         ell('frontPawTip', '前爪尖', 'dark', 8.5, 22.4, 1.4, 0.9, { onlyOver: 'body' }),
-        box('hindPaws', '后爪', 'dark', 21, 30, 2, 2, 0, { onlyOver: 'body' }),
-        box('hindPawFar', '远侧后爪', 'dark', 15, 30, 2, 2, 0, { onlyOver: 'shade' }),
+        // 后脚只露最底下一行（腿被屁股挡住，深色不能渗到屁股上）
+        box('hindPaws', '后爪', 'dark', 22, 31, 2, 1, 0, { onlyOver: 'body' }),
+        box('hindPawFar', '远侧后爪', 'dark', 15, 31, 2, 1, 0, { onlyOver: 'body' }),
       ],
       marks: [],
     },

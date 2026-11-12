@@ -27,7 +27,120 @@
     "focus_end_heavy": "Long stretch. Go rest.",
     "stop_work_message": "Done for the day. Go rest.",
     "eye_reminder": "Look far away, rest your eyes.",
-    "hydration_reminder": "Take a sip, no rush."
+    "hydration_reminder": "Take a sip, no rush.",
+    "lines": {
+      "idle": [
+        "Chilling",
+        "Spacing out",
+        "Just sitting",
+        "Vibing",
+        "Zen capy",
+        "Unbothered"
+      ],
+      "working": [
+        "With you",
+        "Supervising",
+        "Desk duty",
+        "On the clock",
+        "Got your back",
+        "Co-working"
+      ],
+      "focus": [
+        "Staying quiet",
+        "Shh, focus",
+        "Zen mode",
+        "Hushed",
+        "Flow guard",
+        "Silent mode"
+      ],
+      "break": [
+        "Waiting",
+        "Napping",
+        "Taking five",
+        "Recharging",
+        "No rush",
+        "Idling"
+      ],
+      "focus_end_light": [
+        "Look up a moment, then carry on.",
+        "Nice work. Breathe a bit",
+        "One block done. Stretch?"
+      ],
+      "focus_end_heavy": [
+        "Long stretch. Go rest.",
+        "Brain's smoking. Take five",
+        "That ran long. Capy says: rest"
+      ],
+      "stop_work": [
+        "Clocking out. Rest up.",
+        "Off duty! Good work today",
+        "Shift's over. Bath time"
+      ],
+      "rest_fish": [
+        "Slacking off",
+        "Gone fishing",
+        "Any bites?",
+        "Literal slack",
+        "Bobber watch",
+        "Fish o'clock"
+      ],
+      "sunbathe": [
+        "Sunbathing",
+        "Shades on",
+        "Photosynthing",
+        "Soaking sun",
+        "Sun's out",
+        "Basking"
+      ],
+      "bath": [
+        "Soaking",
+        "Bubble bubble",
+        "Hot bath time",
+        "Spa mode",
+        "Steaming…",
+        "Pruning up"
+      ],
+      "bird": [
+        "Bird watching",
+        "A visitor!",
+        "Hi, birdie",
+        "Bird landing",
+        "Perch mode",
+        "Don't move"
+      ],
+      "wobble": [
+        "Wobbling",
+        "Yuzu wobble",
+        "Swaying",
+        "Balancing",
+        "Wiggle wiggle",
+        "Steady now"
+      ],
+      "nap": [
+        "Napping",
+        "Fell asleep",
+        "Zzz…",
+        "Recharging",
+        "Dreaming…",
+        "Snoozing"
+      ],
+      "drink": [
+        "Water time",
+        "Glug glug",
+        "Hydrating",
+        "Gulp gulp",
+        "Cheers!",
+        "Sip sip"
+      ],
+      "look_away": [
+        "Look far",
+        "Eye break",
+        "Gazing afar",
+        "Far away…",
+        "Rest eyes",
+        "Horizon time"
+      ]
+    }
   },
   "errors": {
     "work_invalid_transition": "You can't do that right now.",
@@ -279,7 +392,175 @@
     "jump_there": "Open",
     "got_it": "Got it",
     "reminder_eye": "Claude's on it. Look far away",
-    "reminder_water": "Claude's busy. Grab some water"
+    "reminder_water": "Claude's busy. Grab some water",
+    "lines": {
+      "think": [
+        "Ruminating…",
+        "Marinating…",
+        "Cogitating…",
+        "Munch-musing…",
+        "Cud-chewing…",
+        "Percolating…"
+      ],
+      "read": [
+        "Perusing…",
+        "Page-flipping…",
+        "Squinting…",
+        "Skimming…",
+        "Bookworming…",
+        "Speed-reading…"
+      ],
+      "search": [
+        "Ball-chasing…",
+        "Zooming…",
+        "Scampering…",
+        "Fetching…",
+        "Zoomies…",
+        "Hot pursuit…"
+      ],
+      "update": [
+        "Tweaking…",
+        "Finagling…",
+        "Fiddling…",
+        "Nitpicking…",
+        "Polishing…",
+        "Redlining…"
+      ],
+      "bash": [
+        "Snacking…",
+        "Munching…",
+        "Crunching…",
+        "Nom-nom-ing…",
+        "Chomping…",
+        "Snack break…"
+      ],
+      "delegate": [
+        "Bird courier…",
+        "Dispatching…",
+        "Delegating…",
+        "Outsourcing…",
+        "Bird errand…",
+        "Rallying help…"
+      ],
+      "write": [
+        "Scribbling…",
+        "Penning…",
+        "Drafting…",
+        "Typing away…",
+        "Composing…",
+        "Inkslinging…"
+      ],
+      "fetch": [
+        "Page-flipping…",
+        "Reading web…",
+        "Leafing pages…",
+        "Web-reading…",
+        "Browsing…",
+        "Perusing web…"
+      ],
+      "web_search": [
+        "Web chase…",
+        "Web zoomies…",
+        "Lost online…",
+        "Scampering…",
+        "Hunting…",
+        "Link-chasing…"
+      ],
+      "waiting": [
+        "Psst, you!",
+        "Waving~",
+        "Your call",
+        "Over here~",
+        "Paw wave!",
+        "You decide"
+      ],
+      "done": [
+        "All done!",
+        "Nailed it",
+        "Homework in",
+        "Ta-da!",
+        "Done & dusted",
+        "Hop hop!"
+      ],
+      "failed": [
+        "Ugh, error",
+        "Hit a snag",
+        "Error!",
+        "Huh??",
+        "Uh-oh…",
+        "Confused…"
+      ],
+      "reminder_eye": [
+        "Claude's on it. Look far away",
+        "Claude's busy. Gaze out a window",
+        "Let Claude grind. Rest your eyes",
+        "Claude watches the screen. You watch a tree",
+        "Claude's working late. Your eyes clock out"
+      ],
+      "reminder_water": [
+        "Claude's busy. Grab some water",
+        "Claude's working late. Get a drink",
+        "While Claude works: water time",
+        "Claude's got the code. You get water",
+        "Let Claude grind. Go glug glug"
+      ],
+      "think_dots": [
+        "Spinning…",
+        "Looping…",
+        "Whirring…",
+        "Orbiting…",
+        "Round we go…",
+        "Thinky dots…"
+      ],
+      "think_bulb": [
+        "Brewing…",
+        "Warming bulb…",
+        "Lightbulbing…",
+        "Ding! Idea…",
+        "Hatching…",
+        "Eureka-ing…"
+      ],
+      "paper": [
+        "Nibbling docs…",
+        "Paper snack…",
+        "Tasting docs…",
+        "Munching page…",
+        "Oops, ate it…",
+        "Chewing pages…"
+      ],
+      "rummage": [
+        "Rummaging…",
+        "Box-diving…",
+        "Spelunking…",
+        "Tossing stuff…",
+        "Excavating…",
+        "Bottoms up…"
+      ],
+      "button": [
+        "Hitting enter…",
+        "Red button!",
+        "Smash!",
+        "Booping…",
+        "Launching…",
+        "Pressing on…"
+      ],
+      "surf": [
+        "Shell-surfing…",
+        "Wheee…",
+        "Riding waves…",
+        "Cowabunga…",
+        "Shredding…",
+        "Gliding…"
+      ],
+      "fall": [
+        "Oops, crashed",
+        "Tripped up",
+        "Splat…",
+        "Faceplant!",
+        "Wipeout…",
+        "I'm okay!"
+      ]
+    }
   },
   "digest": {
     "headline": "While you were away: %@ %@",
