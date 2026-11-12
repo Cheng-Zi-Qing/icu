@@ -8,6 +8,7 @@ enum DesktopPetMenuAction: String, Equatable {
     case stopWork
     case showTodayReport
     case openWardrobe
+    case openBackpack
     case openSettings
     case connectClaude
     case disconnectClaude
@@ -30,6 +31,8 @@ enum DesktopPetMenuAction: String, Equatable {
             return TextCatalog.shared.text(.menuTodayReport)
         case .openWardrobe:
             return TextCatalog.shared.text(.menuOpenWardrobe)
+        case .openBackpack:
+            return TextCatalog.shared.text(.menuOpenBackpack)
         case .openSettings:
             return TextCatalog.shared.text(.menuOpenSettings)
         case .connectClaude:
@@ -48,14 +51,18 @@ struct DesktopPetMenuModel: Equatable {
     let state: ShellWorkState
     /// Claude Code 接上了没有；nil = 没法接（找不到 icu-hook），菜单里不出现
     let claudeConnection: Bool?
+    /// 掉落开着（`loot_enabled`）才有「背包」
+    let showsBackpack: Bool
 
-    init(state: ShellWorkState, claudeConnection: Bool? = nil) {
+    init(state: ShellWorkState, claudeConnection: Bool? = nil, showsBackpack: Bool = false) {
         self.state = state
         self.claudeConnection = claudeConnection
+        self.showsBackpack = showsBackpack
     }
 
     var sections: [[DesktopPetMenuAction]] {
-        let tools: [DesktopPetMenuAction] = [.showTodayReport, .openWardrobe, .openSettings] + claudeToggle
+        let backpack: [DesktopPetMenuAction] = showsBackpack ? [.openBackpack] : []
+        let tools: [DesktopPetMenuAction] = [.showTodayReport, .openWardrobe] + backpack + [.openSettings] + claudeToggle
         switch state {
         case .idle:
             return [[.startWork], tools, [.closeWindow, .quitApp]]

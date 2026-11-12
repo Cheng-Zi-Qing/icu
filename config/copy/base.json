@@ -16,7 +16,8 @@
     "today": "今天",
     "today_accessibility": "今天：喝水 %@，护眼 %@，工作 %@",
     "cups_count": "%d/%d 杯",
-    "eye_count": "%d 次"
+    "eye_count": "%d 次",
+    "open_backpack": "背包"
   },
   "pet": {
     "status_idle": "发呆中",
@@ -276,8 +277,8 @@
     "suits": "套装",
     "wearing": "穿着",
     "suit_locked": "缺件，还不能穿",
-    "locked_hint": "完成任务掉落",
-    "locked_accessibility": "还没拿到，完成提醒有机会掉落",
+    "locked_hint": "开宝箱掉落",
+    "locked_accessibility": "还没拿到，开宝箱有机会掉落",
     "slot": {
       "head": "头顶",
       "mouth": "嘴里",
@@ -607,5 +608,67 @@
       "生气了！",
       "哼，扭头"
     ]
+  },
+  "loot": {
+    "title": "背包",
+    "incubator": "孵化中",
+    "slot_empty": "空位",
+    "minutes_left": "还要 %d 分钟",
+    "queued": "排队 %d 个",
+    "shards": "碎片 %d/%d",
+    "codex": "图鉴 %d/%d",
+    "unknown": "？？？",
+    "count": "×%d",
+    "new": "新",
+    "hint": "完成提醒得宝箱，上班时慢慢孵",
+    "earned": "拿到一个%@，上班时慢慢孵",
+    "earned_gray": "收下一个%@，也是一种收藏",
+    "earned_black": "昨天辛苦了，留给你一个%@",
+    "shard": "今天宝箱拿满了，换成碎片 %d/%d",
+    "shard_exchanged": "碎片攒够了，换了一个木宝箱",
+    "hatched": "%@孵好了：%@",
+    "hatched_outfit": "宝箱里掉出一件装扮：%@！",
+    "chest": {
+      "wood": "木宝箱",
+      "iron": "铁宝箱",
+      "gold": "金宝箱",
+      "gray_box": "灰匣",
+      "black_box": "黑匣"
+    },
+    "tier": {
+      "black": "黑",
+      "gray": "灰",
+      "white": "白",
+      "blue": "蓝",
+      "purple": "紫"
+    },
+    "material": {
+      "dew": "露珠",
+      "warm_sip": "一口温水",
+      "tea_stem": "茶叶梗",
+      "ice_cube": "冰块",
+      "first_raindrop": "雨后的第一滴水",
+      "window_cloud": "窗外的云",
+      "slant_sunbeam": "一束斜阳",
+      "distant_bird": "远处的鸟影",
+      "fallen_leaf": "落叶",
+      "pebble": "小石子",
+      "shoelace": "鞋带",
+      "stair_echo": "楼梯的回声",
+      "draft_wind": "一阵穿堂风",
+      "quiet_spell": "一段安静",
+      "pendulum": "钟摆",
+      "spark": "灵感火星",
+      "stardust": "星屑",
+      "dream_shard": "梦的碎片",
+      "cold_water": "冷掉的水",
+      "unblinked_eye": "没眨的眼",
+      "stiff_shoulder": "僵硬的肩膀",
+      "snoozed_alarm": "又推迟的闹钟",
+      "midnight_moon": "熬夜的月亮",
+      "small_hours_glow": "凌晨的屏幕光",
+      "anxious_yarn": "焦虑的线团",
+      "unread_dot": "未读的红点"
+    }
   }
 }

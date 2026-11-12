@@ -44,6 +44,21 @@ final class WardrobeCoordinator {
         controller.present()
     }
 
+    var unownedOutfits: [OutfitCandidate] { state.unownedOutfits(in: catalog) }
+
+    /// 宝箱开出一件装扮：放进衣柜并保存，开着的衣柜窗口跟着刷新。存不上返回 false（这件就当没拿到）
+    func grant(_ itemID: String) -> Bool {
+        guard let next = state.granting(itemID, in: catalog) else { return false }
+        do {
+            try apply(next)
+            windowController?.refresh(state: next)
+            return true
+        } catch {
+            NSLog("[Wardrobe] failed to save a dropped outfit \(itemID): \(error.localizedDescription)")
+            return false
+        }
+    }
+
     private func apply(_ next: WardrobeState) throws {
         try store.save(next)
         let outfitChanged = next.outfitID(in: catalog) != outfitID
