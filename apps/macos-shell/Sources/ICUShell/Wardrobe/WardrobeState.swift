@@ -26,6 +26,17 @@ struct WardrobeState: Equatable {
         return WardrobeState(owned: owned, equipped: equipped.merging([item.slot: item.id]) { _, new in new })
     }
 
+    /// 拿到一件新装扮（宝箱里开出来的）；不认识的返回 nil，已经有了原样返回
+    func granting(_ itemID: String, in catalog: WardrobeCatalog) -> WardrobeState? {
+        guard catalog.item(itemID) != nil else { return nil }
+        return WardrobeState(owned: owned.union([itemID]), equipped: equipped)
+    }
+
+    /// 还没拥有、可以从宝箱里掉的装扮
+    func unownedOutfits(in catalog: WardrobeCatalog) -> [OutfitCandidate] {
+        catalog.items.filter { !owned.contains($0.id) }.map { OutfitCandidate(id: $0.id, isRare: $0.rarity == .rare) }
+    }
+
     func isWearing(_ itemID: String) -> Bool {
         equipped.values.contains(itemID)
     }

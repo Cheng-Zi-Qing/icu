@@ -16,6 +16,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var agentMonitor: AgentStatusMonitor?
     private var claudeInstaller: ClaudeHookInstaller?
     private var healthTracker: HealthSessionTracker?
+    private var loot: LootCoordinator?
+    private var backpackWindow: BackpackWindowController?
     private let fullscreenMonitor = FullscreenMonitor()
     private var usageRecorder: UsageRecorder?
     private var dutyClock: Timer?
@@ -108,6 +110,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             configureClaudeCode(paths: paths)
             configureFullscreenQuiet()
             configureUsageRecording(paths: paths)
+            configureLoot(paths: paths, metrics: healthMetricsStore, repoRootURL: assetLocator.repoRootURL)
             configureDutyClock()
             petWindowController?.showWindow(nil)
         } catch {
@@ -148,7 +151,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        statusMenuController?.toggle(from: button, model: StatusItemMenuModel(claudeConnection: claudeConnection()), summary: todaySummary())
+        statusMenuController?.toggle(from: button, model: StatusItemMenuModel(claudeConnection: claudeConnection(), showsBackpack: loot != nil), summary: todaySummary())
     }
 
     @objc private func quit() {
@@ -177,6 +180,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             presentTodayReport()
         case .openWardrobe:
             wardrobe?.open()
+        case .openBackpack:
+            openBackpack()
         case .openSettings:
             openSettings()
         case .connectClaude:
@@ -204,7 +209,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 MainActor.assumeIsolated { self?.suspendDuty() }
             },
             center.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.healthTracker?.resume(at: .now) }
+                MainActor.assumeIsolated {
+                    self?.healthTracker?.resume(at: .now)
+                    self?.loot?.resetClock(at: .now)
+                }
             },
         ]
     }
@@ -215,6 +223,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         } catch {
             NSLog("[ICUShell] failed to record work time: \(error.localizedDescription)")
         }
+        loot?.tick(isOnDuty: (workSessionController?.state ?? .idle) != .idle, at: .now)
     }
 
     private func suspendDuty() {
@@ -223,6 +232,77 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         } catch {
             NSLog("[ICUShell] failed to record work time before sleep: \(error.localizedDescription)")
         }
+        loot?.tick(isOnDuty: (workSessionController?.state ?? .idle) != .idle, at: .now)
+        loot?.resetClock(at: nil)
+    }
+
+    // MARK: - 宝箱掉落
+
+    /// 完成提醒、专注、离开屏幕得宝箱，上班时孵化（PRD 2.1 Phase 1）。`loot_enabled` 关掉就整个不接
+    private func configureLoot(paths: AppPaths, metrics: HealthMetricsStore, repoRootURL: URL?) {
+        guard settingsStore?.loadLootEnabled() ?? true else {
+            NSLog("[ICUShell] loot is turned off in settings")
+            return
+        }
+        let config = LootCoordinator.loadConfig(directory: repoRootURL?.appendingPathComponent("config/loot", isDirectory: true))
+        let hooks = LootCoordinator.Hooks(
+            daySummary: { date in
+                do {
+                    return try metrics.daySummary(for: date)
+                } catch {
+                    NSLog("[ICUShell] loot could not read the day's health summary: \(error.localizedDescription)")
+                    return nil
+                }
+            },
+            goals: { [weak self] in
+                let profile = self?.settingsStore?.loadHealthProfile() ?? .default
+                return (HydrationPlan(profile: profile).cups, profile.workHours)
+            },
+            unownedOutfits: { [weak self] in self?.wardrobe?.unownedOutfits ?? [] },
+            grantOutfit: { [weak self] id in self?.wardrobe?.grant(id) ?? false },
+            canAnnounce: { [weak self] in self?.petWindowController?.canShowLootNotice ?? false },
+            announce: { [weak self] text in self?.announceLoot(text) }
+        )
+        let loot = LootCoordinator(config: config, store: LootStore(appPaths: paths), hooks: hooks)
+        loot.onChange = { [weak self] _ in self?.refreshBackpack() }
+        healthTracker?.onActivity = { [weak loot] activity in loot?.handle(activity, at: .now) }
+        petWindowController?.showsBackpack = true
+        petWindowController?.onOpenBackpackRequested = { [weak self] in self?.openBackpack() }
+        // 起个头：结算上次上班那天（要不要给黑匣），并开始计孵化时间
+        loot.tick(isOnDuty: false, at: .now)
+        self.loot = loot
+    }
+
+    /// 隔几秒再说：刚完成提醒、刚结束专注时桌宠自己有话（专注小结等），别被宝箱的话盖掉。
+    /// 到时候不方便说话（进了专注、全屏）就不说了，背包里照样看得到
+    private func announceLoot(_ text: String) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.lootNoticeDelay) { [weak self] in
+            MainActor.assumeIsolated {
+                guard let pet = self?.petWindowController, pet.canShowLootNotice else { return }
+                pet.showMessage(text, duration: 4)
+            }
+        }
+    }
+
+    private static let lootNoticeDelay: TimeInterval = 3.5
+
+    private func openBackpack() {
+        guard let loot else { return }
+        let content = BackpackContent(state: loot.state, config: loot.config)
+        if let backpackWindow {
+            backpackWindow.update(content: content, decoration: wardrobe?.decoration)
+            backpackWindow.present()
+            return
+        }
+        let controller = BackpackWindowController(content: content, decoration: wardrobe?.decoration)
+        controller.onClose = { [weak self] in self?.loot?.markAllSeen() }
+        backpackWindow = controller
+        controller.present()
+    }
+
+    private func refreshBackpack() {
+        guard let loot, let backpackWindow, backpackWindow.isVisible else { return }
+        backpackWindow.update(content: BackpackContent(state: loot.state, config: loot.config), decoration: wardrobe?.decoration)
     }
 
     // MARK: - Claude Code

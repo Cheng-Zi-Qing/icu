@@ -22,6 +22,17 @@ swiftc \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Health/HealthMetricsModels.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Health/HealthMetricsStore.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Health/WorkShift.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Loot/LootModels.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Loot/LootRandom.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Loot/LootConfig.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Loot/LootState.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Loot/LootEngine.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Loot/LootRoller.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Loot/LootDayVerdict.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Loot/LootStore.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Loot/LootCoordinator.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Loot/LootText.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Loot/BackpackContent.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Health/HealthSessionTracker.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Health/TodayAdvice.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Health/TodayScore.swift" \
@@ -70,6 +81,7 @@ swiftc \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/PetPeekScriptManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/ReminderCardContentManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/WardrobeManualTests.swift" \
+  "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/LootManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/SettingsFormManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/WorkSessionManualTests.swift" \
   "$ROOT_DIR/apps/macos-shell/Tests/ManualRuntime/MenuModelManualTests.swift" \
@@ -163,6 +175,13 @@ swiftc -framework AppKit \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/ReminderQuips.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Wardrobe/WardrobeCatalog.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Wardrobe/WardrobeState.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Loot/LootModels.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Loot/LootConfig.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Loot/LootState.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Loot/LootText.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Loot/BackpackContent.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Loot/BackpackView.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Loot/BackpackWindowController.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Wardrobe/WardrobeStore.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/ReminderCardContent.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Reminder/ReminderStageRules.swift" \

@@ -64,6 +64,12 @@ final class WardrobeWindowController: NSWindowController, NSWindowDelegate {
         }
     }
 
+    /// 衣柜外面改了状态（宝箱掉了装扮）：窗口里跟着换
+    func refresh(state next: WardrobeState) {
+        state = next
+        wardrobeView.update(state: next)
+    }
+
     @objc private func closeWardrobe() {
         window?.performClose(nil)
     }

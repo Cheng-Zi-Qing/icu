@@ -12,6 +12,7 @@ enum UserVisibleCopyKey: String, CaseIterable {
     case menuHidePet = "menu.hide_pet"
     case menuOpenSettings = "menu.open_settings"
     case menuOpenWardrobe = "menu.open_wardrobe"
+    case menuOpenBackpack = "menu.open_backpack"
     case menuConnectClaude = "menu.connect_claude"
     case menuDisconnectClaude = "menu.disconnect_claude"
 }
@@ -41,6 +42,8 @@ extension UserVisibleCopyKey {
             return "设置…"
         case .menuOpenWardrobe:
             return "衣柜"
+        case .menuOpenBackpack:
+            return "背包"
         case .menuConnectClaude:
             return "接入 Claude Code"
         case .menuDisconnectClaude:

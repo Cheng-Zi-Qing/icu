@@ -1,5 +1,13 @@
 import Foundation
 
+/// 记账时顺带发出的事，给掉落用（`LootCoordinator`）
+enum HealthActivity: Equatable {
+    /// 提醒有了结果；`snoozeCount` = 这条提醒之前已经推迟过几次
+    case reminderOutcome(id: UUID, type: HealthReminderType, outcome: HealthReminderOutcome, snoozeCount: Int)
+    /// 一段专注 / 休息结束了，`seconds` 是这段实际算进上班的时长（睡着的不算）
+    case segmentFinished(ShellWorkState, seconds: Int)
+}
+
 /// 把上班 / 专注 / 休息的时长按天记到本机。
 ///
 /// 时长不是等到切状态才入账：`checkpoint` 会把「到现在为止」的这一段先结掉（App 每分钟调一次，
@@ -10,6 +18,10 @@ final class HealthSessionTracker {
     private var activeState: ShellWorkState?
     private var activeStateStartedAt: Date?
     private var isSuspended = false
+    /// 这一段（从进入当前状态起）已经入账了多少秒
+    private var segmentSeconds: TimeInterval = 0
+    /// 记好账以后通知一声；记账失败（抛错）时不发
+    var onActivity: ((HealthActivity) -> Void)?
 
     init(store: HealthMetricsStore) {
         self.store = store
@@ -21,6 +33,8 @@ final class HealthSessionTracker {
     func recordStateTransition(from oldState: ShellWorkState, to newState: ShellWorkState, at date: Date) throws {
         let settledState = activeState ?? oldState
         try settle(settledState, upTo: date)
+        let finishedSegment = Int(segmentSeconds)
+        segmentSeconds = 0
 
         if settledState == .idle, newState != .idle {
             try store.recordClockIn(at: date)
@@ -44,6 +58,10 @@ final class HealthSessionTracker {
         } else {
             activeState = newState
             activeStateStartedAt = date
+        }
+
+        if settledState == .focus || settledState == .breakState, settledState != newState {
+            onActivity?(.segmentFinished(settledState, seconds: finishedSegment))
         }
     }
 
@@ -98,6 +116,7 @@ final class HealthSessionTracker {
         at date: Date
     ) throws {
         try store.recordReminderOutcome(id: payload.id, outcome: outcome, at: date)
+        onActivity?(.reminderOutcome(id: payload.id, type: payload.type, outcome: outcome, snoozeCount: payload.snoozeCount))
     }
 
     /// 今天的数，含正在进行的这一段
@@ -133,6 +152,7 @@ final class HealthSessionTracker {
             return 0
         }
         try splitShiftAtMidnight(from: startedAt, to: startedAt.addingTimeInterval(duration))
+        segmentSeconds += duration
         return duration
     }
 

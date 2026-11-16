@@ -13,5 +13,6 @@
     "body_weight": 90,
     "cup_volume": 350,
     "work_hours": 8
-  }
+  },
+  "loot_enabled": true
 }

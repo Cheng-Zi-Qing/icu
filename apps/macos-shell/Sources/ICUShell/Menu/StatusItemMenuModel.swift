@@ -4,6 +4,7 @@ enum StatusItemMenuAction: String, Equatable {
     case showPet
     case showTodayReport
     case openWardrobe
+    case openBackpack
     case openSettings
     case connectClaude
     case disconnectClaude
@@ -17,6 +18,8 @@ enum StatusItemMenuAction: String, Equatable {
             return TextCatalog.shared.text(.menuTodayReport)
         case .openWardrobe:
             return TextCatalog.shared.text(.menuOpenWardrobe)
+        case .openBackpack:
+            return TextCatalog.shared.text(.menuOpenBackpack)
         case .openSettings:
             return TextCatalog.shared.text(.menuOpenSettings)
         case .connectClaude:
@@ -32,13 +35,17 @@ enum StatusItemMenuAction: String, Equatable {
 struct StatusItemMenuModel: Equatable {
     /// Claude Code 接上了没有；nil = 没法接，菜单里不出现
     let claudeConnection: Bool?
+    /// 掉落开着（`loot_enabled`）才有「背包」
+    let showsBackpack: Bool
 
-    init(claudeConnection: Bool? = nil) {
+    init(claudeConnection: Bool? = nil, showsBackpack: Bool = false) {
         self.claudeConnection = claudeConnection
+        self.showsBackpack = showsBackpack
     }
 
     var sections: [[StatusItemMenuAction]] {
         let toggle: [StatusItemMenuAction] = claudeConnection.map { [$0 ? .disconnectClaude : .connectClaude] } ?? []
-        return [[.showPet], [.showTodayReport, .openWardrobe, .openSettings] + toggle, [.quitApp]]
+        let backpack: [StatusItemMenuAction] = showsBackpack ? [.openBackpack] : []
+        return [[.showPet], [.showTodayReport, .openWardrobe] + backpack + [.openSettings] + toggle, [.quitApp]]
     }
 }

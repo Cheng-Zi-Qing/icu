@@ -1,0 +1,36 @@
+{
+  "materials": [
+    { "id": "dew", "tier": "white", "task": "hydration", "attributes": ["water"], "name": "露珠" },
+    { "id": "warm_sip", "tier": "white", "task": "hydration", "attributes": ["water", "warmth"], "name": "一口温水" },
+    { "id": "tea_stem", "tier": "blue", "task": "hydration", "attributes": ["water", "warmth"], "name": "茶叶梗" },
+    { "id": "ice_cube", "tier": "blue", "task": "hydration", "attributes": ["water", "cold"], "name": "冰块" },
+    { "id": "first_raindrop", "tier": "purple", "task": "hydration", "attributes": ["water", "sky"], "name": "雨后的第一滴水" },
+
+    { "id": "window_cloud", "tier": "white", "task": "eye_care", "attributes": ["sky"], "name": "窗外的云" },
+    { "id": "slant_sunbeam", "tier": "blue", "task": "eye_care", "attributes": ["light", "warmth"], "name": "一束斜阳" },
+    { "id": "distant_bird", "tier": "purple", "task": "eye_care", "attributes": ["distance", "sky"], "name": "远处的鸟影" },
+
+    { "id": "fallen_leaf", "tier": "white", "task": "stand_up", "attributes": ["wind"], "name": "落叶" },
+    { "id": "pebble", "tier": "white", "task": "stand_up", "attributes": ["earth"], "name": "小石子" },
+    { "id": "shoelace", "tier": "blue", "task": "stand_up", "attributes": ["earth"], "name": "鞋带" },
+    { "id": "stair_echo", "tier": "blue", "task": "stand_up", "attributes": ["earth", "wind"], "name": "楼梯的回声" },
+    { "id": "draft_wind", "tier": "purple", "task": "stand_up", "attributes": ["wind"], "name": "一阵穿堂风" },
+
+    { "id": "quiet_spell", "tier": "white", "task": "focus", "attributes": ["time"], "name": "一段安静" },
+    { "id": "pendulum", "tier": "blue", "task": "focus", "attributes": ["time"], "name": "钟摆" },
+    { "id": "spark", "tier": "purple", "task": "focus", "attributes": ["heart", "light"], "name": "灵感火星" },
+
+    { "id": "stardust", "tier": "blue", "task": "full_day", "attributes": ["star"], "name": "星屑" },
+    { "id": "dream_shard", "tier": "purple", "task": "full_day", "attributes": ["dream"], "name": "梦的碎片" },
+
+    { "id": "cold_water", "tier": "gray", "task": "slack", "attributes": ["cold"], "name": "冷掉的水" },
+    { "id": "unblinked_eye", "tier": "gray", "task": "slack", "attributes": ["stiff"], "name": "没眨的眼" },
+    { "id": "stiff_shoulder", "tier": "gray", "task": "slack", "attributes": ["stiff"], "name": "僵硬的肩膀" },
+    { "id": "snoozed_alarm", "tier": "gray", "task": "slack", "attributes": ["procrastination"], "name": "又推迟的闹钟" },
+
+    { "id": "midnight_moon", "tier": "black", "task": "rough_day", "attributes": ["night"], "name": "熬夜的月亮" },
+    { "id": "small_hours_glow", "tier": "black", "task": "rough_day", "attributes": ["night", "fatigue"], "name": "凌晨的屏幕光" },
+    { "id": "anxious_yarn", "tier": "black", "task": "rough_day", "attributes": ["anxiety"], "name": "焦虑的线团" },
+    { "id": "unread_dot", "tier": "black", "task": "rough_day", "attributes": ["anxiety"], "name": "未读的红点" }
+  ]
+}

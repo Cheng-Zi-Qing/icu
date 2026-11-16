@@ -102,7 +102,7 @@ func testWardrobeWindowOpensOnTheHeadPageWearingTheOrange() throws {
     try expect(lookOf("straw_hat", controller) == .owned, "the straw hat is owned but not worn")
     let locked = view.cells.filter { $0.look == .locked }
     try expect(locked.count == 5 && locked.allSatisfy { !$0.isEnabled }, "drops not yet found are locked")
-    try expect(locked.allSatisfy { $0.accessibilityLabel() == "还没拿到，完成提醒有机会掉落" }, "locked cells never say what the item is")
+    try expect(locked.allSatisfy { $0.accessibilityLabel() == "还没拿到，开宝箱有机会掉落" }, "locked cells never say what the item is")
 }
 
 func testWardrobeWindowPutsOnAnOwnedItemAndSavesRightAway() throws {
@@ -222,7 +222,7 @@ func testWardrobeReloadsItsCopyWhenTheLanguageChanges() throws {
     try expect(controller.view.suitButtons.first?.title == "Default", "suit buttons are rebuilt with the new names")
     let locked = controller.view.cells.first { $0.look == .locked }
     try expect(
-        locked?.accessibilityLabel() == "Not unlocked yet. Finishing reminders can drop it",
+        locked?.accessibilityLabel() == "Not unlocked yet. Chests can drop it",
         "the locked hint follows too (got \(String(describing: locked?.accessibilityLabel())))"
     )
 }
