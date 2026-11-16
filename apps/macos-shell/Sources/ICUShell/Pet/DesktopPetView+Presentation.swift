@@ -178,7 +178,11 @@ extension DesktopPetView {
         })
     }
 
+    /// 落地那句说多久：落地帧一放完字就换回去会一闪而过，再留一会儿
+    static let landedLineDuration: TimeInterval = 1.6
+
     func applyDragPose(_ pose: DragPose) {
+        updateDragMoment(for: pose)
         if let image = poseSprites?.image(for: isFacingRight ? pose.mirrored : pose) {
             isShowingDragPose = true
             present(image)
@@ -205,5 +209,33 @@ extension DesktopPetView {
     func hideLift() {
         liftWindow?.hide()
         imageView?.alphaValue = 1
+    }
+}
+
+// MARK: - 拖拽时状态条说什么
+
+extension DesktopPetView {
+    /// 拎着说拎着的话，落地说「完美落地」这类，落地帧放完后再留 `landedLineDuration` 才回到平时那句
+    func updateDragMoment(for pose: DragPose) {
+        let next = PetDragMoment(pose: pose)
+        if next == nil, dragMoment == .landed {
+            guard dragMomentLinger == nil else { return }
+            let linger = DispatchWorkItem { [weak self] in
+                self?.dragMomentLinger = nil
+                self?.setDragMoment(nil)
+            }
+            dragMomentLinger = linger
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.landedLineDuration, execute: linger)
+            return
+        }
+        dragMomentLinger?.cancel()
+        dragMomentLinger = nil
+        setDragMoment(next)
+    }
+
+    private func setDragMoment(_ moment: PetDragMoment?) {
+        guard moment != dragMoment else { return }
+        dragMoment = moment
+        onDragMomentChanged?(moment)
     }
 }

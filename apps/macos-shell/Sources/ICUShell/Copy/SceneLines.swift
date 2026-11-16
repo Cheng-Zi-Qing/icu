@@ -16,12 +16,14 @@ enum SceneLinePool: String, CaseIterable {
     // 健康提醒挂着时跟着做的动作（捧杯喝水、望远处）
     case drink
     case lookAway = "look_away"
+    // 被拎起来、甩晕、落地（见 PetDragMoment）
+    case held, dizzy, landed
 
     var key: String {
         switch self {
         case .thinkDots, .thinkBulb, .paper, .rummage, .button, .surf, .fall:
             return "agent.lines.\(rawValue)"
-        case .restFish, .sunbathe, .bath, .bird, .wobble, .nap, .drink, .lookAway:
+        case .restFish, .sunbathe, .bath, .bird, .wobble, .nap, .drink, .lookAway, .held, .dizzy, .landed:
             return "pet.lines.\(rawValue)"
         }
     }
@@ -47,7 +49,7 @@ enum SceneLinePool: String, CaseIterable {
     private var isSceneVariant: Bool {
         switch self {
         case .thinkDots, .thinkBulb, .paper, .rummage, .button, .surf, .fall, .restFish: return true
-        case .sunbathe, .bath, .bird, .wobble, .nap, .drink, .lookAway: return false
+        case .sunbathe, .bath, .bird, .wobble, .nap, .drink, .lookAway, .held, .dizzy, .landed: return false
         }
     }
 
@@ -59,6 +61,17 @@ enum SceneLinePool: String, CaseIterable {
     /// 正在演的那种演法该说的一句；不是另外画的、或者这组还没写，就是 nil（照常说原来那句）
     static func line(variant name: String?, catalog: TextCatalog = .shared) -> String? {
         name.flatMap { SceneLinePool(variant: $0) }.flatMap { $0.line(catalog: catalog) }
+    }
+
+    /// 拖拽这一下该说的一句：拎着、甩晕、落地各一组
+    static func line(drag moment: PetDragMoment?, catalog: TextCatalog = .shared) -> String? {
+        moment.flatMap { moment -> String? in
+            switch moment {
+            case .held: return SceneLinePool.held.line(catalog: catalog)
+            case .dizzy: return SceneLinePool.dizzy.line(catalog: catalog)
+            case .landed: return SceneLinePool.landed.line(catalog: catalog)
+            }
+        }
     }
 
     /// 正在放的待机小动作该说的一句；没在放、或者是被戳的反应，就是 nil

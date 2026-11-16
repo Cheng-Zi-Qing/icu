@@ -100,3 +100,22 @@ func testSceneLinesSayWhatIsOnScreen() throws {
     try expect(SceneLinePool.line(reminder: .hydration, catalog: reminders) == "咕咚咕咚", "a water reminder says so on the chip")
     try expect(SceneLinePool.line(reminder: .eyeCare, catalog: reminders) == "看看远处", "an eye reminder says so on the chip")
 }
+
+/// 拖拽时状态条说眼前的事：拎着说拎着的话，晕了说晕，落地才说「完美落地」
+func testDragMomentsHaveTheirOwnLines() throws {
+    try expect(PetDragMoment(pose: .none) == nil, "not dragging: nothing to say")
+    try expect(PetDragMoment(pose: .hold(tilt: -2)) == .held && PetDragMoment(pose: .hold(tilt: 1)) == .held, "every lean of the hold is being held")
+    try expect(PetDragMoment(pose: .dizzy(tilt: 0, twinkle: 1)) == .dizzy, "shaken in the air is dizzy")
+    try expect(PetDragMoment(pose: .dizzyGrounded(twinkle: 0)) == .dizzy, "landing while dizzy is still dizzy, not a perfect landing")
+    try expect(PetDragMoment(pose: .landing(frame: 0)) == .landed && PetDragMoment(pose: .landing(frame: 1)) == .landed, "landing frames are the landing")
+
+    let catalog = playfulCatalog(["pet.lines.held.0": "放我下来～", "pet.lines.dizzy.0": "晕乎乎…", "pet.lines.landed.0": "完美落地"])
+    try expect(SceneLinePool.line(drag: .held, catalog: catalog) == "放我下来～", "held says held")
+    try expect(SceneLinePool.line(drag: .dizzy, catalog: catalog) == "晕乎乎…", "dizzy says dizzy")
+    try expect(SceneLinePool.line(drag: .landed, catalog: catalog) == "完美落地", "landing says landing")
+    try expect(SceneLinePool.line(drag: nil, catalog: catalog) == nil, "not dragging keeps the usual line")
+
+    let chinese = try repoCatalog(language: .chinese)
+    try expect(chinese.texts(SceneLinePool.landed.key).contains("完美落地"), "完美落地 belongs to the landing")
+    try expect(!chinese.texts(AgentLinePool.done.key).contains("完美落地"), "a finished Claude task no longer says 完美落地 (it reads like a landing while held)")
+}

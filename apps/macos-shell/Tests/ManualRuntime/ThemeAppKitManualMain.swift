@@ -50,6 +50,7 @@ struct ThemeAppKitManualMain {
             try testPetLiftRasterCachesFramesAndPreservesTheLastValidImage()
             try testDragPoseMirrorsItsLeanWhenThePetFacesRight()
             try testDesktopPetViewHangsTheLiftedPetInABiggerWindow()
+            try testDesktopPetViewReportsWhatTheDragIsDoing()
             try testDesktopPetViewStaysDizzyOnTheGroundWhenReleasedWhileSeeingStars()
             try testDesktopPetViewLandsNormallyWhenTheStarsAlreadyBurnedOut()
             try testPetStatusChipShowsTheAgentStateAndFallsBack()

@@ -683,3 +683,34 @@ func testPixelSpriteHangingKeepsTheCurveOfTheBack() throws {
                    "the belly still bulges past the neck, just slimmer at \(stretch) (\(widest(hung)) vs \(widest(drop)))")
     }
 }
+
+/// 状态条跟着拖拽走：拎起来就换成拎着的话，落地换成落地的话，落地帧放完还留一会儿才回到平时那句
+func testDesktopPetViewReportsWhatTheDragIsDoing() throws {
+    let (view, window) = try makeLiftablePet()
+    defer { window.close() }
+    var reported: [PetDragMoment?] = []
+    view.onDragMomentChanged = { reported.append($0) }
+
+    view.applyDragPose(.hold(tilt: 0))
+    view.applyDragPose(.hold(tilt: 1))
+    try expect(view.dragMoment == .held && reported == [.held], "lifting reports once that it is held, leaning does not re-report (\(reported))")
+
+    view.applyDragPose(.landing(frame: 0))
+    view.applyDragPose(.landing(frame: 1))
+    try expect(view.dragMoment == .landed && reported == [.held, .landed], "touching down reports the landing (\(reported))")
+
+    view.applyDragPose(.none)
+    try expect(view.dragMoment == .landed, "the landing line stays a moment after the landing frames end")
+    let deadline = Date(timeIntervalSinceNow: DesktopPetView.landedLineDuration + 1)
+    while view.dragMoment != nil && Date() < deadline {
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
+    }
+    try expect(view.dragMoment == nil && reported == [.held, .landed, nil], "then the chip goes back to its usual line (\(reported))")
+
+    // 落地那句还没说完又被拎起来：马上换回拎着的话，旧的计时不会把它清掉
+    view.applyDragPose(.landing(frame: 0))
+    view.applyDragPose(.none)
+    view.applyDragPose(.hold(tilt: 0))
+    RunLoop.main.run(until: Date(timeIntervalSinceNow: DesktopPetView.landedLineDuration + 0.2))
+    try expect(view.dragMoment == .held, "a new lift cancels the pending reset of the landing line")
+}

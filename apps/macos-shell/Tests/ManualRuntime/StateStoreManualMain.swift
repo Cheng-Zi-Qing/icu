@@ -104,6 +104,7 @@ struct StateStoreManualMain {
             try testPlayfulLinesFollowALanguageSwitch()
             try testEveryAlternativeSceneAndIdleActHasItsOwnLines()
             try testSceneLinesSayWhatIsOnScreen()
+            try testDragMomentsHaveTheirOwnLines()
             try testPlayfulPoolsExistInBothLanguages()
             try testReminderQuipsAreVariedAndShortEnoughForTheCard()
             try testReminderCardContentSaysWhatTheMainButtonDoes()

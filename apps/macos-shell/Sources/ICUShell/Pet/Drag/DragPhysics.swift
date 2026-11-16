@@ -66,6 +66,26 @@ enum DragPose: Equatable {
     case landing(frame: Int)
 }
 
+/// 拖拽这一下桌宠在经历什么：状态条说对应那组话（见 SceneLinePool），拎着不会还挂着「干完啦」之类的话
+enum PetDragMoment: Equatable {
+    /// 被拎在半空
+    case held
+    /// 被甩晕了（拎着晕、或者晕着落了地）
+    case dizzy
+    /// 稳稳落地
+    case landed
+
+    /// 这个姿势属于哪一段；没在拖拽（`.none`）时为 nil，落地那句之后留多久由视图决定
+    init?(pose: DragPose) {
+        switch pose {
+        case .none: return nil
+        case .hold: self = .held
+        case .dizzy, .dizzyGrounded: self = .dizzy
+        case .landing: self = .landed
+        }
+    }
+}
+
 /// 每帧的渲染输出
 struct DragOutput: Equatable {
     var pose: DragPose
