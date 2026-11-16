@@ -23,6 +23,12 @@ func testPeekHeadTurnIsARareEasterEgg() throws {
     try expect(glance.contains(.blink), "blink between glances")
     let birds: [PetPeekFrame] = [.birdFlyIn, .birdFlyPast, .birdFlyOut]
     try expect(glance.filter { birds.contains($0) } == birds, "the bird flies in, past and out in order")
+    // 先飞过去，再转头找：小鸟飞走以后才左右张望，第一下看向它飞走的那边（屏幕边）
+    guard let gone = glance.firstIndex(of: .birdFlyOut) else { throw TestFailure(message: "the bird flies out") }
+    try expect(!glance[..<gone].contains(.lookLeft) && !glance[..<gone].contains(.lookRight), "it only searches after the bird has gone")
+    let afterBird = glance[(gone + 1)...].filter { $0 == .lookLeft || $0 == .lookRight }
+    try expect(afterBird.first == .lookRight, "it first turns toward the edge the bird flew past")
+    try expect(afterBird.contains(.lookLeft), "then looks the other way for it")
 }
 
 func testPeekPlaybackTurnsOnlyWhenTheRollHitsAtTheEndOfALoop() throws {

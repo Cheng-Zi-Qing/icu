@@ -5,7 +5,7 @@ import { mkdtempSync, readFileSync, existsSync, writeFileSync, rmSync } from 'no
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { DEFAULT_MODEL, PALETTE } from './model.mjs';
-import { allFrames, birdVisitOptions, napOptions, pettedOptions, renderPose, resolvePose, yuzuWobbleOptions } from './render.mjs';
+import { EDGE_BIRD_FLYBY, allFrames, birdVisitOptions, napOptions, pettedOptions, renderPose, resolvePose, yuzuWobbleOptions } from './render.mjs';
 import { Grid } from './raster.mjs';
 import { renderFrontPeek, renderFrontUpright } from './front-peek.mjs';
 import { EYE_LEFT } from './front-head.mjs';
@@ -311,69 +311,78 @@ test('edge frames include frontal glances and a flyby, keeping the legacy turn p
   assert.deepEqual(names, edgeNames.map((name) => `edge/${name}`));
 });
 
-test('front peek looks move one pixel horizontally on screen, never vertically or with the paws', () => {
+const birdPixels = (grid) => grid.cells.flatMap((ink, j) => ['bird', 'birdWing', 'star'].includes(ink)
+  ? [[j % grid.width, Math.floor(j / grid.width), ink]] : []);
+
+test('front peek head turn: look moves the whole head one column, gaze turns the face, paws and outline stay', () => {
   for (const headwear of ['orange', 'straw_hat']) {
     const rest = renderFrontPeek({ headwear });
+    const up = renderFrontPeek({ headwear, gaze: -1 });
+    const down = renderFrontPeek({ headwear, gaze: 1 });
+    // 转脸只动轮廓里面的五官，脑袋外形（哪些格子有颜色）不变
+    const shape = (grid) => grid.cells.map((ink) => ink !== 'clear');
+    assert.deepEqual(shape(up), shape(rest), `${headwear}: turning the face keeps the head outline`);
+    assert.notDeepEqual(up.cells, rest.cells, `${headwear}: turning the face is visible`);
+    // 眼睛高光：往上看比往下看高两行（各挪一格），左右不动
+    const whites = (grid) => grid.cells.flatMap((ink, j) => ink === 'white' ? [[j % 32, Math.floor(j / 32)]] : []);
+    // 头饰上的高光不算，只看眼睛里的
+    const restWhites = new Set(whites(rest).map(String));
+    const eyeWhites = (grid) => whites(grid).filter((point) => !restWhites.has(String(point)));
+    assert.equal(eyeWhites(up).length, 2, `${headwear}: both watching eyes are open`);
+    assert.deepEqual(eyeWhites(up), eyeWhites(down).map(([x, y]) => [x, y - 2]), `${headwear}: gaze -1 turns the face up on screen`);
     for (const look of [-1, 1]) {
-      const glance = renderFrontPeek({ headwear, look });
-      assert.notDeepEqual(glance.cells, rest.cells, 'a glance is visible');
-      for (let y = 0; y < 32; y += 1) {
-        for (let x = 0; x < 32; x += 1) {
-          if (rest.tagAt(x, y) === 'paw') {
-            assert.equal(glance.get(x, y), rest.get(x, y), `paw stays at ${x},${y}`);
-            assert.equal(glance.tagAt(x, y), 'paw');
-          }
+      const glance = renderFrontPeek({ headwear, look, gaze: -1 });
+      for (let y = 0; y < 32; y += 1) for (let x = 0; x < 32; x += 1) {
+        if (rest.tagAt(x, y) === 'paw') {
+          assert.equal(glance.get(x, y), rest.get(x, y), `paw stays at ${x},${y}`);
+          assert.equal(glance.tagAt(x, y), 'paw');
         }
       }
-      // The whole front head, including its eyes and headwear, moves only one screen column.
-      // Exclude the last seven columns, where the stationary paw outlines cover the head.
+      // 整颗头（连五官、头饰）在屏幕上只左右挪一格；最后七列被不动的爪子描边盖着，不比
       for (let y = 0; y < 32; y += 1) for (let x = 1; x < 25; x += 1) {
-        assert.equal(glance.get(x, y), rest.get(x - look, y), `${headwear}: horizontal look ${look} at ${x},${y}`);
+        assert.equal(glance.get(x, y), up.get(x - look, y), `${headwear}: horizontal look ${look} at ${x},${y}`);
       }
     }
   }
 });
 
-test('edge bird flyby uses empty space beside the front head, follows the head turn, and keeps paw anchors', () => {
+test('edge bird flies upright over the head toward the screen edge while the capybara turns to watch it', () => {
   for (const headwear of ['orange', 'straw_hat']) {
     const frames = new Map(allFrames(DEFAULT_MODEL, { headwear }));
     const centers = [];
-    for (const [i, look] of [-1, -1, 1].entries()) {
-      const base = renderFrontPeek({ headwear, look });
+    EDGE_BIRD_FLYBY.forEach(({ look }, i) => {
       const flyby = frames.get(`edge/bird_${i}.png`);
       assert.ok(flyby, `bird ${i} exists for ${headwear}`);
-      assert.ok(flyby.cells.includes('bird') && flyby.cells.includes('birdWing'));
-      assert.equal(flyby.width, 32);
-      assert.equal(flyby.height, 32);
-      const [atX, atY, beakY] = [[2, 1, 2], [11, 1, 1], [23, 1, 2]][i];
-      const beak = [atY + beakY, 31 - (atX + 5)];
-      assert.equal(flyby.get(...beak), 'star', 'beak follows the head counter-clockwise by 90 degrees');
-      assert.equal(flyby.get(beak[0], beak[1] + 1), 'outline', 'eye stays below the upward-pointing beak');
-      const left = flyby.mirrored();
-      const leftBase = base.mirrored();
-      assert.equal(left.get(31 - beak[0], beak[1]), 'star', 'left edge mirrors the bird horizontally, not vertically');
-      for (let y = 0; y < 32; y += 1) for (let x = 0; x < 32; x += 1) {
-        assert.equal(left.get(31 - x, y), flyby.get(x, y), 'left and right flybys mirror exactly');
-        if (['head', 'paw'].includes(leftBase.tagAt(x, y))) {
-          assert.equal(left.get(x, y), leftBase.get(x, y), 'left-edge bird leaves head and paws visible');
-          assert.equal(left.tagAt(x, y), leftBase.tagAt(x, y));
+      // 水豚：抬头看着，头跟着小鸟挪；小鸟不压到水豚身上，爪子不动
+      const base = renderFrontPeek({ headwear, look, gaze: -1 });
+      for (let j = 0; j < base.cells.length; j += 1) {
+        if (flyby.cells[j] === base.cells[j]) continue;
+        const [x, y] = [j % 32, Math.floor(j / 32)];
+        assert.equal(base.cells[j], 'clear', `${headwear}: bird stays clear of pet at ${x},${y}`);
+        // 连小鸟的描边都不贴着水豚或帽子
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          assert.equal(base.get(x + dx, y + dy), 'clear', `${headwear}: bird ${i} brushes the pet at ${x + dx},${y + dy}`);
         }
       }
       assert.deepEqual(flyby.tags.flatMap((tag, j) => tag === 'paw' ? [j] : []), base.tags.flatMap((tag, j) => tag === 'paw' ? [j] : []));
-      for (let j = 0; j < base.cells.length; j += 1) {
-        if (flyby.cells[j] !== base.cells[j]) assert.equal(base.cells[j], 'clear', `bird stays clear of pet at ${j % 32},${Math.floor(j / 32)}`);
-      }
-      const points = flyby.cells.flatMap((ink, j) => ['bird', 'birdWing'].includes(ink)
-        ? [[j % flyby.width, Math.floor(j / flyby.width)]] : []);
+      // 小鸟正着飞（不跟着头转 90°）：横着比竖着宽，嘴朝它飞去的屏幕边（右边），整只在头顶上方
+      const points = birdPixels(flyby);
+      assert.ok(points.some(([, , ink]) => ink === 'birdWing'), `bird ${i} flaps`);
       const xs = points.map(([x]) => x);
       const ys = points.map(([, y]) => y);
-      const xSpan = Math.max(...xs) - Math.min(...xs);
-      const ySpan = Math.max(...ys) - Math.min(...ys);
-      assert.ok(ySpan > xSpan, `bird ${i} turns upright with the head (${xSpan}x${ySpan})`);
-      centers.push([xs.reduce((sum, x) => sum + x, 0) / xs.length, ys.reduce((sum, y) => sum + y, 0) / ys.length]);
-    }
-    assert.ok(centers[0][1] > centers[1][1] && centers[1][1] > centers[2][1], `${headwear}: bird path enters, passes, then leaves upward`);
-    assert.ok(Math.max(...centers.map(([x]) => x)) - Math.min(...centers.map(([x]) => x)) <= 1, `${headwear}: bird path follows the screen edge vertically`);
+      assert.ok(Math.max(...xs) - Math.min(...xs) > Math.max(...ys) - Math.min(...ys), `bird ${i} is upright, not turned with the head`);
+      const beak = points.find(([, , ink]) => ink === 'star');
+      assert.equal(beak[0], Math.max(...xs), `bird ${i} faces the screen edge it flies toward`);
+      for (const [x, y] of points) {
+        for (let below = 0; below <= y; below += 1) assert.equal(base.get(x, below), 'clear', `${headwear}: bird ${i} flies above the pet in column ${x}`);
+      }
+      centers.push(xs.reduce((sum, x) => sum + x, 0) / xs.length);
+    });
+    assert.ok(centers[0] < centers[1] && centers[1] < centers[2], `${headwear}: the bird crosses toward the edge (${centers})`);
+    assert.ok(centers[2] >= 24, `${headwear}: the last frame reaches the screen edge it flies out of`);
+    const looks = EDGE_BIRD_FLYBY.map(({ look }) => look);
+    assert.deepEqual(looks, [...looks].sort((a, b) => a - b), 'the head follows the bird the same way it flies');
+    assert.ok(looks[0] < looks[2], 'the head really turns while the bird crosses');
   }
 });
 
