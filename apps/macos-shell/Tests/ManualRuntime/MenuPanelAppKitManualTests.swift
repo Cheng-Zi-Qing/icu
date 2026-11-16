@@ -76,6 +76,104 @@ func testThemedMenuPanelShowsTodaySummaryHeader() throws {
     try expect(separators.count == 3, "the header is separated from the actions (got \(separators.count))")
 }
 
+func testDesktopPetViewRightClickOpensMenuWhilePeekingAtEitherEdge() throws {
+    _ = NSApplication.shared
+    _ = try makeInstalledThemeManager()
+    let repoRoot = inferredManualTestRepoRootURL()
+    let view = DesktopPetView(
+        frame: NSRect(origin: .zero, size: DesktopPetView.compactContentSize),
+        assetLocator: PetAssetLocator(repoRootURL: repoRoot),
+        petID: "capybara"
+    )
+    let window = DesktopPetWindow(
+        contentRect: NSRect(origin: NSPoint(x: 400, y: 300), size: view.frame.size),
+        styleMask: [.borderless], backing: .buffered, defer: false
+    )
+    window.isReleasedWhenClosed = false
+    window.contentView = view
+    view.layoutSubtreeIfNeeded()
+    let controller = ContextMenuPanelController { _ in }
+    window.contextMenuController = controller
+    defer {
+        controller.dismiss()
+        window.contentView = nil
+        window.close()
+    }
+
+    try expect(view.hasPeekPose, "load the real repo capybara edge/peek PNGs")
+    var pointerEntries = 0
+    var overlayChanges = 0
+    var pokeReactions = 0
+    view.onPointerEntered = { pointerEntries += 1 }
+    view.onOverlayLayoutModeChanged = { _ in overlayChanges += 1 }
+    view.onPokeReaction = { _, _ in pokeReactions += 1 }
+    let visible = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+    let cases: [(HorizontalDockEdge?, ShellWorkState)] = [(.right, .working), (.left, .breakState), (nil, .idle)]
+    for (edge, state) in cases {
+        let description = "edge=\(String(describing: edge)), state=\(state)"
+        view.setWorkState(state)
+        view.setFacingRight(edge == .left)
+        view.setDockedToSide(edge != nil)
+        view.setEdgePeek(edge != nil)
+        window.menuModelProvider = { DesktopPetMenuModel(state: state) }
+        guard let body = view.petBodyRect else {
+            throw TestFailure(message: "real sprite should have body bounds (\(description))")
+        }
+        if let edge {
+            let origin = EdgeDockLayout.hiddenOrigin(
+                dockedOrigin: NSPoint(x: 400, y: visible.midY), edge: edge,
+                bodyRect: body, visibleFrame: visible, peekWidth: 36
+            )
+            window.setFrameOrigin(origin)
+            try expect(view.statusLabel.isHidden, "peeking hides the status chip (\(description))")
+        } else {
+            window.setFrameOrigin(NSPoint(x: visible.midX, y: visible.midY))
+        }
+
+        // Pick a visible, opaque pixel in the upper half of the actual displayed head.
+        let points = stride(from: body.midY, to: body.maxY, by: 1).flatMap { y in
+            stride(from: body.minX, to: body.maxX, by: 1).map { NSPoint(x: $0, y: y) }
+        }
+        guard let head = points.first(where: {
+            view.isOpaquePetPixel(at: $0) && visible.contains(window.convertPoint(toScreen: $0))
+        }), let hit = view.hitTest(head) else {
+            throw TestFailure(message: "exposed head should hit an opaque repo PNG pixel (\(description))")
+        }
+        try expect(hit === view, "opaque head hits the pet view (\(description), point=\(head))")
+        let transparent = NSPoint(x: view.petCanvasRect.minX + 1, y: view.petCanvasRect.maxY - 1)
+        try expect(!view.isOpaquePetPixel(at: transparent) && view.hitTest(transparent) == nil,
+                   "transparent padding still passes through (\(description))")
+        let originalFrame = window.frame
+        let originalPeekFrame = view.shownPeekFrame
+        let popoversBefore = NSApp.windows.filter { NSStringFromClass(type(of: $0)).contains("Popover") }.count
+        guard let event = NSEvent.mouseEvent(
+            with: .rightMouseDown, location: view.convert(head, to: nil), modifierFlags: [],
+            timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+            context: nil, eventNumber: 1, clickCount: 1, pressure: 1
+        ) else {
+            throw TestFailure(message: "failed to create a real right-mouse event")
+        }
+        hit.rightMouseDown(with: event)
+
+        try expect(controller.isPresented, "right-click on the hit head immediately opens the menu (\(description), point=\(head))")
+        guard let panel = controller.currentPanel else {
+            throw TestFailure(message: "head right-click should present the themed operation menu")
+        }
+        let titles = allSubviews(in: panel).compactMap { ($0 as? PixelButton)?.title }
+        try expect(titles == DesktopPetMenuModel(state: state).items.map(\.title),
+                   "menu contains the current work-state actions and settings (\(description), got \(titles))")
+        try expect(window.frame == originalFrame && view.isPeeking == (edge != nil)
+                   && view.isDockedToSide == (edge != nil) && view.shownPeekFrame == originalPeekFrame,
+                   "right-click does not reveal or move the pet or change its peek frame (\(description))")
+        try expect(pointerEntries == 0 && overlayChanges == 0 && pokeReactions == 0
+                   && !view.isPressingPet && view.pokePressPoint == nil && !view.dragController.isDragging,
+                   "right-click needs no hover, reveal, poke or left-button press (\(description))")
+        try expect(NSApp.windows.filter { NSStringFromClass(type(of: $0)).contains("Popover") }.count == popoversBefore,
+                   "right-click does not open a popover (\(description))")
+        controller.dismiss()
+    }
+}
+
 func testContextMenuPanelControllerDispatchesSelectedActionAndDismissesPanel() throws {
     _ = NSApplication.shared
 
@@ -277,8 +375,14 @@ func testFloatingPanelControllerDismissesOnEscape() throws {
     controller.present(contentView: contentView, frame: NSRect(x: 120, y: 120, width: 180, height: 120))
 
     try expect(controller.isPresented == true, "floating panel controller should present a panel window")
+    guard let panel = controller.panelWindow else {
+        throw TestFailure(message: "floating panel controller should expose its panel window")
+    }
+    try expect(panel.styleMask.contains(.nonactivatingPanel), "floating panel should support presentation without activating the app")
+    try expect(!panel.hidesOnDeactivate, "floating panel should stay visible while the app is inactive")
+    try expect(panel.isVisible, "floating panel should be visible after present")
 
-    controller.panelWindow?.cancelOperation(nil)
+    panel.cancelOperation(nil)
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
 
     try expect(controller.isPresented == false, "floating panel controller should dismiss the panel when escape is triggered")

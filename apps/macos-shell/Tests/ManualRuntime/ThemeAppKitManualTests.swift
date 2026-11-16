@@ -1119,7 +1119,8 @@ func testPetEdgeDockControllerSnapsHidesAndPeeksOut() throws {
 
     controller.overlayVisibilityChanged(true)
     try expect(scheduler.pending == nil && !controller.isHidden, "reminder overlays bring the pet out")
-    try expect(window.frame.origin == CGPoint(x: 1336, y: 300), "…to the docked spot")
+    try expect(window.frame.origin == CGPoint(x: 1306, y: 300), "the whole overlay window should fit inside the screen margin (got \(window.frame.origin))")
+    try expect(persisted.last == CGPoint(x: 1336, y: 300), "overlay reveal must preserve the saved docked position")
     controller.pointerEntered()
     controller.overlayVisibilityChanged(false)
     try expect(scheduler.pending == nil, "no hide while the pointer is over the pet")
@@ -1213,14 +1214,15 @@ func testPetEdgeDockControllerDucksBehindEdgeThenPeeksOut() throws {
     try expect(!peeking, "grabbing a peeking pet should restore the normal pose")
 }
 
-/// 探着头时来了提醒：先吓一跳（> < 眼、往后缩），再缩回边后，换正常形象滑出来
-func testPetEdgeDockControllerFlinchesBeforeDuckingBackIn() throws {
-    let screen = CGRect(x: 0, y: 25, width: 1440, height: 875)
-    let window = NSWindow(contentRect: NSRect(x: 1321, y: 300, width: 128, height: 152), styleMask: [.borderless], backing: .buffered, defer: true)
+/// Overlay 出现时温和展开到屏幕内，收起后回到原吸附点，再恢复延迟藏边。
+func testPetEdgeDockControllerExpandsOverlaysWithoutFlinching() throws {
+    let screen = CGRect(x: 200, y: 80, width: 1200, height: 800)
+    let window = NSWindow(contentRect: NSRect(x: 1280, y: 80, width: 128, height: 152), styleMask: [.borderless], backing: .buffered, defer: true)
     let mover = ImmediateWindowMover()
     let scheduler = ManualHideScheduler()
     var peeking = false
     var events: [String] = []
+    var persisted: [CGPoint] = []
     let controller = PetEdgeDockController(
         window: window,
         settings: EdgeSnapSettings(isEnabled: true, snapDistance: 20, peekWidth: 40, autoHideDelay: 2),
@@ -1232,23 +1234,73 @@ func testPetEdgeDockControllerFlinchesBeforeDuckingBackIn() throws {
     controller.canPeek = { true }
     controller.onPeekChanged = { peeking = $0; events.append($0 ? "peek" : "normal") }
     controller.onPeekFlinch = { events.append("flinch") }
+    controller.onDockedOriginSettled = { persisted.append($0) }
 
     controller.dragEnded()
+    let dockedOrigin = window.frame.origin
     scheduler.fire()
-    try expect(events == ["peek"], "no flinch while hiding (got \(events))")
+    try expect(controller.isHidden && peeking, "auto-hide should still use the peek pose")
 
-    controller.pointerEntered()
-    try expect(events == ["peek"], "a passing pointer does not startle it out (got \(events))")
+    // Simulate the pet's expanded bubble/card dimensions before reclamping.
+    window.setFrame(NSRect(origin: window.frame.origin, size: NSSize(width: 128, height: 260)), display: false)
     controller.overlayVisibilityChanged(true)
-    try expect(events == ["peek", "flinch", "normal"], "a reminder pops it out: flinch first, then swap back (got \(events))")
-    try expect(window.frame.origin == CGPoint(x: 1336, y: 300), "and still comes back out to the docked spot (got \(window.frame.origin))")
+    let expandedFrame = window.frame
+    try expect(!controller.isHidden && !peeking, "overlay reveal should gently restore the sitting pose")
+    try expect(!events.contains("flinch"), "an automatic overlay reveal must not play the flinch reaction")
+    try expect(expandedFrame.minX >= screen.minX + 6 && expandedFrame.maxX <= screen.maxX - 6,
+               "the expanded overlay window should fit horizontally inside the body-selected screen (got \(expandedFrame), screen \(screen))")
+    try expect(expandedFrame.minY >= screen.minY + 6 && expandedFrame.maxY <= screen.maxY - 6,
+               "the expanded overlay window should fit vertically inside the screen (got \(expandedFrame))")
+    try expect(controller.dock.horizontal == .right && persisted == [dockedOrigin],
+               "temporary overlay positioning must preserve the dock and never persist the reveal position")
 
-    // 一直是正常形象时（没探头）碰它不会吓一跳
-    events.removeAll()
+    controller.overlayVisibilityChanged(false)
+    try expect(window.frame.origin == dockedOrigin, "closing the overlay should restore the original dock position")
+    try expect(scheduler.pending != nil, "closing the overlay should re-arm delayed auto-hide")
+    scheduler.fire()
+    try expect(controller.isHidden, "the restored dock should hide again after its delay")
+
+    // A second overlay cycle from the left edge also keeps the whole expanded window visible.
+    controller.dragStarted()
+    window.setFrame(NSRect(origin: window.frame.origin, size: NSSize(width: 128, height: 152)), display: false)
+    window.setFrameOrigin(CGPoint(x: 205, y: 825))
+    controller.dragEnded()
+    let leftDock = window.frame.origin
+    window.setFrame(NSRect(origin: window.frame.origin, size: NSSize(width: 128, height: 260)), display: false)
+    controller.overlayVisibilityChanged(true)
+    try expect(window.frame.minX >= screen.minX + 6 && window.frame.maxX <= screen.maxX - 6,
+               "left-edge overlays should remain fully visible")
+    try expect(window.frame.minY >= screen.minY + 6 && window.frame.maxY <= screen.maxY - 6,
+               "near-top overlays should remain fully visible")
+    controller.overlayVisibilityChanged(false)
+    try expect(window.frame.origin == leftDock, "left-edge overlay close should restore its own dock origin")
+
+    // A bottom dock on a display with a non-zero origin must clamp against that display, not the primary screen.
+    controller.dragStarted()
+    window.setFrame(NSRect(origin: window.frame.origin, size: NSSize(width: 128, height: 152)), display: false)
+    window.setFrameOrigin(CGPoint(x: 700, y: 81))
+    controller.dragEnded()
+    window.setFrame(NSRect(origin: window.frame.origin, size: NSSize(width: 128, height: 260)), display: false)
+    controller.overlayVisibilityChanged(true)
+    try expect(window.frame.minY >= screen.minY + 6 && window.frame.maxY <= screen.maxY - 6,
+               "bottom-edge overlays should remain fully visible on a non-zero-origin display")
     controller.overlayVisibilityChanged(false)
     controller.overlayVisibilityChanged(true)
-    try expect(!events.contains("flinch"), "only a peeking head flinches (got \(events))")
+    controller.overlayVisibilityChanged(false)
+    controller.overlayVisibilityChanged(true)
+    try expect(controller.isManagingWindowPosition && scheduler.pending == nil,
+               "rapid overlay toggles should cancel pending hides and keep the temporary position guarded")
+    controller.dragStarted()
+    try expect(!controller.isManagingWindowPosition && controller.dock == .none,
+               "starting a drag should release temporary overlay positioning and clear the dock")
+    window.setFrameOrigin(CGPoint(x: 1280, y: 300))
+    controller.dragEnded()
+    try expect(controller.dock.horizontal == .right && scheduler.pending == nil,
+               "dropping near an edge must not schedule auto-hide while the overlay is still visible")
+    controller.overlayVisibilityChanged(false)
+    try expect(scheduler.pending != nil, "closing the dragged overlay should re-arm delayed auto-hide")
 }
+
 
 func testPetEdgeDockControllerDoesNothingWhenDisabled() throws {
     let window = NSWindow(contentRect: NSRect(x: 1321, y: 300, width: 128, height: 128), styleMask: [.borderless], backing: .buffered, defer: true)

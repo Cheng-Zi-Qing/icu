@@ -319,3 +319,104 @@ func testHealthSessionTrackerSplitsSettledDurationAcrossMidnightBoundary() throw
     try expect(firstDaySummary.workDuration == 600, "work before midnight should settle on first day")
     try expect(secondDaySummary.workDuration == 600, "work after midnight should settle on next day")
 }
+
+func testWorkRestStateCombinesIdleLockAndSleep() throws {
+    var state = WorkRestState()
+    state.userIdleSeconds = 179
+    try expect(!state.isResting, "179 idle seconds should still be work")
+    state.userIdleSeconds = 180
+    try expect(state.isResting, "180 idle seconds should start rest")
+    state.userIdleSeconds = 0
+    state.isScreenLocked = true
+    try expect(state.isResting, "locking should immediately rest even with fresh input")
+    state.userIdleSeconds = 200
+    state.isScreenLocked = false
+    try expect(state.isResting, "unlocking must not override continued idle")
+    state.userIdleSeconds = 0
+    state.isSleeping = true
+    try expect(state.isResting, "sleep should immediately rest even with fresh input")
+    state.isSleeping = false
+    try expect(!state.isResting, "fresh input with no system rest should resume work")
+}
+
+func testHealthSessionTrackerAutomaticRestSettlesOnceAndResumesWork() throws {
+    let store = try HealthMetricsStore(appPaths: makeTemporaryAppPaths(), calendar: testUTCCalendar)
+    let tracker = HealthSessionTracker(store: store)
+    let start = Date(timeIntervalSince1970: 1_744_000_000)
+    try tracker.recordStateTransition(from: .idle, to: .working, at: start)
+    try tracker.checkpoint(at: start.addingTimeInterval(179))
+    try tracker.setAutomaticRest(true, at: start.addingTimeInterval(180))
+    try tracker.setAutomaticRest(true, at: start.addingTimeInterval(210))
+    try tracker.checkpoint(at: start.addingTimeInterval(240))
+    try tracker.setAutomaticRest(false, at: start.addingTimeInterval(300))
+    try tracker.recordStateTransition(from: .working, to: .idle, at: start.addingTimeInterval(360))
+    let summary = try store.daySummary(for: start)
+    try expect(summary.workDuration == 240, "idle threshold must not backdate the first three minutes; returning input resumes work")
+    try expect(summary.breakDuration == 120 && summary.breakCount == 1, "repeated idle samples and checkpoints must settle one rest exactly once")
+}
+
+func testHealthSessionTrackerAutomaticRestPreservesFocusAndManualBreak() throws {
+    let store = try HealthMetricsStore(appPaths: makeTemporaryAppPaths(), calendar: testUTCCalendar)
+    let tracker = HealthSessionTracker(store: store)
+    let start = Date(timeIntervalSince1970: 1_744_000_000)
+    try tracker.recordStateTransition(from: .idle, to: .focus, at: start)
+    try tracker.setAutomaticRest(true, at: start.addingTimeInterval(60))
+    try tracker.setAutomaticRest(false, at: start.addingTimeInterval(120))
+    try tracker.recordStateTransition(from: .focus, to: .breakState, at: start.addingTimeInterval(180))
+    try tracker.setAutomaticRest(true, at: start.addingTimeInterval(210))
+    try tracker.setAutomaticRest(false, at: start.addingTimeInterval(240))
+    try tracker.recordStateTransition(from: .breakState, to: .idle, at: start.addingTimeInterval(300))
+    let summary = try store.daySummary(for: start)
+    try expect(summary.focusDuration == 120 && summary.focusCount == 1, "automatic rest must resume the existing focus session")
+    try expect(summary.breakDuration == 180 && summary.breakCount == 2, "automatic rest must not double count or exit a manual break")
+}
+
+func testHealthSessionTrackerManualChangesDuringAutomaticRestUseEffectiveState() throws {
+    let store = try HealthMetricsStore(appPaths: makeTemporaryAppPaths(), calendar: testUTCCalendar)
+    let tracker = HealthSessionTracker(store: store)
+    let start = Date(timeIntervalSince1970: 1_744_000_000)
+    try tracker.recordStateTransition(from: .idle, to: .working, at: start)
+    try tracker.setAutomaticRest(true, at: start.addingTimeInterval(60))
+    try tracker.recordStateTransition(from: .working, to: .breakState, at: start.addingTimeInterval(120))
+    try tracker.recordStateTransition(from: .breakState, to: .working, at: start.addingTimeInterval(180))
+    try tracker.recordStateTransition(from: .working, to: .focus, at: start.addingTimeInterval(240))
+    try tracker.setAutomaticRest(false, at: start.addingTimeInterval(300))
+    try tracker.recordStateTransition(from: .focus, to: .idle, at: start.addingTimeInterval(360))
+    let summary = try store.daySummary(for: start)
+    try expect(summary.workDuration == 60 && summary.focusDuration == 60, "manual transitions during rest must not settle rest as work or focus")
+    try expect(summary.breakDuration == 240 && summary.breakCount == 1, "overlapping manual and automatic rest is one continuous break")
+}
+
+func testHealthSessionTrackerAutomaticRestSkipsOffDutyAndStopsAcrossMidnight() throws {
+    let store = try HealthMetricsStore(appPaths: makeTemporaryAppPaths(), calendar: testUTCCalendar)
+    let tracker = HealthSessionTracker(store: store)
+    let start = testUTCCalendar.date(from: DateComponents(year: 2025, month: 4, day: 3, hour: 23, minute: 58))!
+    try tracker.setAutomaticRest(true, at: start.addingTimeInterval(-120))
+    try tracker.checkpoint(at: start.addingTimeInterval(-60))
+    let offDuty = try store.daySummary(for: start)
+    try expect(!offDuty.hasActivity, "automatic rest while off duty must not create activity")
+    try tracker.recordStateTransition(from: .idle, to: .working, at: start)
+    try tracker.setAutomaticRest(true, at: start.addingTimeInterval(60))
+    try tracker.recordStateTransition(from: .working, to: .idle, at: start.addingTimeInterval(180))
+    try tracker.checkpoint(at: start.addingTimeInterval(240))
+    try tracker.setAutomaticRest(false, at: start.addingTimeInterval(300))
+    try tracker.endSession(at: start.addingTimeInterval(360))
+    let firstDay = try store.daySummary(for: start)
+    let secondDay = try store.daySummary(for: start.addingTimeInterval(180))
+    try expect(firstDay.workDuration == 0 && firstDay.breakDuration == 120 && firstDay.breakCount == 1, "starting work while away must rest immediately and split at midnight")
+    try expect(secondDay.workDuration == 0 && secondDay.breakDuration == 60, "stopping mid-rest must end rest accounting on the next day")
+}
+
+func testHealthSessionTrackerAutomaticRestKeepsLegacySuspendResumeSemantics() throws {
+    let store = try HealthMetricsStore(appPaths: makeTemporaryAppPaths(), calendar: testUTCCalendar)
+    let tracker = HealthSessionTracker(store: store)
+    let start = Date(timeIntervalSince1970: 1_744_000_000)
+    try tracker.recordStateTransition(from: .idle, to: .working, at: start)
+    try tracker.suspend(at: start.addingTimeInterval(60))
+    tracker.resume(at: start.addingTimeInterval(120))
+    try tracker.setAutomaticRest(true, at: start.addingTimeInterval(180))
+    try tracker.setAutomaticRest(false, at: start.addingTimeInterval(240))
+    try tracker.endSession(at: start.addingTimeInterval(300))
+    let summary = try store.daySummary(for: start)
+    try expect(summary.workDuration == 180 && summary.breakDuration == 60, "legacy suspend should exclude time; automatic sleep/rest should include break time")
+}

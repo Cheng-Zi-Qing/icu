@@ -1,14 +1,15 @@
 import AppKit
 
-/// 桌宠上的手型光标：头上摸摸、身上张手、按住 / 拖着时握拳，透明区域不碰光标（下面的 App 说了算）
+/// 桌宠上的手型光标：摸头、挠肚子、戳背后，拖起来才握拳，透明区域由下面的 App 管光标。
 extension DesktopPetView {
     /// - Parameter point: 视图坐标；nil 表示鼠标离开了桌宠窗口
     func updateCursor(at eventPoint: NSPoint?) {
         let point = eventPoint.flatMap(pointerIfReallyHere)
         let kind = PetCursorKind.kind(
-            isGrabbing: isPressingPet || isDraggingPet,
+            isDragging: isDraggingPet,
             overBody: point.map(isOpaquePetPixel(at:)) ?? false,
-            overHead: point.map(isOverHead) ?? false
+            zone: isPeeking ? .head : (workPlayer.facesSideways ? point.flatMap(pokeZone(at:)) : nil),
+            activeClip: behavior.activeClip
         )
         let update = PetCursorKind.update(from: currentCursorKind, to: kind)
         currentCursorKind = kind

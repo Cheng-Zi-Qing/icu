@@ -372,3 +372,187 @@ func testPetLiftWindowSplitsHeadAndBody() throws {
                "body below, head on top, together the whole canvas (head \(head), body \(body))")
     try expect(abs(body.height - 128 * PetAnimationEngine.liftedBodyShare) < 4.01, "split at the neck (got \(body.height))")
 }
+
+private struct LiftRasterPixels {
+    let width: Int
+    let height: Int
+    let bytes: [UInt8]
+
+    func pixel(_ x: Int, _ y: Int) -> [UInt8] {
+        let offset = (y * width + x) * 4
+        return Array(bytes[offset..<(offset + 4)])
+    }
+}
+
+private func liftPixelSource() -> NSImage {
+    let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 256, pixelsHigh: 256, bitsPerSample: 8,
+                              samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
+                              bytesPerRow: 0, bitsPerPixel: 0)!
+    let bytes = rep.bitmapData!
+    for y in 0..<256 {
+        for x in 0..<256 {
+            let offset = y * rep.bytesPerRow + x * 4
+            let color: [UInt8] = x < 32 || x >= 224 ? [0, 0, 0, 0]
+                : y >= 152 ? [0, 0, 255, 255] : x < 96 ? [0, 255, 0, 255] : [255, 0, 0, 255]
+            for channel in 0..<4 { bytes[offset + channel] = color[channel] }
+        }
+    }
+    let image = NSImage(size: NSSize(width: 128, height: 128))
+    image.addRepresentation(rep)
+    return image
+}
+
+/// Drive the same display-link path as dragging, including the final on-screen layer tree.
+private func drawLiftFrame(_ lift: PetLiftWindow, drag: DragOutput) throws {
+    let engine = PetAnimationEngine()
+    let target = CALayer()
+    target.bounds = liftCanvas
+    engine.attachTo(layer: target)
+    var ticked = false
+    engine.dragOutputProvider = { _ in ticked = true; return drag }
+    engine.liftedWindow = { lift }
+    engine.start()
+    defer { engine.stop() }
+    let deadline = Date(timeIntervalSinceNow: 1)
+    while !ticked && Date() < deadline {
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01))
+    }
+    try expect(ticked, "the display link should render a drag frame")
+    if drag.pose.isLifted && lift.isVisible {
+        try expect(CATransform3DIsIdentity(target.transform), "the small-window image must not get another lift transform")
+    } else {
+        let fallback = PetAnimationEngine.composedTransform(base: engine.baseTransform(at: 0), drag: drag,
+                                                          layerBounds: target.bounds, anchorPoint: target.anchorPoint)
+        try expect(CATransform3DEqualToTransform(target.transform, fallback), "without a visible lifted pose the original transform must remain active")
+    }
+}
+
+private func liftDisplayPixels(_ lift: PetLiftWindow, scale: Int) throws -> LiftRasterPixels {
+    let width = Int(lift.frame.width) * scale
+    let height = Int(lift.frame.height) * scale
+    guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+                                  space: CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue),
+          let root = lift.contentView?.layer else {
+        throw TestFailure(message: "could not capture the lift display")
+    }
+    context.interpolationQuality = .none
+    context.setShouldAntialias(false)
+    context.scaleBy(x: CGFloat(scale), y: CGFloat(scale))
+    root.render(in: context)
+    let bytes = Array(UnsafeBufferPointer(start: context.data!.assumingMemoryBound(to: UInt8.self), count: width * height * 4))
+    return LiftRasterPixels(width: width, height: height, bytes: bytes)
+}
+
+func testPetLiftRasterKeepsTheOriginalPixelGridWhileSwinging() throws {
+    let parent = NSWindow(contentRect: liftCanvas, styleMask: [.borderless], backing: .buffered, defer: false)
+    parent.isReleasedWhenClosed = false
+    let lift = PetLiftWindow()
+    defer { lift.hide(); lift.close(); parent.close() }
+    let source = liftPixelSource()
+    for right in [false, true] {
+        lift.show(image: right ? PixelArtScaler.mirroredHorizontally(source) : source, canvas: liftCanvas, over: parent)
+        for (stretch, swing) in [(CGFloat(1.37), CGFloat(-23)), (1.8, 31)] {
+            try drawLiftFrame(lift, drag: DragOutput(pose: .hold(tilt: 0), stretchY: stretch,
+                                                   swingDegrees: swing, landingSquash: 1, fallOffset: 17.3))
+            for scale in [1, 2] {
+                let output = try liftDisplayPixels(lift, scale: scale)
+                let block = 4 * scale
+                var opaque = 0
+                for y in stride(from: 0, to: output.height, by: block) {
+                    for x in stride(from: 0, to: output.width, by: block) {
+                        let first = output.pixel(x, y)
+                        try expect(first[3] == 0 || first[3] == 255, "swing edges must not blend alpha at \(x),\(y)")
+                        if first[3] != 0 {
+                            opaque += 1
+                            try expect(first == [255, 0, 0, 255] || first == [0, 255, 0, 255] || first == [0, 0, 255, 255],
+                                       "sampling must keep the source palette, got \(first)")
+                        }
+                        for dy in 0..<block {
+                            for dx in 0..<block {
+                                try expect(output.pixel(x + dx, y + dy) == first,
+                                           "\(scale)x lift tore the \(block)px source block at \(x),\(y), offset \(dx),\(dy), stretch \(stretch), swing \(swing), right \(right)")
+                            }
+                        }
+                    }
+                }
+                try expect(opaque > 400, "the pixel-grid check must include a visible head and stretched body")
+                try expect((0..<output.width).allSatisfy { output.pixel($0, 0)[3] == 0 && output.pixel($0, output.height - 1)[3] == 0 },
+                           "the first and last rows should remain clear, without clipped or torn feet")
+            }
+        }
+    }
+}
+
+func testPetLiftRasterStretchesOnlyTheBodyAndKeepsTheNeckJoined() throws {
+    let parent = NSWindow(contentRect: liftCanvas, styleMask: [.borderless], backing: .buffered, defer: false)
+    parent.isReleasedWhenClosed = false
+    let lift = PetLiftWindow()
+    defer { lift.hide(); lift.close(); parent.close() }
+    lift.show(image: liftPixelSource(), canvas: liftCanvas, over: parent)
+    var headCounts: [Int] = []
+    var bodySizes: [CGSize] = []
+    for stretch in [CGFloat(1), 1.37, 1.8] {
+        try drawLiftFrame(lift, drag: DragOutput(pose: .hold(tilt: 0), stretchY: stretch, swingDegrees: 0, landingSquash: 1))
+        let output = try liftDisplayPixels(lift, scale: 1)
+        var headCount = 0
+        var bodyPoints: [CGPoint] = []
+        var centerRows: [Int] = []
+        for y in 0..<output.height {
+            for x in 0..<output.width {
+                let pixel = output.pixel(x, y)
+                if pixel[3] == 255 {
+                    if pixel[2] == 255 { bodyPoints.append(CGPoint(x: x, y: y)) } else { headCount += 1 }
+                    if x == output.width / 2 { centerRows.append(y) }
+                }
+            }
+        }
+        headCounts.append(headCount)
+        guard let minX = bodyPoints.map(\.x).min(), let maxX = bodyPoints.map(\.x).max(),
+              let minY = bodyPoints.map(\.y).min(), let maxY = bodyPoints.map(\.y).max() else {
+            throw TestFailure(message: "the stretched blue body should remain visible")
+        }
+        bodySizes.append(CGSize(width: maxX - minX + 1, height: maxY - minY + 1))
+        try expect(Set(centerRows).count == centerRows.max()! - centerRows.min()! + 1,
+                   "the head/body split must stay joined at zero swing")
+    }
+    try expect(Set(headCounts).count == 1 && headCounts[0] > 0, "stretch must leave the head's actual rendered area unchanged")
+    try expect(bodySizes[1].height > bodySizes[0].height && bodySizes[2].height > bodySizes[1].height,
+               "the actual body must get longer: \(bodySizes)")
+    try expect(bodySizes[1].width < bodySizes[0].width && bodySizes[2].width < bodySizes[1].width,
+               "the actual body must get slimmer: \(bodySizes)")
+}
+
+func testPetLiftRasterCachesFramesAndPreservesTheLastValidImage() throws {
+    let parent = NSWindow(contentRect: liftCanvas, styleMask: [.borderless], backing: .buffered, defer: false)
+    parent.isReleasedWhenClosed = false
+    let lift = PetLiftWindow()
+    defer { lift.hide(); lift.close(); parent.close() }
+    lift.show(image: liftPixelSource(), canvas: liftCanvas, over: parent)
+    let drag = DragOutput(pose: .hold(tilt: 0), stretchY: 1.37, swingDegrees: -23, landingSquash: 1, fallOffset: 17.3)
+    lift.render(drag: drag)
+    guard let first = lift.rasterLayer.contents else { throw TestFailure(message: "lifting must produce a bitmap immediately") }
+    let raster = first as! CGImage
+    try expect(raster.width == 88 && raster.height == 67, "the lift is composed on the original 4pt grid")
+    try expect(lift.spriteLayer.isHidden && !lift.rasterLayer.isHidden && CATransform3DIsIdentity(lift.rasterLayer.transform),
+               "only the untransformed raster should be visible")
+    lift.render(drag: drag)
+    try expect(lift.rasterLayer.contents as AnyObject === first as AnyObject, "identical source and drag should reuse the raster")
+    lift.setImage(nil)
+    try expect(lift.rasterLayer.contents as AnyObject === first as AnyObject, "a missing frame should keep the last valid raster")
+    lift.setImage(PixelArtScaler.mirroredHorizontally(liftPixelSource()))
+    try expect(lift.rasterLayer.contents as AnyObject !== first as AnyObject, "a changed source must invalidate the drag cache")
+    let mirrored = try liftDisplayPixels(lift, scale: 1)
+    lift.setImage(liftPixelSource())
+    let original = try liftDisplayPixels(lift, scale: 1)
+    try expect(mirrored.bytes != original.bytes, "changing direction must change the actual display pixels")
+    var still = drag
+    still.swingDegrees = 0
+    lift.render(drag: still)
+    let unswung = try liftDisplayPixels(lift, scale: 1)
+    try expect(unswung.bytes != original.bytes, "swing must move the rendered pet while retaining the pixel grid")
+    try drawLiftFrame(lift, drag: DragOutput(pose: .landing(frame: 0), stretchY: 1, swingDegrees: 0, landingSquash: 0.8))
+    lift.hide()
+    try expect(lift.parent == nil && !lift.isVisible, "hiding must detach and remove the raster window")
+    try drawLiftFrame(lift, drag: drag)
+}

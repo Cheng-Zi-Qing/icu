@@ -50,7 +50,7 @@ export const BELLY_RULES = Object.freeze({
  */
 export const FRAME_KINDS = Object.freeze([
   { match: /^ui\/item_/, skip: true },
-  { match: /^edge\/peek/, view: 'front', partial: true, rotated: true },
+  { match: /^edge\/(peek|look_|bird_)/, view: 'front', partial: true, rotated: true },
   { match: /^ui\/bar_peek/, view: 'front', partial: true },
   { match: /^edge\/turn/, view: 'side', partial: true, rotated: true },
   { match: /^work\/(read|write|eat)_/, view: 'front', partial: true },

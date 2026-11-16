@@ -38,13 +38,17 @@ extension DesktopPetView {
 
     func applyActionImage(_ image: NSImage?) {
         actionImage = image
+        if !isShowingDragPose && !isPeeking {
+            present(restingImage)
+        }
         let clip = behavior.activeClip
         if clip != reportedActionClip {
             reportedActionClip = clip
             onActionClipChanged?(clip)
+            if let window {
+                updateCursor(at: convert(window.convertPoint(fromScreen: pointerLocation()), from: nil))
+            }
         }
-        guard !isShowingDragPose && !isPeeking else { return }
-        present(restingImage)
     }
 
     /// 头 = 身体上半截（侧面坐姿时头和柚子都在这里，朝左朝右都一样）
@@ -149,13 +153,8 @@ extension DesktopPetView {
         animationEngine.onDragPoseChanged = { [weak self] pose in
             self?.applyDragPose(pose)
         }
-        animationEngine.liftedLayer = { [weak self] in
-            guard let lift = self?.liftWindow, lift.isVisible else { return nil }
-            return lift.spriteLayer
-        }
-        animationEngine.liftedBodyLayer = { [weak self] in
-            guard let lift = self?.liftWindow, lift.isVisible else { return nil }
-            return lift.bodyLayer
+        animationEngine.liftedWindow = { [weak self] in
+            self?.liftWindow
         }
     }
 

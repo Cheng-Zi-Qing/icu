@@ -4,20 +4,29 @@ import AppKit
 enum PetCursorKind: String, CaseIterable {
     /// 头上：平放的小手 + 小爱心（摸摸）
     case pat
+    /// 肚子：挠痒痒的小手
+    case tickle
+    /// 背 / 屁股：戳一下
+    case poke
     /// 身上：张开的手（可以拎起来）
     case grab
-    /// 按住 / 拖着走：握拳
+    /// 已经拖起来：握拳
     case grabbing
 
-    /// - Parameters:
-    ///   - isGrabbing: 正按着桌宠或正在拖（快速拖时鼠标会短暂跑出身体，拳头不能松）
-    ///   - overBody: 鼠标在不透明的像素上
-    ///   - overHead: 鼠标在头那一截上
-    /// - Returns: nil 表示用普通箭头（透明区域本来就点不到桌宠）
-    static func kind(isGrabbing: Bool, overBody: Bool, overHead: Bool) -> PetCursorKind? {
-        if isGrabbing { return .grabbing }
+    /// 拖拽优先；点按阶段仍按部位显示手型，透明区域让下面的 App 管光标。
+    static func kind(
+        isDragging: Bool, overBody: Bool, zone: PetPokeZone?, activeClip: PetActionClip?
+    ) -> PetCursorKind? {
+        if isDragging { return .grabbing }
         guard overBody else { return nil }
-        return overHead ? .pat : .grab
+        if activeClip == .petted { return .pat }
+        if activeClip == .tickled { return .tickle }
+        switch zone {
+        case .head: return .pat
+        case .belly: return .tickle
+        case .back: return .poke
+        default: return .grab
+        }
     }
 
     /// 这次鼠标移动该怎么动光标
@@ -39,7 +48,7 @@ enum PetCursorKind: String, CaseIterable {
     /// 宠物没有像素光标素材时用系统自带的手型
     var systemCursor: NSCursor {
         switch self {
-        case .pat: return .pointingHand
+        case .pat, .tickle, .poke: return .pointingHand
         case .grab: return .openHand
         case .grabbing: return .closedHand
         }

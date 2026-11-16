@@ -22,6 +22,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var usageRecorder: UsageRecorder?
     private var dutyClock: Timer?
     private var sleepObservers: [NSObjectProtocol] = []
+    private var screenLockObservers: [NSObjectProtocol] = []
+    private var workRestState = WorkRestState()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupStatusBarMenu()
@@ -122,6 +124,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         dutyClock?.invalidate()
         sleepObservers.forEach { NSWorkspace.shared.notificationCenter.removeObserver($0) }
+        screenLockObservers.forEach { DistributedNotificationCenter.default().removeObserver($0) }
         // 还在上班就退出：当成下班，把最后一段记上
         do {
             try healthTracker?.endSession(at: .now)
@@ -195,7 +198,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - 上班时长
 
-    /// 上班时长每分钟入一次账（报告里总是最新的，意外退出最多丢一分钟）；电脑睡着的时间不算上班
+    /// 上班时长每分钟入一次账；睡眠、锁屏和无操作期间按休息记账
     private func configureDutyClock() {
         let timer = Timer(timeInterval: 60, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.checkpointDuty() }
@@ -206,15 +209,37 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let center = NSWorkspace.shared.notificationCenter
         sleepObservers = [
             center.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.suspendDuty() }
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.workRestState.isSleeping = true
+                    self.applyAutomaticRest()
+                    self.pauseLootForSleep()
+                }
             },
             center.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated {
-                    self?.healthTracker?.resume(at: .now)
-                    self?.loot?.resetClock(at: .now)
+                    guard let self else { return }
+                    self.workRestState.isSleeping = false
+                    self.workRestState.userIdleSeconds = PetBehaviorCoordinator.systemUserIdleSeconds()
+                    self.applyAutomaticRest()
+                    // 宝箱从醒来这一刻重新计孵化时间
+                    self.loot?.resetClock(at: .now)
                 }
             },
         ]
+
+        let lockCenter = DistributedNotificationCenter.default()
+        screenLockObservers = [true, false].map { isLocked in
+            let name = Notification.Name(isLocked ? "com.apple.screenIsLocked" : "com.apple.screenIsUnlocked")
+            return lockCenter.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.workRestState.isScreenLocked = isLocked
+                    self.workRestState.userIdleSeconds = PetBehaviorCoordinator.systemUserIdleSeconds()
+                    self.applyAutomaticRest()
+                }
+            }
+        }
     }
 
     private func checkpointDuty() {
@@ -226,12 +251,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         loot?.tick(isOnDuty: (workSessionController?.state ?? .idle) != .idle, at: .now)
     }
 
-    private func suspendDuty() {
+    private func applyAutomaticRest() {
+        reminderScheduler?.setUserResting(workRestState.isResting)
         do {
-            try healthTracker?.suspend(at: .now)
+            try healthTracker?.setAutomaticRest(workRestState.isResting, at: .now)
         } catch {
-            NSLog("[ICUShell] failed to record work time before sleep: \(error.localizedDescription)")
+            NSLog("[ICUShell] failed to record automatic rest: \(error.localizedDescription)")
         }
+    }
+
+    /// 电脑要睡了：宝箱先把睡前这段孵化时间记上，睡着期间不孵化（醒来再 resetClock）。
+    /// 只在睡眠时做：锁屏、无操作走 applyAutomaticRest，那里每次空闲检测都会调，不能清孵化时钟
+    private func pauseLootForSleep() {
         loot?.tick(isOnDuty: (workSessionController?.state ?? .idle) != .idle, at: .now)
         loot?.resetClock(at: nil)
     }
@@ -311,7 +342,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func configureUsageRecording(paths: AppPaths) {
         let recorder = UsageRecorder(log: UsageSampleLog(appPaths: paths))
         usageRecorder = recorder
-        petWindowController?.onUserIdleChecked = { [weak recorder] idle in recorder?.userIdleChecked(idle) }
+        petWindowController?.onUserIdleChecked = { [weak self, weak recorder] idle in
+            recorder?.userIdleChecked(idle)
+            guard let self else { return }
+            self.workRestState.userIdleSeconds = idle
+            self.applyAutomaticRest()
+        }
         recorder.agentChanged(agentMonitor?.summary.kind ?? .idle)
     }
 

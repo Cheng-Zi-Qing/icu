@@ -225,6 +225,7 @@ func testWorkStateBubbleExpandsWindowAndKeepsBubbleAbovePetCanvas() throws {
 func testReminderSnoozeSchedulesFreshFollowUpAndLogsOutcomes() throws {
     let harness = try makeHealthFlowHarness()
     defer { harness.controller.close() }
+    harness.window.actionHandler?(.startWork)
 
     let originalPayload = ReminderPresentationPayload(
         id: UUID(uuidString: "cccccccc-3333-3333-3333-333333333333")!,

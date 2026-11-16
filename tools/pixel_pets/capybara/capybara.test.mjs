@@ -10,7 +10,9 @@ import { Grid } from './raster.mjs';
 import { renderFrontPeek, renderFrontUpright } from './front-peek.mjs';
 import { EYE_LEFT } from './front-head.mjs';
 import { OUTFIT_HEADWEAR } from './headwear.mjs';
-import { CURSOR_POINT_SIZE, CURSOR_SIZE, cursorDefinitions, cursorManifest } from './cursors.mjs';
+import { CURSOR_POINT_SIZE, CURSOR_SCALE, CURSOR_SIZE, cursorDefinitions, cursorManifest } from './cursors.mjs';
+import { loadModel } from './build.mjs';
+import { encodePNG } from './png.mjs';
 import { validateModel } from './validate.mjs';
 import {
   committed, createHistory, dragged, duplicatedPart, redone, setIn, undone, withMoved, withoutIndex,
@@ -298,9 +300,98 @@ test('front peek flinch squeezes the eyes shut and ducks one pixel toward the ed
   assert.ok(eyeInk(flinch) > 0);
 });
 
-test('edge frames: front peek plus a side head-turn pair', () => {
+const edgeNames = [
+  'peek_0.png', 'peek_1.png', 'peek_2.png', 'peek_3.png',
+  'look_left.png', 'look_right.png', 'bird_0.png', 'bird_1.png', 'bird_2.png',
+  'turn_0.png', 'turn_1.png',
+];
+
+test('edge frames include frontal glances and a flyby, keeping the legacy turn pair', () => {
   const names = allFrames(DEFAULT_MODEL).map(([name]) => name).filter((n) => n.startsWith('edge/'));
-  assert.deepEqual(names, ['edge/peek_0.png', 'edge/peek_1.png', 'edge/peek_2.png', 'edge/peek_3.png', 'edge/turn_0.png', 'edge/turn_1.png']);
+  assert.deepEqual(names, edgeNames.map((name) => `edge/${name}`));
+});
+
+test('front peek looks move one pixel horizontally on screen, never vertically or with the paws', () => {
+  for (const headwear of ['orange', 'straw_hat']) {
+    const rest = renderFrontPeek({ headwear });
+    for (const look of [-1, 1]) {
+      const glance = renderFrontPeek({ headwear, look });
+      assert.notDeepEqual(glance.cells, rest.cells, 'a glance is visible');
+      for (let y = 0; y < 32; y += 1) {
+        for (let x = 0; x < 32; x += 1) {
+          if (rest.tagAt(x, y) === 'paw') {
+            assert.equal(glance.get(x, y), rest.get(x, y), `paw stays at ${x},${y}`);
+            assert.equal(glance.tagAt(x, y), 'paw');
+          }
+        }
+      }
+      // The whole front head, including its eyes and headwear, moves only one screen column.
+      // Exclude the last seven columns, where the stationary paw outlines cover the head.
+      for (let y = 0; y < 32; y += 1) for (let x = 1; x < 25; x += 1) {
+        assert.equal(glance.get(x, y), rest.get(x - look, y), `${headwear}: horizontal look ${look} at ${x},${y}`);
+      }
+    }
+  }
+});
+
+test('edge bird flyby uses empty space beside the front head, follows the head turn, and keeps paw anchors', () => {
+  for (const headwear of ['orange', 'straw_hat']) {
+    const frames = new Map(allFrames(DEFAULT_MODEL, { headwear }));
+    const centers = [];
+    for (const [i, look] of [-1, -1, 1].entries()) {
+      const base = renderFrontPeek({ headwear, look });
+      const flyby = frames.get(`edge/bird_${i}.png`);
+      assert.ok(flyby, `bird ${i} exists for ${headwear}`);
+      assert.ok(flyby.cells.includes('bird') && flyby.cells.includes('birdWing'));
+      assert.equal(flyby.width, 32);
+      assert.equal(flyby.height, 32);
+      const [atX, atY, beakY] = [[2, 1, 2], [11, 1, 1], [23, 1, 2]][i];
+      const beak = [atY + beakY, 31 - (atX + 5)];
+      assert.equal(flyby.get(...beak), 'star', 'beak follows the head counter-clockwise by 90 degrees');
+      assert.equal(flyby.get(beak[0], beak[1] + 1), 'outline', 'eye stays below the upward-pointing beak');
+      const left = flyby.mirrored();
+      const leftBase = base.mirrored();
+      assert.equal(left.get(31 - beak[0], beak[1]), 'star', 'left edge mirrors the bird horizontally, not vertically');
+      for (let y = 0; y < 32; y += 1) for (let x = 0; x < 32; x += 1) {
+        assert.equal(left.get(31 - x, y), flyby.get(x, y), 'left and right flybys mirror exactly');
+        if (['head', 'paw'].includes(leftBase.tagAt(x, y))) {
+          assert.equal(left.get(x, y), leftBase.get(x, y), 'left-edge bird leaves head and paws visible');
+          assert.equal(left.tagAt(x, y), leftBase.tagAt(x, y));
+        }
+      }
+      assert.deepEqual(flyby.tags.flatMap((tag, j) => tag === 'paw' ? [j] : []), base.tags.flatMap((tag, j) => tag === 'paw' ? [j] : []));
+      for (let j = 0; j < base.cells.length; j += 1) {
+        if (flyby.cells[j] !== base.cells[j]) assert.equal(base.cells[j], 'clear', `bird stays clear of pet at ${j % 32},${Math.floor(j / 32)}`);
+      }
+      const points = flyby.cells.flatMap((ink, j) => ['bird', 'birdWing'].includes(ink)
+        ? [[j % flyby.width, Math.floor(j / flyby.width)]] : []);
+      const xs = points.map(([x]) => x);
+      const ys = points.map(([, y]) => y);
+      const xSpan = Math.max(...xs) - Math.min(...xs);
+      const ySpan = Math.max(...ys) - Math.min(...ys);
+      assert.ok(ySpan > xSpan, `bird ${i} turns upright with the head (${xSpan}x${ySpan})`);
+      centers.push([xs.reduce((sum, x) => sum + x, 0) / xs.length, ys.reduce((sum, y) => sum + y, 0) / ys.length]);
+    }
+    assert.ok(centers[0][1] > centers[1][1] && centers[1][1] > centers[2][1], `${headwear}: bird path enters, passes, then leaves upward`);
+    assert.ok(Math.max(...centers.map(([x]) => x)) - Math.min(...centers.map(([x]) => x)) <= 1, `${headwear}: bird path follows the screen edge vertically`);
+  }
+});
+
+test('edge PNGs match the Swift enum and generated 32px frames for both headwear sets', () => {
+  const script = readFileSync(new URL('../../../apps/macos-shell/Sources/ICUShell/Pet/Edge/PetPeekScript.swift', import.meta.url), 'utf8');
+  const files = [...script.matchAll(/return "([^"]+\.png)"/g)].map((match) => match[1]);
+  assert.deepEqual([...files].sort(), [...edgeNames].sort(), 'Swift and generator list the same frames');
+  for (const headwear of ['orange', 'straw_hat']) {
+    const root = headwear === 'orange' ? '../../../assets/pets/capybara/' : '../../../assets/pets/capybara/outfits/straw_hat/';
+    for (const [name, grid] of allFrames(loadModel(), { headwear }).filter(([name]) => name.startsWith('edge/'))) {
+      assert.equal(grid.width, 32, name);
+      assert.equal(grid.height, 32, name);
+      const png = readFileSync(new URL(root + name, import.meta.url));
+      assert.equal(png.readUInt32BE(16), 32, name);
+      assert.equal(png.readUInt32BE(20), 32, name);
+      assert.deepEqual(png, encodePNG(grid), `${headwear}/${name} is up to date`);
+    }
+  }
 });
 
 test('settings title bar decoration is the upright front peek with paws on the bottom edge', () => {
@@ -439,21 +530,74 @@ test('the visiting bird flies in, perches on the head without covering the pet a
 
 // ---------- 光标 ----------
 
-test('pixel cursors are fully outlined 16x16 hands with the hot spot on the hand', () => {
+test('Kenney cursor masks and hot spots match the selected source tiles', () => {
+  const expected = {
+    pat: { hotSpot: [7, 5], rows: [
+      '................', '................', '....XXXXXXXXX...', '...XXXXXXXXXXX..',
+      '..XXX#X##X##XXX.', '..XX#########XX.', '..XX#########XX.', '.XXXX########XXX',
+      '.XX###########XX', '.XX###########XX', '.XX###########XX', '.XXX##########XX',
+      '..XXXX#######XXX', '...XXXX#####XXX.', '.....XXXXXXXXX..', '......XXXXXXX...',
+    ] },
+    tickle: { hotSpot: [4, 3], rows: [
+      '......XXXX......', '...XXXXXXXXXX...', '..XXXXX##XXXXX..', '..XX##X##X##XX..',
+      '..XX##X##X##XXX.', '..XX###X##X##XX.', '..XX#########XX.', '.XXXX########XXX',
+      'XXXXX#########XX', 'XX############XX', 'XX############XX', 'XXXX##########XX',
+      '.XXXXX#######XXX', '...XXXX#####XXX.', '.....XXXXXXXXX..', '......XXXXXXX...',
+    ] },
+    grabbing: { hotSpot: [8, 7], rows: [
+      '................', '................', '................', '....XXXXXXXXXX..',
+      '...XXXXXXXXXXXX.', '..XXX##X##X##XX.', '.XXXX########XXX', '.XX###########XX',
+      '.XX###########XX', '.XX###########XX', '.XXX##########XX', '..XXX########XXX',
+      '...XX########XX.', '...XXX######XXX.', '....XXXXXXXXXX..', '.....XXXXXXXX...',
+    ] },
+    poke: { hotSpot: [3, 2], rows: [
+      '..XXX...........', '.XXXXX..........', 'XXX#XXXXXX......', 'XX###XXXXXXX....',
+      'XX#######XXXX...', 'XXX########XXX..', 'XXXX########XX..', 'XX##X#######XXX.',
+      'XX###########XXX', 'XXX###########XX', '.XXX##########XX', '..XXXXXX######XX',
+      '...XXXXX#####XXX', '......XX###XXXX.', '......XXXXXXXX..', '.......XXXXX....',
+    ] },
+    grab: { hotSpot: [8, 3], rows: [
+      '.......XXXX.....', '....XXXXXXXXXX..', '...XXXXX##XXXXX.', '...XX##X##X##XX.',
+      '...XX##X##X##XX.', '.XXXX##X##X##XX.', 'XXXXX########XXX', 'XX##X#########XX',
+      'XX############XX', 'XXX###########XX', '.XXX##########XX', '..XXX########XXX',
+      '...XX########XX.', '...XXX######XXX.', '....XXXXXXXXXX..', '.....XXXXXXXX...',
+    ] },
+  };
   const definitions = cursorDefinitions();
-  assert.deepEqual(Object.keys(definitions).sort(), ['grab', 'grabbing', 'pat']);
+  assert.deepEqual(Object.keys(definitions).sort(), Object.keys(expected).sort());
+  for (const [name, { rows, hotSpot }] of Object.entries(expected)) {
+    const { grid } = definitions[name];
+    for (const row of rows) assert.equal(row.length, CURSOR_SIZE, `${name}: source row width`);
+    assert.equal(grid.cells.length, 256, `${name}: 16x16 grid cells`);
+    assert.deepEqual(definitions[name].hotSpot, hotSpot, `${name}: selected hot spot`);
+    assert.deepEqual(Array.from({ length: CURSOR_SIZE }, (_, y) => Array.from({ length: CURSOR_SIZE }, (_, x) => {
+      const ink = grid.get(x, y);
+      return ink === 'clear' ? '.' : ink === 'outline' ? 'X' : ink === 'white' ? '#' : '?';
+    }).join('')), rows, `${name}: Kenney source mask`);
+    assert.equal(grid.get(...hotSpot), 'white', `${name}: hot spot is a source white pixel`);
+  }
+});
+
+test('Kenney cursor masks retain their 16x16 white fill and dark outline', () => {
+  const definitions = cursorDefinitions();
+  assert.deepEqual(Object.keys(definitions).sort(), ['grab', 'grabbing', 'pat', 'poke', 'tickle']);
   for (const [name, { grid, hotSpot }] of Object.entries(definitions)) {
     assert.equal(grid.width, CURSOR_SIZE, name);
     assert.equal(grid.height, CURSOR_SIZE, name);
-    for (let i = 0; i < CURSOR_SIZE; i += 1) {
-      for (const [x, y] of [[i, 0], [i, CURSOR_SIZE - 1], [0, i], [CURSOR_SIZE - 1, i]]) {
-        assert.ok(grid.get(x, y) !== 'white', `${name}: white fill at the edge ${x},${y} would lose its outline`);
-      }
-    }
     assert.equal(grid.get(...hotSpot), 'white', `${name}: hot spot sits on the hand`);
+    assert.ok(grid.cells.includes('white'), `${name}: white hand fill`);
+    assert.ok(grid.cells.includes('outline'), `${name}: original dark outline`);
+    assert.ok(grid.cells.every((ink) => ['clear', 'white', 'outline'].includes(ink)), `${name}: original black/white palette only`);
   }
-  assert.ok(new Set(definitions.pat.grid.cells).has('blush'), 'pat cursor carries a little heart');
-  assert.notDeepEqual(definitions.pat.grid.cells, definitions.grab.grid.cells, 'pat and grab look different');
+});
+
+test('cursor masks remain distinct', () => {
+  const entries = Object.entries(cursorDefinitions());
+  for (let i = 0; i < entries.length; i += 1) {
+    for (let j = i + 1; j < entries.length; j += 1) {
+      assert.notDeepEqual(entries[i][1].grid.cells, entries[j][1].grid.cells, `${entries[i][0]} and ${entries[j][0]} use different Kenney tiles`);
+    }
+  }
 });
 
 test('cursor manifest lists every cursor with its hot spot and size', () => {
@@ -462,6 +606,20 @@ test('cursor manifest lists every cursor with its hot spot and size', () => {
   assert.equal(manifest.pointSize, CURSOR_POINT_SIZE);
   for (const [name, { hotSpot }] of Object.entries(cursorDefinitions())) {
     assert.deepEqual(manifest.cursors[name], { file: `${name}.png`, hotSpot });
+  }
+});
+
+test('cursor generated resources match the manifest and 48px PNG exports', () => {
+  const directory = new URL('../../../assets/pets/capybara/cursor/', import.meta.url);
+  const manifest = JSON.parse(readFileSync(new URL('cursors.json', directory), 'utf8'));
+  assert.deepEqual(manifest, cursorManifest());
+  assert.equal(CURSOR_SCALE, 3);
+  assert.equal(CURSOR_POINT_SIZE, 24);
+  for (const [name, { grid }] of Object.entries(cursorDefinitions())) {
+    const png = readFileSync(new URL(manifest.cursors[name].file, directory));
+    assert.equal(png.readUInt32BE(16), 48, `${name}: PNG width`);
+    assert.equal(png.readUInt32BE(20), 48, `${name}: PNG height`);
+    assert.deepEqual(png, encodePNG(grid, { scale: CURSOR_SCALE }), `${name}: resource matches pixels`);
   }
 });
 

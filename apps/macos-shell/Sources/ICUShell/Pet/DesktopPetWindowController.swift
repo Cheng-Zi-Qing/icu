@@ -123,8 +123,7 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
             self?.updateChase()
         }
         petView.onOverlayLayoutModeChanged = { [weak self] mode in
-            self?.updateWindowSize(for: mode)
-            self?.edgeDock?.overlayVisibilityChanged(mode != .compact)
+            self?.updateOverlayWindowLayout(for: mode)
         }
         petView.onActionClipChanged = { [weak self] _ in
             guard let self else { return }
@@ -132,7 +131,12 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
         }
         petView.onPresentedWidthChanged = { [weak self] _ in
             guard let self else { return }
-            self.updateWindowSize(for: self.petView.currentOverlayLayoutMode)
+            let mode = self.petView.currentOverlayLayoutMode
+            if mode == .compact {
+                self.updateWindowSize(for: mode)
+            } else {
+                self.updateOverlayWindowLayout(for: mode)
+            }
         }
 
         window.menuModelProvider = { [weak self] in
@@ -596,6 +600,13 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
 
     private func logHealthError(_ operation: String, error: Error) {
         NSLog("[ICUShell] failed to \(operation): \(error.localizedDescription)")
+    }
+
+    private func updateOverlayWindowLayout(for mode: DesktopPetView.OverlayLayoutMode) {
+        let visible = mode != .compact
+        edgeDock?.prepareOverlayLayoutChange(visible: visible)
+        updateWindowSize(for: mode)
+        edgeDock?.overlayVisibilityChanged(visible)
     }
 
     private func updateWindowSize(for mode: DesktopPetView.OverlayLayoutMode) {

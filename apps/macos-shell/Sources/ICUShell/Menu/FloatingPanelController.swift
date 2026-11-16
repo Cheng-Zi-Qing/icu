@@ -17,6 +17,7 @@ final class FloatingPanelController {
     }
 
     func present(contentView: NSView, frame: NSRect) {
+        NSLog("[ICUMenu] present requested active=\(NSApp.isActive)")
         dismiss()
 
         let adjustedFrame = clampedFrame(for: frame)
@@ -24,7 +25,7 @@ final class FloatingPanelController {
 
         let panel = MenuFloatingPanelWindow(
             contentRect: adjustedFrame,
-            styleMask: [.borderless],
+            styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
@@ -33,7 +34,7 @@ final class FloatingPanelController {
         // 像素板子自己画了硬投影，不要系统的柔和阴影
         panel.hasShadow = false
         panel.level = .popUpMenu
-        panel.hidesOnDeactivate = true
+        panel.hidesOnDeactivate = false
         panel.isMovableByWindowBackground = false
         panel.contentView = contentView
         panel.onCancel = { [weak self] in
@@ -53,6 +54,7 @@ final class FloatingPanelController {
         panelWindow?.orderOut(nil)
         panelWindow = nil
         if hadPanel {
+            NSLog("[ICUMenu] dismissed active=\(NSApp.isActive)")
             onDidDismiss?()
         }
     }

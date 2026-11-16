@@ -3,11 +3,19 @@ import AppKit
 // 桌宠上的像素手型光标：头上摸摸、身上张手、拖着走时握拳
 
 func testPetCursorKindFollowsWhatThePointerIsOver() throws {
-    try expect(PetCursorKind.kind(isGrabbing: false, overBody: true, overHead: true) == .pat, "over the head: pat")
-    try expect(PetCursorKind.kind(isGrabbing: false, overBody: true, overHead: false) == .grab, "over the body: open hand")
-    try expect(PetCursorKind.kind(isGrabbing: true, overBody: true, overHead: true) == .grabbing, "holding it: fist, even over the head")
-    try expect(PetCursorKind.kind(isGrabbing: true, overBody: false, overHead: false) == .grabbing, "the fist stays while the pet lags behind a fast drag")
-    try expect(PetCursorKind.kind(isGrabbing: false, overBody: false, overHead: false) == nil, "transparent pixels keep the normal arrow")
+    for (zone, expected) in [(PetPokeZone.head, PetCursorKind.pat), (.belly, .tickle), (.back, .poke),
+                             (.nose, .grab), (.legs, .grab)] {
+        try expect(PetCursorKind.kind(isDragging: false, overBody: true, zone: zone, activeClip: nil) == expected,
+                   "hovering \(zone) shows \(expected)")
+        try expect(PetCursorKind.kind(isDragging: true, overBody: true, zone: zone, activeClip: .tickled) == .grabbing,
+                   "actual drag overrides the zone and active clip")
+    }
+    try expect(PetCursorKind.kind(isDragging: false, overBody: true, zone: nil, activeClip: nil) == .grab, "unknown body: open hand")
+    try expect(PetCursorKind.kind(isDragging: true, overBody: false, zone: nil, activeClip: nil) == .grabbing, "fast drag keeps its grip off-body")
+    try expect(PetCursorKind.kind(isDragging: false, overBody: false, zone: .head, activeClip: .petted) == nil, "transparent pixels override patting")
+    try expect(PetCursorKind.kind(isDragging: false, overBody: false, zone: .belly, activeClip: .tickled) == nil, "transparent pixels override tickling")
+    try expect(PetCursorKind.kind(isDragging: false, overBody: true, zone: .back, activeClip: .petted) == .pat, "patting clip overrides the hovered zone")
+    try expect(PetCursorKind.kind(isDragging: false, overBody: true, zone: .head, activeClip: .tickled) == .tickle, "tickling clip overrides the hovered zone")
 }
 
 /// 透明区域盖在别的 App 上（比如 Otty 的文字）：桌宠不能每动一下就设箭头，跟人家的光标抢
@@ -18,8 +26,8 @@ func testPetCursorOnlyTouchesTheCursorOverThePet() throws {
     try expect(PetCursorKind.update(from: nil, to: nil) == .leaveAlone, "over transparent pixels the app underneath owns the cursor")
 }
 
-private func writeCursorAssets(in directory: URL) throws {
-    for kind in PetCursorKind.allCases {
+private func writeCursorAssets(in directory: URL, omittingImages: Set<PetCursorKind> = []) throws {
+    for kind in PetCursorKind.allCases where !omittingImages.contains(kind) {
         try makeColorPNG(at: directory.appendingPathComponent("\(kind.rawValue).png"), color: .white)
     }
     let manifest = """
@@ -29,7 +37,9 @@ private func writeCursorAssets(in directory: URL) throws {
       "cursors": {
         "grab": { "file": "grab.png", "hotSpot": [9, 9] },
         "grabbing": { "file": "grabbing.png", "hotSpot": [8, 9] },
-        "pat": { "file": "pat.png", "hotSpot": [7, 8] }
+        "pat": { "file": "pat.png", "hotSpot": [7, 8] },
+        "tickle": { "file": "tickle.png", "hotSpot": [6, 7] },
+        "poke": { "file": "poke.png", "hotSpot": [5, 6] }
       }
     }
     """
@@ -46,6 +56,8 @@ func testPetCursorSetLoadsPixelCursorsWithTheirHotSpots() throws {
     try expect(grab.image.size == NSSize(width: 24, height: 24), "pixel cursor is 24pt (got \(grab.image.size))")
     try expect(grab.hotSpot == NSPoint(x: 13.5, y: 13.5), "hot spot scales from pixels to points (got \(grab.hotSpot))")
     try expect(cursors.cursor(for: .pat).hotSpot == NSPoint(x: 10.5, y: 12), "each cursor keeps its own hot spot")
+    try expect(cursors.cursor(for: .tickle).hotSpot == NSPoint(x: 9, y: 10.5), "tickle cursor loads its own asset")
+    try expect(cursors.cursor(for: .poke).hotSpot == NSPoint(x: 7.5, y: 9), "poke cursor loads its own asset")
     // 原图 16px 按 24pt 显示，系统得自己缩放；后台换光标时它缩坏了就是白方块。所以 1 倍 / 2 倍的像素图都提前备好
     let widths = grab.image.representations.compactMap { ($0 as? NSBitmapImageRep)?.pixelsWide }.sorted()
     try expect(widths == [24, 48], "ready-made 1x and 2x bitmaps (got \(widths))")
@@ -59,7 +71,15 @@ func testPetCursorSetFallsBackToSystemHands() throws {
         try expect(cursors.cursor(for: .grab) === NSCursor.openHand, "no pixel art: open hand")
         try expect(cursors.cursor(for: .grabbing) === NSCursor.closedHand, "no pixel art: closed hand")
         try expect(cursors.cursor(for: .pat) === NSCursor.pointingHand, "no pixel art: pointing hand")
+        try expect(cursors.cursor(for: .tickle) === NSCursor.pointingHand, "no tickle art: pointing hand")
+        try expect(cursors.cursor(for: .poke) === NSCursor.pointingHand, "no poke art: pointing hand")
     }
+    let partial = try makeTemporaryDirectory()
+    try writeCursorAssets(in: partial, omittingImages: [.tickle, .poke])
+    let cursors = PetCursorSet(directory: partial)
+    try expect(cursors.cursor(for: .tickle) === NSCursor.pointingHand, "missing tickle.png uses the system hand")
+    try expect(cursors.cursor(for: .poke) === NSCursor.pointingHand, "missing poke.png uses the system hand")
+    try expect(cursors.cursor(for: .grab) !== NSCursor.openHand, "existing assets still load when new images are missing")
 }
 
 func testBackgroundCursorCanBeEnabled() throws {
@@ -143,21 +163,51 @@ func testDesktopPetViewSwitchesCursorsAcrossHeadAndBody() throws {
         assetLocator: PetAssetLocator(appPaths: appPaths),
         petID: "capybara"
     )
+    view.behavior = PetBehaviorCoordinator(sprites: { _ in nil }, startsTimer: false)
     view.layoutSubtreeIfNeeded()
-    guard let body = view.petBodyRect else { throw TestFailure(message: "pet body should be known") }
 
     func move(to point: NSPoint) throws {
-        guard let event = NSEvent.mouseEvent(
-            with: .mouseMoved, location: point, modifierFlags: [], timestamp: 0,
-            windowNumber: 0, context: nil, eventNumber: 0, clickCount: 0, pressure: 0
-        ) else { throw TestFailure(message: "mouse event") }
-        view.mouseMoved(with: event)
+        view.mouseMoved(with: try cursorMouseEvent(.mouseMoved, at: point))
     }
 
-    try move(to: NSPoint(x: body.midX, y: body.maxY - body.height * 0.2))
-    try expect(view.currentCursorKind == .pat, "head shows the patting hand (got \(String(describing: view.currentCursorKind)))")
-    try move(to: NSPoint(x: body.midX, y: body.minY + body.height * 0.2))
-    try expect(view.currentCursorKind == .grab, "body shows the open hand")
+    guard let image = view.currentImage else { throw TestFailure(message: "pet image should be known") }
+    let rect = view.aspectFitRect(for: image.size, in: view.petCanvasRect)
+    func point(x: CGFloat, y: CGFloat, mirrored: Bool) -> NSPoint {
+        NSPoint(x: rect.minX + (mirrored ? 32 - x : x) / 32 * rect.width,
+                y: rect.maxY - y / 32 * rect.height)
+    }
+    for mirrored in [false, true] {
+        view.setFacingRight(mirrored)
+        for (x, y, expected) in [(CGFloat(12), CGFloat(10), PetCursorKind.pat),
+                                 (12, 22, .tickle), (25, 22, .poke), (4, 10, .grab), (12, 29, .grab)] {
+            let local = point(x: x, y: y, mirrored: mirrored)
+            try move(to: local)
+            try expect(view.currentCursorKind == expected, "\(mirrored ? "right" : "left") facing hover shows \(expected)")
+            view.mouseDown(with: try cursorMouseEvent(.leftMouseDown, at: local))
+            try expect(view.isPressingPet && !view.isDraggingPet && view.currentCursorKind == expected,
+                       "press before drag keeps \(expected)")
+            view.mouseUp(with: try cursorMouseEvent(.leftMouseUp, at: local))
+            try expect(view.currentCursorKind == expected, "release restores \(expected)")
+        }
+    }
+    view.setFacingRight(false)
+    try move(to: NSPoint(x: rect.minX - 1, y: rect.midY))
+    try expect(view.currentCursorKind == nil, "transparent space beside the sprite has no pet cursor")
+
+    view.setWorkActivity(.write)
+    try move(to: point(x: 12, y: 10, mirrored: false))
+    try expect(view.currentCursorKind == .grab, "front-facing work scenes use a generic grab hand")
+    view.setWorkActivity(nil)
+    let edge = petRoot.appendingPathComponent("edge", isDirectory: true)
+    try makeColorPNG(at: edge.appendingPathComponent(PetPeekFrame.rest.fileName), color: .brown)
+    view.reloadPoseSprites()
+    view.setEdgePeek(true)
+    defer { view.setEdgePeek(false) }
+    view.showPeekFrame(.turned)
+    try move(to: point(x: 12, y: 22, mirrored: false))
+    try expect(view.currentCursorKind == .pat, "a rotated peeking head never becomes a belly")
+    view.setEdgePeek(false)
+    try verifyCursorDragEvents(view, at: point(x: 25, y: 22, mirrored: false))
 }
 
 /// 状态条刷新、窗口变大小时 AppKit 可能补发过期的鼠标事件：鼠标其实在别的 App 上（比如 Otty），
@@ -192,4 +242,92 @@ func testDesktopPetViewIgnoresMouseEventsWhenThePointerIsElsewhere() throws {
     view.pointerLocation = { window.convertPoint(toScreen: view.convert(head, to: nil)) }
     view.mouseMoved(with: event)
     try expect(view.currentCursorKind == .pat, "pointer really on the head: patting hand (got \(String(describing: view.currentCursorKind)))")
+    try verifyStationaryCursorFollowsActionClips(view, window: window)
+}
+
+private func cursorMouseEvent(_ type: NSEvent.EventType, at point: NSPoint, windowNumber: Int = 0) throws -> NSEvent {
+    guard let event = NSEvent.mouseEvent(
+        with: type, location: point, modifierFlags: [], timestamp: 0,
+        windowNumber: windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1
+    ) else { throw TestFailure(message: "cursor mouse event") }
+    return event
+}
+
+private func verifyCursorDragEvents(_ view: DesktopPetView, at point: NSPoint) throws {
+    let window = NSWindow(contentRect: NSRect(origin: CGPoint(x: 200, y: 200), size: view.bounds.size),
+                          styleMask: [.borderless], backing: .buffered, defer: true)
+    window.contentView = view
+    defer { window.close() }
+    view.pointerLocation = { window.convertPoint(toScreen: view.convert(point, to: nil)) }
+    view.mouseDown(with: try cursorMouseEvent(.leftMouseDown, at: point, windowNumber: window.windowNumber))
+    try expect(view.currentCursorKind == .poke && !view.isDraggingPet, "butt press stays poke before threshold")
+    view.mouseDragged(with: try cursorMouseEvent(.leftMouseDragged, at: point, windowNumber: window.windowNumber))
+    try expect(view.currentCursorKind == .poke && !view.isDraggingPet, "drag event below threshold keeps the poke hand")
+    // Seed the existing controller's press point; the event still uses the real system pointer for dragging.
+    let actual = NSEvent.mouseLocation
+    view.dragController.mouseDown(mouseLocation: CGPoint(x: actual.x - 20, y: actual.y), windowOrigin: window.frame.origin)
+    view.mouseDragged(with: try cursorMouseEvent(.leftMouseDragged, at: point, windowNumber: window.windowNumber))
+    try expect(view.isDraggingPet && view.currentCursorKind == .grabbing, "the first actual drag event immediately closes the hand")
+    view.pointerLocation = { window.convertPoint(toScreen: CGPoint(x: -100, y: -100)) }
+    view.updateCursor(at: point)
+    try expect(view.currentCursorKind == .grabbing, "drag keeps its grip when the pointer briefly leaves the body")
+    view.pointerLocation = { window.convertPoint(toScreen: view.convert(point, to: nil)) }
+    view.mouseUp(with: try cursorMouseEvent(.leftMouseUp, at: point, windowNumber: window.windowNumber))
+    try expect(!view.isDraggingPet && view.currentCursorKind == .poke, "release returns to the butt poke hand")
+    view.updateCursor(at: nil)
+}
+
+private func verifyStationaryCursorFollowsActionClips(_ view: DesktopPetView, window: NSWindow) throws {
+    let directory = try makeTemporaryDirectory()
+    for clip in [PetActionClip.petted, .tickled] {
+        for name in clip.frameNames {
+            try makeColorPNG(at: directory.appendingPathComponent(name), color: .brown)
+        }
+    }
+    let sprites = PetPoseSprites(directory: directory, canvasPointSize: DesktopPetView.compactContentSize)
+    var time: TimeInterval = 1000
+    let coordinator = PetBehaviorCoordinator(sprites: { _ in sprites }, userIdle: { 0 }, now: { time }, startsTimer: false)
+    view.behavior = coordinator
+    coordinator.onImageChanged = { [weak view] in view?.applyActionImage($0) }
+    guard let image = view.currentImage else { throw TestFailure(message: "pet image") }
+    let rect = view.aspectFitRect(for: image.size, in: view.petCanvasRect)
+    let head = NSPoint(x: rect.minX + rect.width * 12 / 32, y: rect.maxY - rect.height * 10 / 32)
+    let belly = NSPoint(x: head.x, y: rect.maxY - rect.height * 22 / 32)
+    var pointer = head
+    var reads = 0
+    view.pointerLocation = {
+        reads += 1
+        return window.convertPoint(toScreen: view.convert(pointer, to: nil))
+    }
+    view.updateCursor(at: head)
+    try expect(view.currentCursorKind == .pat, "stationary pointer starts on head")
+    coordinator.poked(.belly)
+    try expect(coordinator.activeClip == .tickled && view.currentCursorKind == .tickle, "tickled starts without a mouse event")
+    reads = 0
+    time += 1 / PetActionClip.tickled.framesPerSecond
+    coordinator.tick()
+    try expect(reads == 0, "another frame of the same clip does not reapply the cursor")
+    time += PetActionClip.tickled.duration
+    coordinator.tick()
+    try expect(coordinator.activeClip == nil && view.currentCursorKind == .pat, "tickled ends back on head without mouse movement")
+
+    pointer = belly
+    view.updateCursor(at: belly)
+    try expect(view.currentCursorKind == .tickle, "belly starts with tickle")
+    for x: CGFloat in [40, 50, 60, 50, 40, 50, 60] {
+        time += 0.08
+        coordinator.pointerMoved(x: x, overHead: true)
+    }
+    try expect(coordinator.activeClip == .petted && view.currentCursorKind == .pat, "petted starts without a pointer event")
+    time += PetActionClip.petted.duration
+    coordinator.tick()
+    try expect(coordinator.activeClip == nil && view.currentCursorKind == .tickle, "petted ends back on belly without mouse movement")
+
+    pointer = NSPoint(x: rect.minX - 5, y: rect.midY)
+    coordinator.poked(.belly)
+    try expect(view.currentCursorKind == nil && !view.cursorGate.isOpen, "clip start on transparent space leaves cursor alone")
+    view.pointerLocation = { window.convertPoint(toScreen: CGPoint(x: -100, y: -100)) }
+    time += PetActionClip.tickled.duration
+    coordinator.tick()
+    try expect(view.currentCursorKind == nil && !view.cursorGate.isOpen, "clip end over another app does not claim the cursor")
 }

@@ -3,7 +3,8 @@ import Foundation
 func testPeekFrontLoopNeverTurnsTheHead() throws {
     let loop = PetPeekScript.frontLoop
     try expect(!loop.contains(where: \.isTurned), "the everyday loop should stay facing the user")
-    try expect(loop.first == .rest, "the loop should start from the front rest frame")
+    try expect(loop.first == .rest && loop.last == .rest, "the quiet loop should start and end at front rest")
+    try expect(!loop.contains(.birdFlyIn), "birds are reserved for the rare glance script")
     let rest = loop.filter { $0 == .rest }.count
     try expect(Double(rest) / Double(loop.count) >= 0.5, "mostly resting (got \(rest)/\(loop.count))")
 }
@@ -11,12 +12,17 @@ func testPeekFrontLoopNeverTurnsTheHead() throws {
 func testPeekHeadTurnIsARareEasterEgg() throws {
     let loopSeconds = Double(PetPeekScript.frontLoop.count) / PetPeekScript.framesPerSecond
     let averageGap = loopSeconds / PetPeekScript.turnChancePerLoop
-    try expect(averageGap >= 120, "on average the head should turn at most every couple of minutes (got \(averageGap)s)")
+    try expect(averageGap >= 120, "on average the bird-search glance should happen at most every couple of minutes (got \(averageGap)s)")
 
-    let turnSeconds = Double(PetPeekScript.turnLoop.count) / PetPeekScript.framesPerSecond
-    try expect(turnSeconds >= 1.5, "a head turn should last long enough to notice (got \(turnSeconds)s)")
-    try expect(PetPeekScript.turnLoop.allSatisfy(\.isTurned), "the head stays turned for the whole turn")
-    try expect(PetPeekScript.turnLoop.contains(.turnedBlink), "it should blink while the head is turned")
+    let glance = PetPeekScript.turnLoop
+    let turnSeconds = Double(glance.count) / PetPeekScript.framesPerSecond
+    try expect(turnSeconds >= 1.5 && turnSeconds <= 6, "a glance is short but readable (got \(turnSeconds)s)")
+    try expect(!glance.contains(where: \.isTurned), "normal playback must never switch to the side silhouette")
+    try expect(glance.first == .rest && glance.last == .rest, "glancing starts and settles at neutral")
+    try expect(glance.contains(.lookLeft) && glance.contains(.lookRight), "scan both ways without turning the body")
+    try expect(glance.contains(.blink), "blink between glances")
+    let birds: [PetPeekFrame] = [.birdFlyIn, .birdFlyPast, .birdFlyOut]
+    try expect(glance.filter { birds.contains($0) } == birds, "the bird flies in, past and out in order")
 }
 
 func testPeekPlaybackTurnsOnlyWhenTheRollHitsAtTheEndOfALoop() throws {
@@ -37,15 +43,42 @@ func testPeekPlaybackTurnsOnlyWhenTheRollHitsAtTheEndOfALoop() throws {
     )
     try expect(
         Array(frames.dropFirst(PetPeekScript.frontLoop.count).prefix(PetPeekScript.turnLoop.count)) == PetPeekScript.turnLoop,
-        "a winning roll at the end of a loop should play the head turn"
+        "a winning roll at the end of a loop should play the frontal glance"
     )
-    try expect(frames.last == PetPeekScript.frontLoop[0], "after the turn it should face the user again")
+    try expect(frames.last == PetPeekScript.frontLoop[0], "after the bird leaves it should return to neutral")
+    try expect(!frames.contains(where: \.isTurned), "even a winning roll never uses the old turned frames")
+
+    // Winning rolls before the boundary are ignored; equality at the threshold is not a win.
+    var boundary = PetPeekPlayback.start
+    for _ in 1..<PetPeekScript.frontLoop.count { boundary = boundary.advanced(roll: 0) }
+    try expect(boundary.advanced(roll: PetPeekScript.turnChancePerLoop) == .start, "threshold equality stays in the quiet loop")
+    try expect(boundary.advanced(roll: 0.999999) == .start, "the upper random boundary stays quiet")
+    let winning = boundary.advanced(roll: PetPeekScript.turnChancePerLoop.nextDown)
+    var finished = winning
+    var glanced: [PetPeekFrame] = []
+    for _ in PetPeekScript.turnLoop {
+        glanced.append(finished.frame)
+        finished = finished.advanced(roll: 0)
+    }
+    try expect(glanced == PetPeekScript.turnLoop, "a roll just below the threshold plays the complete glance")
+    try expect(finished == .start, "the rare loop never immediately chains another rare loop")
+
+    var quiet = PetPeekPlayback.start
+    for index in 0..<(PetPeekScript.frontLoop.count * 3) {
+        try expect(quiet.frame == PetPeekScript.frontLoop[index % PetPeekScript.frontLoop.count], "high rolls repeat complete quiet loops")
+        quiet = quiet.advanced(roll: 0.999999)
+    }
 }
 
 func testPeekFrameFileNames() throws {
     try expect(PetPeekFrame.rest.fileName == "peek_0.png", "front rest")
     try expect(PetPeekFrame.blink.fileName == "peek_1.png", "front blink")
     try expect(PetPeekFrame.reach.fileName == "peek_2.png", "front reach")
+    try expect(PetPeekFrame.lookLeft.fileName == "look_left.png", "frontal left glance")
+    try expect(PetPeekFrame.lookRight.fileName == "look_right.png", "frontal right glance")
+    try expect(PetPeekFrame.birdFlyIn.fileName == "bird_0.png", "bird arrival")
+    try expect(PetPeekFrame.birdFlyPast.fileName == "bird_1.png", "bird passes")
+    try expect(PetPeekFrame.birdFlyOut.fileName == "bird_2.png", "bird departure")
     try expect(PetPeekFrame.turned.fileName == "turn_0.png", "head turned sideways")
     try expect(PetPeekFrame.turnedBlink.fileName == "turn_1.png", "head turned, blinking")
 }

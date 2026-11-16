@@ -11,12 +11,15 @@ const N = FRONT_SIZE;
 // 下巴缩在屏幕边后面一格，只露出半截口鼻，探出来的长度和侧身探头差不多
 const ROW0 = 25;
 
-/** 头连同表情；dy 是整颗头往下挪多少（0 = 下巴贴着边） */
-function head(dy, { blink, reach, flinch }) {
+/** 头连同表情；look 在最终贴边画面里左右挪一格，不改变爪子的锚点 */
+function head(dy, { blink, reach, flinch, look }) {
   const c = ROW0 + dy;
   // 平时和侧面一样半眯；往外探的那一下睁眼看你；被碰到挤成 > <
   const eyes = flinch ? 'squeeze' : blink ? 'closed' : reach ? 'open' : 'relaxed';
-  return frontFace(frontHead(c), c, { eyes });
+  const face = frontFace(Grid.empty(N, N), c, { eyes, look });
+  // 撤回原图 x 轴的眼珠位移；由原图 y 轴位移让头、眼睛和头饰在最终屏幕上左右挪一格。
+  const marks = look ? face.sampled(N, N, (x, y) => [x + (y >= c - 4 && y <= c - 1 ? look : 0), y]) : face;
+  return frontHead(c).overlaid(new Grid(N, N, marks.cells, marks.cells.map(ink => ink === 'clear' ? null : 'head')));
 }
 
 /** 两只爪子搭在边上（画布底边），在下巴两侧：单独描边，跟脸分开 */
@@ -28,9 +31,9 @@ function paws() {
 }
 
 /** 竖着的一帧（边在画布底边），用来跟侧面对照 */
-export function renderFrontUpright({ blink = false, reach = false, flinch = false, headwear: kind = HEADWEAR[0] } = {}) {
-  const dy = flinch ? 1 : reach ? -1 : 0;
-  return head(dy, { blink, reach, flinch }).overlaid(paws()).overlaid(frontHeadwearLayer(kind, ROW0 + dy));
+export function renderFrontUpright({ blink = false, reach = false, flinch = false, look = 0, headwear: kind = HEADWEAR[0] } = {}) {
+  const dy = (flinch ? 1 : reach ? -1 : 0) + look;
+  return head(dy, { blink, reach, flinch, look }).overlaid(paws()).overlaid(frontHeadwearLayer(kind, ROW0 + dy));
 }
 
 /** 逆时针转 90°：画布底边转到右边 */
@@ -39,7 +42,8 @@ const turnedTowardRightEdge = (grid) => grid.sampled(N, N, (x, y) => [N - 1 - y,
 /**
  * 正面贴边探头的一帧。
  * blink：闭眼；reach：头往屏幕里多探 1 格（爪子不动）；
- * flinch：被碰到吓一跳，眼睛挤成 > <，头往边后缩 1 格
+ * flinch：被碰到吓一跳，眼睛挤成 > <，头往边后缩 1 格；
+ * look：最终贴边画面往左（-1）/ 右（+1）轻移 1 格，头饰随头，爪子固定
  */
 export function renderFrontPeek(options = {}) {
   return turnedTowardRightEdge(renderFrontUpright(options));

@@ -76,6 +76,15 @@ test('frames are classified by their asset path', () => {
   assert.equal(frameKind('drag/dizzy_grounded_0.png').pose, 'sit');
   assert.equal(frameKind('work/read_3.png').partial, true);
   assert.equal(frameKind('ui/item_orange.png').skip, true);
+  for (const path of ['edge/look_left.png', 'edge/look_right.png', 'edge/bird_0.png', 'edge/bird_1.png', 'edge/bird_2.png']) {
+    const kind = frameKind(path);
+    assert.equal(kind.view, 'front', path);
+    assert.equal(kind.partial, true, path);
+    assert.equal(kind.rotated, true, path);
+  }
+  assert.equal(frameKind('edge/turn_0.png').view, 'side');
+  assert.equal(frameKind('unknown/frame.png').view, 'side');
+  assert.equal(frameKind('unknown/frame.png').pose, 'sit');
 });
 
 test('every asset frame is the same capybara (body consistency check)', () => {
