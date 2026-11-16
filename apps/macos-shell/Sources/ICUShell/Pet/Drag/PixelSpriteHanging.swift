@@ -16,41 +16,123 @@ enum PixelSpriteHanging {
         return max(1, bodyRows + Int((CGFloat(bodyRows) * (stretch - 1)).rounded()))
     }
 
-    /// 脑袋原样，身体拉到 `stretchedBodyRows` 行，越往下越细，到脚底横向收成 1 / 拉长量^slimming
+    /// 脑袋原样，身体拉到 `stretchedBodyRows` 行；比脖子宽出来的部分（鼓出去的背和肚子）横向压成 1 / 拉长量^slimming。
+    ///
+    /// 不是整行复制：先把原图每行左右边缘的台阶抹成一条顺的曲线（相邻三行取平均），
+    /// 沿这条曲线拉长再取整，背和肚子的弧线跟着变长，不会被拉成竖直线；取整后单独跳出去一行的毛刺抹平。
+    /// 收细只压鼓出去的那一截、不整体往中线缩：弧线形状不变只是扁一点，脖子处天然和脑袋一样宽，
+    /// 本来就比脖子窄的地方（脚）也不会被撑宽。边缘移动后露在外面的毛色，补回原图那一处的描边色。
     static func hanging(
         _ sprite: PixelSpriteGrid,
         headRows: Int,
         stretchedBodyRows: Int,
         slimming: CGFloat
     ) -> PixelSpriteGrid {
-        let headRows = min(max(headRows, 0), sprite.height)
+        let headRows = min(max(headRows, 1), sprite.height)
         let bodyRows = sprite.height - headRows
         guard bodyRows > 0, stretchedBodyRows > 0 else { return sprite }
         let stretch = CGFloat(stretchedBodyRows) / CGFloat(bodyRows)
-        let feetScale = 1 / pow(max(stretch, 1), slimming)
-        let center = CGFloat(sprite.width) / 2
+        let bulge = Bulge(
+            neck: sprite.opaqueSpan(row: headRows - 1).map { (CGFloat($0.lowerBound), CGFloat($0.upperBound + 1)) }
+                ?? (CGFloat(sprite.width) / 2, CGFloat(sprite.width) / 2),
+            scale: 1 / pow(max(stretch, 1), slimming)
+        )
+        let curve = smoothedEdges(sprite, firstRow: headRows)
+
+        /// 输出的第 row 行身体对应原图身体的哪个位置（连续的行号，按格子中心对齐）
+        func sourceRow(_ row: Int) -> CGFloat {
+            min(max((CGFloat(row) + 0.5) / stretch - 0.5, 0), CGFloat(bodyRows - 1))
+        }
+
+        let rawSpans = (0..<stretchedBodyRows).map { row -> (left: Int, right: Int)? in
+            guard let edge = interpolated(curve, at: sourceRow(row)) else { return nil }
+            let left = Int(bulge.slimmed(edge.left).rounded())
+            return (left, max(left, Int(bulge.slimmed(edge.right).rounded()) - 1))
+        }
+        let neck = sprite.opaqueSpan(row: headRows - 1).map { (left: $0.lowerBound, right: $0.upperBound) }
+        let spans = despiked(rawSpans, after: neck)
+
         let head = Array(sprite.cells[0..<(headRows * sprite.width)])
         let body = (0..<stretchedBodyRows).flatMap { row -> [UInt32] in
-            let sourceRow = headRows + endpointIndex(row, from: stretchedBodyRows, to: bodyRows)
-            // 第 0 行（紧挨脖子）几乎不收，最后一行收到 feetScale
-            let progress = CGFloat(row) / CGFloat(max(stretchedBodyRows - 1, 1))
-            let scale = 1 - (1 - feetScale) * progress
-            return taperedRow(sprite, row: sourceRow, scale: scale, center: center)
+            let nearest = headRows + Int(sourceRow(row).rounded())
+            guard let target = spans[row], let source = sprite.opaqueSpan(row: nearest) else {
+                return Array(repeating: PixelSpriteGrid.clear, count: sprite.width)
+            }
+            return (0..<sprite.width).map { x in
+                guard x >= target.left, x <= target.right else { return PixelSpriteGrid.clear }
+                let column = source.lowerBound + endpointIndex(x - target.left, from: target.right - target.left + 1, to: source.count)
+                return sprite[column, nearest]
+            }
         }
-        return PixelSpriteGrid(width: sprite.width, height: headRows + stretchedBodyRows, cells: head + body)
+        let shaped = PixelSpriteGrid(width: sprite.width, height: headRows + stretchedBodyRows, cells: head + body)
+        return repairingSilhouette(shaped, from: sprite) { x, y in
+            guard y >= headRows else { return CGPoint(x: CGFloat(x) + 0.5, y: CGFloat(y) + 0.5) }
+            return CGPoint(x: bulge.unslimmed(CGFloat(x) + 0.5), y: CGFloat(headRows) + sourceRow(y - headRows) + 0.5)
+        }
     }
 
-    /// 把一行的不透明部分围绕 center 收窄到 scale：两端的描边格一定留着，中间按整格挑
-    private static func taperedRow(_ sprite: PixelSpriteGrid, row: Int, scale: CGFloat, center: CGFloat) -> [UInt32] {
-        guard let span = sprite.opaqueSpan(row: row) else {
-            return Array(repeating: PixelSpriteGrid.clear, count: sprite.width)
+    /// 比脖子宽出来的那一截按 scale 压扁；脖子范围以内原样
+    private struct Bulge {
+        let neck: (left: CGFloat, right: CGFloat)
+        let scale: CGFloat
+
+        func slimmed(_ x: CGFloat) -> CGFloat {
+            if x > neck.right { return neck.right + (x - neck.right) * scale }
+            if x < neck.left { return neck.left - (neck.left - x) * scale }
+            return x
         }
-        let left = Int((center - (center - CGFloat(span.lowerBound)) * scale).rounded())
-        let right = max(left, Int((center + (CGFloat(span.upperBound + 1) - center) * scale).rounded()) - 1)
-        return (0..<sprite.width).map { x in
-            guard x >= left, x <= right else { return PixelSpriteGrid.clear }
-            let source = span.lowerBound + endpointIndex(x - left, from: right - left + 1, to: span.count)
-            return sprite[source, row]
+
+        func unslimmed(_ x: CGFloat) -> CGFloat {
+            if x > neck.right { return neck.right + (x - neck.right) / scale }
+            if x < neck.left { return neck.left - (neck.left - x) / scale }
+            return x
+        }
+    }
+
+    /// 从 firstRow 往下每行的左右边缘，和上下相邻行取平均：像素台阶背后那条顺的曲线。
+    /// 左边缘是第一格的左沿，右边缘是最后一格的右沿；第一行会和它上面一行（脑袋）一起平均，脖子接得上
+    private static func smoothedEdges(_ sprite: PixelSpriteGrid, firstRow: Int) -> [(left: CGFloat, right: CGFloat)?] {
+        let spans = (0..<sprite.height).map { sprite.opaqueSpan(row: $0) }
+        return (firstRow..<sprite.height).map { row in
+            guard spans[row] != nil else { return nil }
+            let neighbors = (max(row - 1, 0)...min(row + 1, sprite.height - 1)).compactMap { spans[$0] }
+            let count = CGFloat(neighbors.count)
+            return (
+                neighbors.map { CGFloat($0.lowerBound) }.reduce(0, +) / count,
+                neighbors.map { CGFloat($0.upperBound + 1) }.reduce(0, +) / count
+            )
+        }
+    }
+
+    /// 在相邻两行之间按比例插出左右边缘
+    private static func interpolated(
+        _ curve: [(left: CGFloat, right: CGFloat)?], at position: CGFloat
+    ) -> (left: CGFloat, right: CGFloat)? {
+        let lower = Int(position.rounded(.down))
+        let upper = min(lower + 1, curve.count - 1)
+        let fraction = position - CGFloat(lower)
+        switch (curve[lower], curve[upper]) {
+        case let (a?, b?):
+            return (a.left + (b.left - a.left) * fraction, a.right + (b.right - a.right) * fraction)
+        case let (a?, nil), let (nil, a?):
+            return a
+        case (nil, nil):
+            return nil
+        }
+    }
+
+    /// 取整后单独一行跳出去又跳回来（23, 22, 23）的毛刺抹平，像素画的边缘只朝一个方向走台阶
+    private static func despiked(
+        _ spans: [(left: Int, right: Int)?], after previous: (left: Int, right: Int)?
+    ) -> [(left: Int, right: Int)?] {
+        let padded = [previous] + spans
+        return spans.indices.map { index in
+            let row = index + 1
+            guard let current = padded[row] else { return nil }
+            guard row + 1 < padded.count, let above = padded[row - 1], let below = padded[row + 1] else { return current }
+            let left = above.left == below.left ? above.left : current.left
+            let right = above.right == below.right ? above.right : current.right
+            return (left, max(left, right))
         }
     }
 

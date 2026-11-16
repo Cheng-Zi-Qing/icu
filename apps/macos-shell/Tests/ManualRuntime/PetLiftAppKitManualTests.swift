@@ -614,8 +614,8 @@ func testPetLiftRasterStretchesOnlyTheBodyAndKeepsTheNeckJoined() throws {
     try expect(Set(headCounts).count == 1 && headCounts[0] > 0, "stretch must leave the head's actual rendered area unchanged")
     try expect(bodySizes[1].height > bodySizes[0].height && bodySizes[2].height > bodySizes[1].height,
                "the actual body must get longer: \(bodySizes)")
-    try expect(feetWidths[1] < feetWidths[0] && feetWidths[2] < feetWidths[1],
-               "the body must taper slimmer towards the feet: \(feetWidths)")
+    // 这只身体和脖子一样宽，没有鼓出去的部分可压；收细只压比脖子宽的那截（见 KeepsTheCurveOfTheBack）
+    try expect(feetWidths.allSatisfy { $0 <= feetWidths[0] }, "stretching never widens the body: \(feetWidths)")
 }
 
 func testPetLiftRasterCachesFramesAndPreservesTheLastValidImage() throws {
@@ -650,4 +650,36 @@ func testPetLiftRasterCachesFramesAndPreservesTheLastValidImage() throws {
     lift.hide()
     try expect(lift.parent == nil && !lift.isVisible, "hiding must detach and remove the raster window")
     try drawLiftFrame(lift, drag: drag)
+}
+
+/// 后背是一条弧线：拉长、收细之后照样是一格一格顺下来的弧，不能鼓出小尖、也不能拉成一长段竖直线
+func testPixelSpriteHangingKeepsTheCurveOfTheBack() throws {
+    // 右边缘每往下一行往外挪一格的半个水滴（上窄下宽），下面 4 行收回来
+    let width = 32, height = 32, headRows = 19
+    let rightEdges = (0..<height).map { y in y < 28 ? 12 + y / 2 : 26 - (y - 28) }
+    let cells = (0..<height).flatMap { y in
+        (0..<width).map { x -> UInt32 in
+            guard x >= 6, x <= rightEdges[y] else { return PixelSpriteGrid.clear }
+            return x == 6 || x == rightEdges[y] || y == height - 1 ? outline : fur
+        }
+    }
+    let drop = PixelSpriteGrid(width: width, height: height, cells: cells)
+    try expect(outlinePieces(drop) == 1, "the test drop starts with one closed outline")
+    for stretch in [CGFloat(1.32), 1.48] {
+        let rows = PixelSpriteHanging.stretchedBodyRows(bodyRows: height - headRows, stretch: stretch)
+        let hung = PixelSpriteHanging.hanging(drop, headRows: headRows, stretchedBodyRows: rows, slimming: PetAnimationEngine.liftedSlimming)
+        let backs = (headRows - 1..<(headRows + rows - 5)).compactMap { hung.opaqueSpan(row: $0)?.upperBound }
+        let steps = zip(backs.dropFirst(), backs).map { $0 - $1 }
+        try expect(steps.allSatisfy { abs($0) <= 1 }, "the back moves at most one cell per row at \(stretch) (\(backs))")
+        let firstIn = steps.firstIndex { $0 < 0 } ?? steps.count
+        try expect(steps[..<firstIn].allSatisfy { $0 >= 0 } && steps[firstIn...].allSatisfy { $0 <= 0 },
+                   "the back bulges out once then comes back in, no nub at the neck at \(stretch) (\(backs))")
+        let longestStraight = steps.split { $0 != 0 }.map(\.count).max() ?? 0
+        // 原图每 2 行往外挪 1 格，拉长再收细后每 3～5 行挪 1 格；以前整行复制会拉出 8 行的直线
+        try expect(longestStraight <= 4, "the back is a curve, not a long straight drop at \(stretch) (\(backs))")
+        try expect(outlinePieces(hung) == 1, "the stretched outline is still one closed stroke at \(stretch)")
+        let widest = { (grid: PixelSpriteGrid) in (headRows..<grid.height).compactMap { grid.opaqueSpan(row: $0)?.upperBound }.max() ?? 0 }
+        try expect(widest(hung) < widest(drop) && widest(hung) > rightEdges[headRows - 1],
+                   "the belly still bulges past the neck, just slimmer at \(stretch) (\(widest(hung)) vs \(widest(drop)))")
+    }
 }
