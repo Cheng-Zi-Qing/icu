@@ -12,9 +12,9 @@ struct DragPhysicsConfig {
     /// 每 1pt/s 指针速度（任意方向）带来的额外拉长
     var stretchPerSpeed: CGFloat = 0.00025
     /// 钟摆最大角度（度）：夸张一点，甩起来整个身子荡出去
-    var maxSwingDegrees: CGFloat = 40
+    var maxSwingDegrees: CGFloat = 60
     /// 每 1pt/s 横向速度对应的目标摆角（度）
-    var swingPerVelocity: CGFloat = 0.07
+    var swingPerVelocity: CGFloat = 0.1
     /// 摆的弹簧够硬（固有频率约 4Hz），鼠标晃多快身子就晃多快；
     /// 阻尼比约 0.4，鼠标一停还会来回荡两下
     var swingStiffness: CGFloat = 700

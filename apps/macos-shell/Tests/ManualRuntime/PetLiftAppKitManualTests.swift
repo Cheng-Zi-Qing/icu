@@ -628,7 +628,7 @@ func testPetLiftRasterCachesFramesAndPreservesTheLastValidImage() throws {
     lift.render(drag: drag)
     guard let first = lift.rasterLayer.contents else { throw TestFailure(message: "lifting must produce a bitmap immediately") }
     let raster = first as! CGImage
-    try expect(raster.width == 88 && raster.height == 67, "the lift is composed on the original 4pt grid")
+    try expect(raster.width == 88 && raster.height == 71, "the lift is composed on the original 4pt grid")
     try expect(!lift.rasterLayer.isHidden && CATransform3DIsIdentity(lift.rasterLayer.transform),
                "only the untransformed raster should be visible")
     lift.render(drag: drag)
@@ -713,4 +713,41 @@ func testDesktopPetViewReportsWhatTheDragIsDoing() throws {
     view.applyDragPose(.hold(tilt: 0))
     RunLoop.main.run(until: Date(timeIntervalSinceNow: DesktopPetView.landedLineDuration + 0.2))
     try expect(view.dragMoment == .held, "a new lift cancels the pending reset of the landing line")
+}
+
+/// 真画一遍：仓库里每一张拎着 / 甩晕的姿势帧，甩到最大角度、拉到最长、抬到最高，整只都在拎起窗口里，
+/// 四条边上一格都没画到（画到了就是被裁掉了一截）
+func testEveryRealDragFrameFitsTheLiftWindowAtTheWildestSwing() throws {
+    let config = DragPhysicsConfig()
+    let directory = inferredManualTestRepoRootURL().appendingPathComponent("assets/pets/capybara/drag", isDirectory: true)
+    let names = try FileManager.default.contentsOfDirectory(atPath: directory.path)
+        .filter { ($0.hasPrefix("hold_") || $0.hasPrefix("dizzy_")) && !$0.contains("grounded") }
+        .sorted()
+    try expect(names.count >= 10, "the capybara has its hold and dizzy frames (got \(names))")
+    let parent = NSWindow(contentRect: liftCanvas, styleMask: [.borderless], backing: .buffered, defer: false)
+    parent.isReleasedWhenClosed = false
+    let lift = PetLiftWindow()
+    defer { lift.hide(); lift.close(); parent.close() }
+    let stretch = 1 + config.holdStretch + config.maxExtraStretch
+    for name in names {
+        guard let raw = NSImage(contentsOf: directory.appendingPathComponent(name)) else {
+            throw TestFailure(message: "could not read \(name)")
+        }
+        let image = PixelArtScaler.upscaledForDisplay(raw, canvasPointSize: liftCanvas.size)
+        for mirrored in [false, true] {
+            lift.show(image: mirrored ? PixelArtScaler.mirroredHorizontally(image) : image, canvas: liftCanvas, over: parent)
+            for swing in [-config.maxSwingDegrees, config.maxSwingDegrees] {
+                lift.render(drag: DragOutput(pose: .hold(tilt: 0), stretchY: stretch, swingDegrees: swing,
+                                             landingSquash: 1, fallOffset: config.liftHeight))
+                guard let raster = lift.rasterLayer.contents.map({ $0 as! CGImage }),
+                      let grid = PixelSpriteGrid.sampling(raster, columns: raster.width, rows: raster.height) else {
+                    throw TestFailure(message: "\(name) should render")
+                }
+                let edges = (0..<grid.width).flatMap { [($0, 0), ($0, grid.height - 1)] }
+                    + (0..<grid.height).flatMap { [(0, $0), (grid.width - 1, $0)] }
+                try expect(edges.allSatisfy { !grid.isOpaque(x: $0.0, y: $0.1) },
+                           "\(name)\(mirrored ? " mirrored" : "") swung \(swing)° is clipped by the lift window")
+            }
+        }
+    }
 }

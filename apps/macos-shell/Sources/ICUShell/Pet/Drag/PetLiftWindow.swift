@@ -10,10 +10,11 @@ import QuartzCore
 /// （见 PixelSpriteHanging），再整张最近邻放大上屏。位置也按整格对齐，所以屏幕上的方块
 /// 和地上那只一样大、一样齐，不会半格错位或被拉成扁格。
 final class PetLiftWindow: NSWindow {
-    /// 左右各留多少：最大摆角时脚能荡出画布约 90pt
+    /// 左右各留多少：甩到 60° 时身体最远荡出画布约 88pt
     static let sideMargin: CGFloat = 112
-    /// 头顶留白：拎着时身体抬高 liftHeight，转起来时画布上角还会再翘 20pt
-    static let topMargin: CGFloat = 76
+    /// 头顶留白：拎着时身体抬高 liftHeight（56pt），甩到 60° 时脑袋那一角（柚子、叶子）还会翘出画布顶 32pt；
+    /// 再多留一格，保持 4pt 对齐
+    static let topMargin: CGFloat = 92
     /// 脚下留白：拉长后身体往下坠
     static let bottomMargin: CGFloat = 64
 
@@ -25,10 +26,18 @@ final class PetLiftWindow: NSWindow {
     private var spriteOrigin = (x: 0, y: 0)
     /// 后颈（画布顶边中点）在 sprite 里的位置，格子坐标、y 向下
     private var scruff = CGPoint.zero
-    /// 拉长到某个行数后的样子和它的 8 倍平滑图；换帧就清空
-    private var hangingCache: [Int: (sprite: PixelSpriteGrid, oversampled: PixelSpriteGrid?)] = [:]
+    /// 某一帧拉长到某个行数后的样子和它的 8 倍平滑图。按帧的内容存，不随换帧清空：
+    /// 甩起来歪向帧来回换、晕的时候星星一闪一闪，都是那几张图，换回来直接用，不用每次重算
+    private var hangingCache: [HangingKey: (sprite: PixelSpriteGrid, oversampled: PixelSpriteGrid?)] = [:]
+    /// 缓存最多留几份（一份 8 倍图约 400KB）；满了整个清掉重来，拖拽姿势帧一共也就二三十张
+    private static let hangingCacheLimit = 32
     private var lastRenderedKey: RenderKey?
     private var lastDrag = DragOutput.rest
+
+    private struct HangingKey: Hashable {
+        let sprite: PixelSpriteGrid
+        let bodyRows: Int
+    }
 
     /// 同一个 key 画出来的图完全一样：拉长按整行、角度按整度、抬高按整格
     private struct RenderKey: Equatable {
@@ -99,7 +108,6 @@ final class PetLiftWindow: NSWindow {
         sprite = placement.sprite
         spriteOrigin = placement.origin
         scruff = placement.scruff
-        hangingCache = [:]
         lastRenderedKey = nil
         render(drag: lastDrag)
     }
@@ -136,13 +144,17 @@ final class PetLiftWindow: NSWindow {
     private func hangingSprite(
         from sprite: PixelSpriteGrid, headRows: Int, bodyRows: Int, needsOversample: Bool
     ) -> (sprite: PixelSpriteGrid, oversampled: PixelSpriteGrid?) {
-        let cached = hangingCache[bodyRows] ?? (PixelSpriteHanging.hanging(
+        let key = HangingKey(sprite: sprite, bodyRows: bodyRows)
+        let cached = hangingCache[key] ?? (PixelSpriteHanging.hanging(
             sprite, headRows: headRows, stretchedBodyRows: bodyRows, slimming: PetAnimationEngine.liftedSlimming
         ), nil)
         let entry = needsOversample && cached.oversampled == nil
             ? (cached.sprite, PixelSpriteHanging.oversampled(cached.sprite))
             : cached
-        hangingCache[bodyRows] = entry
+        if hangingCache[key] == nil, hangingCache.count >= Self.hangingCacheLimit {
+            hangingCache.removeAll()
+        }
+        hangingCache[key] = entry
         return entry
     }
 

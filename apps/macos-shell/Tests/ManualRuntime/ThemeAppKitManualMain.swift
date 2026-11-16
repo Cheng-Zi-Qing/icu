@@ -41,6 +41,7 @@ struct ThemeAppKitManualMain {
             try testAnimationEngineLiftSwingsTheBodyAroundTheScruff()
             try testPetLiftWindowLeavesRoomForTheWildestSwing()
             try testPetLiftWindowKeepsRoomForTheLiftedPet()
+            try testEveryRealDragFrameFitsTheLiftWindowAtTheWildestSwing()
             try testLiftedPetStretchesTheBodyButNotTheHead()
             try testPixelSpriteHangingStretchesTheBodyByWholeRowsAndKeepsTheHead()
             try testPixelSpriteHangingSwingsWithoutBreakingTheOutline()

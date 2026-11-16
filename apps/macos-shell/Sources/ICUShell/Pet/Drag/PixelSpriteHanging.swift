@@ -144,25 +144,34 @@ enum PixelSpriteHanging {
 
     // MARK: - 甩动（RotSprite）
 
-    /// Scale2x：一格变 2×2，斜边上的阶梯补齐成更顺的斜线，不引入新颜色
+    /// Scale2x：一格变 2×2，斜边上的阶梯补齐成更顺的斜线，不引入新颜色。
+    /// 拎着甩的时候每帧都可能要算，直接在缓冲区里走（debug 构建下闭包版本要慢十倍）
     static func scale2x(_ grid: PixelSpriteGrid) -> PixelSpriteGrid {
-        let width = grid.width * 2
-        let cells = (0..<(grid.height * 2)).flatMap { y in
-            (0..<width).map { x -> UInt32 in
-                let sx = x / 2, sy = y / 2
-                let center = grid[sx, sy]
-                let up = grid[sx, sy - 1], down = grid[sx, sy + 1]
-                let left = grid[sx - 1, sy], right = grid[sx + 1, sy]
-                // 每个子格只看它那个角挨着的两条边
-                let vertical = y % 2 == 0 ? up : down
-                let horizontal = x % 2 == 0 ? left : right
-                let oppositeVertical = y % 2 == 0 ? down : up
-                let oppositeHorizontal = x % 2 == 0 ? right : left
-                let corner = vertical == horizontal && vertical != oppositeVertical && horizontal != oppositeHorizontal
-                return corner ? vertical : center
+        let width = grid.width, height = grid.height
+        let outWidth = width * 2
+        var cells = [UInt32](repeating: PixelSpriteGrid.clear, count: width * height * 4)
+        grid.cells.withUnsafeBufferPointer { source in
+            cells.withUnsafeMutableBufferPointer { out in
+                for y in 0..<height {
+                    for x in 0..<width {
+                        let index = y * width + x
+                        let center = source[index]
+                        let up = y > 0 ? source[index - width] : PixelSpriteGrid.clear
+                        let down = y < height - 1 ? source[index + width] : PixelSpriteGrid.clear
+                        let left = x > 0 ? source[index - 1] : PixelSpriteGrid.clear
+                        let right = x < width - 1 ? source[index + 1] : PixelSpriteGrid.clear
+                        let topLeft = 2 * y * outWidth + 2 * x
+                        let bottomLeft = topLeft + outWidth
+                        // 每个子格只看它那个角挨着的两条边
+                        out[topLeft] = left == up && left != down && up != right ? up : center
+                        out[topLeft + 1] = up == right && up != left && right != down ? right : center
+                        out[bottomLeft] = down == left && down != right && left != up ? left : center
+                        out[bottomLeft + 1] = right == down && right != up && down != left ? down : center
+                    }
+                }
             }
         }
-        return PixelSpriteGrid(width: width, height: grid.height * 2, cells: cells)
+        return PixelSpriteGrid(width: outWidth, height: height * 2, cells: cells)
     }
 
     /// RotSprite 用的 8 倍平滑图
@@ -183,9 +192,12 @@ enum PixelSpriteHanging {
         canvasWidth: Int,
         canvasHeight: Int
     ) -> PixelSpriteGrid {
+        var cells = [UInt32](repeating: PixelSpriteGrid.clear, count: canvasWidth * canvasHeight)
         guard degrees != 0, let oversampled else {
-            let cells = (0..<canvasHeight).flatMap { y in
-                (0..<canvasWidth).map { x in sprite[x - origin.x, y - origin.y] }
+            for y in 0..<sprite.height where (0..<canvasHeight).contains(y + origin.y) {
+                for x in 0..<sprite.width where (0..<canvasWidth).contains(x + origin.x) {
+                    cells[(y + origin.y) * canvasWidth + x + origin.x] = sprite.cells[y * sprite.width + x]
+                }
             }
             return PixelSpriteGrid(width: canvasWidth, height: canvasHeight, cells: cells)
         }
@@ -198,13 +210,18 @@ enum PixelSpriteHanging {
             return CGPoint(x: cosine * dx - sine * dy + pivot.x, y: sine * dx + cosine * dy + pivot.y)
         }
         let factor = CGFloat(rotationOversample)
-        let swung = (0..<canvasHeight).flatMap { y in
-            (0..<canvasWidth).map { x -> UInt32 in
-                let point = source(x, y)
-                return oversampled[Int((point.x * factor).rounded(.down)), Int((point.y * factor).rounded(.down))]
+        let bigWidth = oversampled.width, bigHeight = oversampled.height
+        oversampled.cells.withUnsafeBufferPointer { big in
+            for y in 0..<canvasHeight {
+                for x in 0..<canvasWidth {
+                    let point = source(x, y)
+                    let bx = Int((point.x * factor).rounded(.down)), by = Int((point.y * factor).rounded(.down))
+                    guard bx >= 0, by >= 0, bx < bigWidth, by < bigHeight else { continue }
+                    cells[y * canvasWidth + x] = big[by * bigWidth + bx]
+                }
             }
         }
-        let grid = PixelSpriteGrid(width: canvasWidth, height: canvasHeight, cells: swung)
+        let grid = PixelSpriteGrid(width: canvasWidth, height: canvasHeight, cells: cells)
         return repairingSilhouette(grid, from: sprite, source: source)
     }
 
@@ -215,21 +232,25 @@ enum PixelSpriteHanging {
         from sprite: PixelSpriteGrid,
         source: (Int, Int) -> CGPoint
     ) -> PixelSpriteGrid {
-        let cells = (0..<grid.height).flatMap { y in
-            (0..<grid.width).map { x -> UInt32 in
+        var cells = grid.cells
+        for y in 0..<grid.height {
+            for x in 0..<grid.width where grid.isOpaque(x: x, y: y) && isOnSilhouette(grid, x: x, y: y) {
                 let cell = grid[x, y]
-                guard grid.isOpaque(x: x, y: y), isOnSilhouette(grid, x: x, y: y) else { return cell }
                 let point = source(x, y)
-                let nearby = (-1...1).flatMap { dy in
-                    (-1...1).map { dx in (x: Int(point.x.rounded(.down)) + dx, y: Int(point.y.rounded(.down)) + dy) }
+                let baseX = Int(point.x.rounded(.down)), baseY = Int(point.y.rounded(.down))
+                var nearest: (color: UInt32, distance: CGFloat)?
+                var matchesOutline = false
+                for dy in -1...1 {
+                    for dx in -1...1 {
+                        let sx = baseX + dx, sy = baseY + dy
+                        guard sprite.isOpaque(x: sx, y: sy), isOnSilhouette(sprite, x: sx, y: sy) else { continue }
+                        let color = sprite[sx, sy]
+                        if color == cell { matchesOutline = true }
+                        let distance = hypot(CGFloat(sx) + 0.5 - point.x, CGFloat(sy) + 0.5 - point.y)
+                        if nearest.map({ distance < $0.distance }) ?? true { nearest = (color, distance) }
+                    }
                 }
-                .filter { sprite.isOpaque(x: $0.x, y: $0.y) && isOnSilhouette(sprite, x: $0.x, y: $0.y) }
-                guard !nearby.isEmpty, !nearby.contains(where: { sprite[$0.x, $0.y] == cell }) else { return cell }
-                let nearest = nearby.min { a, b in
-                    hypot(CGFloat(a.x) + 0.5 - point.x, CGFloat(a.y) + 0.5 - point.y)
-                        < hypot(CGFloat(b.x) + 0.5 - point.x, CGFloat(b.y) + 0.5 - point.y)
-                }
-                return nearest.map { sprite[$0.x, $0.y] } ?? cell
+                if !matchesOutline, let nearest { cells[y * grid.width + x] = nearest.color }
             }
         }
         return PixelSpriteGrid(width: grid.width, height: grid.height, cells: cells)

@@ -5,7 +5,7 @@ import Foundation
 ///
 /// 拎起来的拉长、甩动都在这张小图上按整格做，最后整张最近邻放大上屏，
 /// 所以屏幕上永远是整齐的方块，不会出现半格、斜切或被拉扁的像素。
-struct PixelSpriteGrid: Equatable {
+struct PixelSpriteGrid: Hashable {
     /// 透明格
     static let clear: UInt32 = 0
 
@@ -79,10 +79,10 @@ extension PixelSpriteGrid {
     /// 一格一像素的位图；交给图层按最近邻放大
     func makeImage() -> CGImage? {
         guard width > 0, height > 0 else { return nil }
-        let bytes = cells.flatMap { cell in
-            [UInt8(cell >> 24), UInt8(cell >> 16 & 0xFF), UInt8(cell >> 8 & 0xFF), UInt8(cell & 0xFF)]
-        }
-        guard let provider = CGDataProvider(data: Data(bytes) as CFData) else { return nil }
+        // 每格按大端存成 r g b a 四个字节
+        let bigEndian = cells.map(\.bigEndian)
+        let data = bigEndian.withUnsafeBytes { Data($0) }
+        guard let provider = CGDataProvider(data: data as CFData) else { return nil }
         return CGImage(
             width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: width * 4,
             space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGBitmapInfo(rawValue: Self.bitmapInfo),
