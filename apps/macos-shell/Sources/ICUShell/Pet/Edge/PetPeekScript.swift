@@ -39,7 +39,7 @@ enum PetPeekFrame: Equatable {
     }
 }
 
-/// 贴边时播放的顺序：大部分时间安静正面休息，偶尔轻微左右张望找小鸟。
+/// 贴边时播放的顺序：大部分时间安静正面休息，偶尔有小鸟飞过、转头找它。
 /// 保留旧 turn 命名及概率，但不再切换侧面轮廓。
 enum PetPeekScript {
     static let framesPerSecond: Double = 4
@@ -50,12 +50,14 @@ enum PetPeekScript {
         + Array(repeating: .rest, count: 6) + [.blink]
         + Array(repeating: .rest, count: 8)
 
-    /// 稀有小彩蛋：慢慢扫视两边，小鸟掠过，再回到中性帧
+    /// 稀有小彩蛋：小鸟从头顶飞过去，水豚抬头、头跟着它从左转到右；
+    /// 小鸟从屏幕边飞走后，水豚转头往它飞走的那边找，再往另一边找，找不到眨眨眼回到中性帧
     static let turnLoop: [PetPeekFrame] =
-        [.rest, .blink, .lookLeft, .lookLeft, .lookLeft, .rest, .rest,
-         .lookRight, .lookRight, .lookRight, .rest, .lookLeft,
-         .birdFlyIn, .birdFlyPast, .birdFlyOut, .lookRight, .lookRight,
-         .blink, .rest, .rest]
+        [.rest, .blink, .rest, .rest,
+         .birdFlyIn, .birdFlyPast, .birdFlyOut,
+         .lookRight, .lookRight, .lookRight, .rest,
+         .lookLeft, .lookLeft, .lookLeft, .rest,
+         .lookRight, .blink, .rest, .rest]
 
     /// 每轮结束时张望找鸟的机会：平均约 3 分钟一次
     static let turnChancePerLoop = 1.0 / 30

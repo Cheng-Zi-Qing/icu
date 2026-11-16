@@ -333,6 +333,14 @@ export function yuzuWobbleOptions() {
  * 待机小动作 · 小鸟来访：6fps。从左上方飞来（脸朝右）→ 落在柚子前面的额头上歇一会儿
  * （转回朝左，和水豚同向）→ 往左飞走；水豚抬眼看它
  */
+/** 贴边时小鸟飞过头顶的三帧（贴右边的画面；贴左边 app 整张镜像）。look 是水豚的头跟着挪到哪 */
+export const EDGE_BIRD_FLYBY = Object.freeze([
+  { pose: 'wingsUp', at: [2, 2], faceRight: true, look: -1 },
+  // 草帽的帽檐两头翘到画面顶上一格，小鸟从帽檐两边飞过、不擦到
+  { pose: 'wingsDown', at: [10, 1], faceRight: true, look: 0 },
+  { pose: 'wingsUp', at: [25, 0], faceRight: true, look: 1 },
+]);
+
 export function birdVisitOptions() {
   const flyIn = [
     { pose: 'wingsUp', at: [-3, -1], faceRight: true },
@@ -394,13 +402,12 @@ export function allFrames(model, { headwear = HEADWEAR[0] } = {}) {
   frames.push(['edge/peek_1.png', front({ blink: true })]);
   frames.push(['edge/peek_2.png', front({ reach: true })]);
   frames.push(['edge/peek_3.png', front({ flinch: true })]);
-  frames.push(['edge/look_left.png', front({ look: -1 })]);
-  frames.push(['edge/look_right.png', front({ look: 1 })]);
-  [
-    { pose: 'wingsUp', at: [2, 1], faceRight: true },
-    { pose: 'wingsDown', at: [11, 1], faceRight: true },
-    { pose: 'wingsUp', at: [23, 1], faceRight: true },
-  ].forEach((bird, i) => frames.push([`edge/bird_${i}.png`, front({ look: i < 2 ? -1 : 1 }).overlaid(birdLayer(32, bird).rotatedQuarter(-1))]));
+  // 张望（找鸟）：头往一边挪一格、睁眼往上看
+  frames.push(['edge/look_left.png', front({ look: -1, gaze: -1 })]);
+  frames.push(['edge/look_right.png', front({ look: 1, gaze: -1 })]);
+  // 小鸟从头顶飞过去：按屏幕方向画（不跟着头转，头是扒在竖着的屏幕边上才转了 90°，小鸟还是正着飞），
+  // 从屏幕里往屏幕边飞，扑着翅膀略往上走，最后从屏幕边飞出去；水豚睁眼往上看，头跟着小鸟从左挪到右
+  EDGE_BIRD_FLYBY.forEach(({ look, ...bird }, i) => frames.push([`edge/bird_${i}.png`, front({ look, gaze: -1 }).overlaid(birdLayer(32, bird))]));
   frames.push(['edge/turn_0.png', pose('peek', {})]);
   frames.push(['edge/turn_1.png', pose('peek', { blink: true })]);
   // 设置 / 衣柜窗口标题栏上趴着的那只（正面，爪子压在画布底边）
