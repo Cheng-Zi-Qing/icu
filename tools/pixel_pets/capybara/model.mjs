@@ -94,7 +94,8 @@ export const DEFAULT_MODEL = Object.freeze({
         // 一整条圆顶的身子，从后脑勺顺下来，中后段最高；不单独鼓一个屁股（像驼峰）
         ell('barrel', '身体', 'body', 26.5, 24.2, 15, 7),
         ell('rump', '臀部', 'body', 34.5, 24.4, 7.6, 6.8),
-        ell('shoulder', '肩膀', 'body', 18, 24.6, 6.4, 5.8, { breathe: true }),
+        // 肩膀顶和身子顶齐平，把后脑勺和背之间那道凹槽填上：凹一格再鼓起来，看着像背上长了个包（2026-11-16 用户）
+        ell('shoulder', '肩膀', 'body', 20, 24.2, 7.5, 7, { breathe: true }),
         ell('hindPaw', '后脚', 'shade', 39.5, 29.8, 2.2, 1),
         HEAD,
         ell('nearPaw', '近侧前爪', 'dark', 7.5, 30, 1.5, 0.8, { reach: true }),

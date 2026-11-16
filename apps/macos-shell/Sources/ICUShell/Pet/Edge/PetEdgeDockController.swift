@@ -6,18 +6,17 @@ import AppKit
 /// 1. 松手时身体离左 / 右 / 下边不超过 `snapDistance` → 滑过去贴住
 /// 2. 贴在左右边、`autoHideDelay` 内没碰它 → 先整只躲到屏幕边外，
 ///    再换成「探头扒边」的专用形象把脑袋探出来（没有探头图的宠物退回只露 `peekWidth`）
-/// 3. 只有拖它或者来了提醒卡片才出来；鼠标路过不出来。有提醒时探着头的会吓一跳缩回去、换回正常形象再滑出来
+/// 3. 只有拖它或者来了提醒卡片才出来；提醒出现时温和展开到屏幕内
 /// 贴左边时形象镜像，让脸朝屏幕里。
 final class PetEdgeDockController {
     private enum Timing {
         static let snap: TimeInterval = 0.22
         static let hide: TimeInterval = 0.35
-        static let reveal: TimeInterval = 0.2
+        static let reveal = 0.18
         static let duck: TimeInterval = 0.22
         static let peekOut: TimeInterval = 0.28
-        static let peekIn: TimeInterval = 0.14
-        /// 吓一跳后缩回去：比平时慢一点，让 > < 那一帧看得见
-        static let flinchIn: TimeInterval = 0.3
+        static let overlayDuck = 0.08
+        static let overlayMargin: CGFloat = 6
     }
 
     private weak var window: NSWindow?
@@ -55,6 +54,8 @@ final class PetEdgeDockController {
     private var isPointerInside = false
     private var isOverlayVisible = false
     private var isDragging = false
+    private var isOverlayPositionTemporary = false
+    private var moveGeneration = 0
 
     init(
         window: NSWindow,
@@ -72,17 +73,17 @@ final class PetEdgeDockController {
         self.hideScheduler = hideScheduler
     }
 
-    /// 窗口正在被贴边逻辑移动或处于藏边状态：这时的位置不该当作用户摆放的位置保存
-    var isManagingWindowPosition: Bool { isMoving || isHidden }
+    /// 窗口正在被贴边逻辑移动或处于藏边 / 临时 overlay 展开状态：这时的位置不该保存
+    var isManagingWindowPosition: Bool { isMoving || isHidden || isOverlayPositionTemporary }
 
     // MARK: - 事件
 
     func dragStarted() {
-        isDragging = true
         hideScheduler.cancel()
-        mover.cancel()
-        isMoving = false
+        cancelMotion()
+        isDragging = true
         isHidden = false
+        isOverlayPositionTemporary = false
         setPeeking(false)
         dock = .none
         dockedOrigin = nil
@@ -109,13 +110,27 @@ final class PetEdgeDockController {
         scheduleHideIfNeeded()
     }
 
+    /// resize 前先进入受保护状态；退出时先恢复 dock，再由 overlayVisibilityChanged 解锁并安排藏边。
+    func prepareOverlayLayoutChange(visible: Bool) {
+        hideScheduler.cancel()
+        cancelMotion()
+        isOverlayPositionTemporary = true
+        isOverlayVisible = visible
+        guard !visible else { return }
+        restoreDockedOrigin(animated: false)
+    }
+
     /// 气泡 / 提醒卡片出现时必须完整露出来
     func overlayVisibilityChanged(_ visible: Bool) {
+        hideScheduler.cancel()
+        cancelMotion()
         isOverlayVisible = visible
         if visible {
-            hideScheduler.cancel()
-            reveal()
+            isOverlayPositionTemporary = true
+            revealForOverlay()
         } else {
+            restoreDockedOrigin(animated: false)
+            isOverlayPositionTemporary = false
             scheduleHideIfNeeded()
         }
     }
@@ -214,33 +229,46 @@ final class PetEdgeDockController {
         slide(window, to: target, duration: Timing.peekOut) {}
     }
 
-    private func reveal() {
-        guard isHidden, let window, let dockedOrigin else { return }
-        isHidden = false
-        guard
-            isPeeking,
-            let edge = dock.horizontal,
-            let peekBody = bodyRectProvider(),
-            let visibleFrame = visibleFrame(for: dockedOrigin, body: peekBody)
-        else {
-            setPeeking(false)
-            slide(window, to: dockedOrigin, duration: Timing.reveal) {}
+    private func revealForOverlay() {
+        guard let window, let dockedOrigin else { return }
+        if isHidden, isPeeking, let edge = dock.horizontal,
+           let peekBody = bodyRectProvider(),
+           let visibleFrame = visibleFrame(for: dockedOrigin, body: peekBody) {
+            isHidden = false
+            let behind = EdgeDockLayout.behindOrigin(
+                dockedOrigin: dockedOrigin, edge: edge, bodyRect: peekBody, visibleFrame: visibleFrame
+            )
+            slide(window, to: behind, duration: Timing.overlayDuck) { [weak self] in
+                guard let self else { return }
+                self.setPeeking(false)
+                window.setFrameOrigin(EdgeDockLayout.behindOrigin(
+                    dockedOrigin: dockedOrigin,
+                    edge: edge,
+                    bodyRect: self.bodyRectProvider() ?? peekBody,
+                    visibleFrame: visibleFrame
+                ))
+                self.slide(window, to: self.overlayOrigin(dockedOrigin: dockedOrigin), duration: Timing.reveal) {}
+            }
             return
         }
 
-        // 吓一跳，缩回屏幕外，换回正常形象，再滑出来
-        onPeekFlinch?()
-        let peekBehind = EdgeDockLayout.behindOrigin(dockedOrigin: dockedOrigin, edge: edge, bodyRect: peekBody, visibleFrame: visibleFrame)
-        slide(window, to: peekBehind, duration: Timing.flinchIn) { [weak self] in
-            guard let self else { return }
-            self.setPeeking(false)
-            if let body = self.bodyRectProvider() {
-                window.setFrameOrigin(EdgeDockLayout.behindOrigin(
-                    dockedOrigin: dockedOrigin, edge: edge, bodyRect: body, visibleFrame: visibleFrame
-                ))
-            }
-            self.slide(window, to: dockedOrigin, duration: Timing.reveal) {}
-        }
+        isHidden = false
+        setPeeking(false)
+        slide(window, to: overlayOrigin(dockedOrigin: dockedOrigin), duration: Timing.reveal) {}
+    }
+
+    private func restoreDockedOrigin(animated: Bool) {
+        guard let window, let dockedOrigin else { return }
+        isHidden = false
+        setPeeking(false)
+        slide(window, to: dockedOrigin, duration: animated ? Timing.reveal : 0) {}
+    }
+
+    private func overlayOrigin(dockedOrigin: CGPoint) -> CGPoint {
+        guard let window, let body = bodyRectProvider(),
+              let visibleFrame = visibleFrame(for: dockedOrigin, body: body) else { return dockedOrigin }
+        let insetFrame = visibleFrame.insetBy(dx: Timing.overlayMargin, dy: Timing.overlayMargin)
+        return WindowPlacement.clampedOrigin(dockedOrigin, windowSize: window.frame.size, visibleFrame: insetFrame)
     }
 
     private func setPeeking(_ peeking: Bool) {
@@ -249,10 +277,19 @@ final class PetEdgeDockController {
         onPeekChanged?(peeking)
     }
 
+    private func cancelMotion() {
+        moveGeneration += 1
+        mover.cancel()
+        isMoving = false
+    }
+
     private func slide(_ window: NSWindow, to origin: CGPoint, duration: TimeInterval, completion: @escaping () -> Void) {
+        moveGeneration += 1
+        let generation = moveGeneration
         isMoving = true
         mover.move(window, to: origin, duration: duration) { [weak self] in
-            self?.isMoving = false
+            guard let self, self.moveGeneration == generation else { return }
+            self.isMoving = false
             completion()
         }
     }

@@ -389,11 +389,18 @@ export function allFrames(model, { headwear = HEADWEAR[0] } = {}) {
   for (const [name, options] of Object.entries(idleExtraOptions())) {
     options.forEach((o, i) => frames.push([`idle_act/${name}_${i}.png`, IDLE_EXTRA_RENDER[name]({ ...o, headwear, model })]));
   }
-  // 贴边：平时正面探头；时不时把头转成侧面（就是原来侧身转 90° 那个造型）
+  // 贴边始终保留正面扒边姿势；旧侧面帧只为历史素材兼容保留。
   frames.push(['edge/peek_0.png', front({})]);
   frames.push(['edge/peek_1.png', front({ blink: true })]);
   frames.push(['edge/peek_2.png', front({ reach: true })]);
   frames.push(['edge/peek_3.png', front({ flinch: true })]);
+  frames.push(['edge/look_left.png', front({ look: -1 })]);
+  frames.push(['edge/look_right.png', front({ look: 1 })]);
+  [
+    { pose: 'wingsUp', at: [2, 1], faceRight: true },
+    { pose: 'wingsDown', at: [11, 1], faceRight: true },
+    { pose: 'wingsUp', at: [23, 1], faceRight: true },
+  ].forEach((bird, i) => frames.push([`edge/bird_${i}.png`, front({ look: i < 2 ? -1 : 1 }).overlaid(birdLayer(32, bird).rotatedQuarter(-1))]));
   frames.push(['edge/turn_0.png', pose('peek', {})]);
   frames.push(['edge/turn_1.png', pose('peek', { blink: true })]);
   // 设置 / 衣柜窗口标题栏上趴着的那只（正面，爪子压在画布底边）

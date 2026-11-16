@@ -38,13 +38,17 @@ extension DesktopPetView {
 
     func applyActionImage(_ image: NSImage?) {
         actionImage = image
+        if !isShowingDragPose && !isPeeking {
+            present(restingImage)
+        }
         let clip = behavior.activeClip
         if clip != reportedActionClip {
             reportedActionClip = clip
             onActionClipChanged?(clip)
+            if let window {
+                updateCursor(at: convert(window.convertPoint(fromScreen: pointerLocation()), from: nil))
+            }
         }
-        guard !isShowingDragPose && !isPeeking else { return }
-        present(restingImage)
     }
 
     /// 头 = 身体上半截（侧面坐姿时头和柚子都在这里，朝左朝右都一样）
@@ -149,13 +153,8 @@ extension DesktopPetView {
         animationEngine.onDragPoseChanged = { [weak self] pose in
             self?.applyDragPose(pose)
         }
-        animationEngine.liftedLayer = { [weak self] in
-            guard let lift = self?.liftWindow, lift.isVisible else { return nil }
-            return lift.spriteLayer
-        }
-        animationEngine.liftedBodyLayer = { [weak self] in
-            guard let lift = self?.liftWindow, lift.isVisible else { return nil }
-            return lift.bodyLayer
+        animationEngine.liftedWindow = { [weak self] in
+            self?.liftWindow
         }
     }
 
@@ -179,7 +178,11 @@ extension DesktopPetView {
         })
     }
 
+    /// 落地那句说多久：落地帧一放完字就换回去会一闪而过，再留一会儿
+    static let landedLineDuration: TimeInterval = 1.6
+
     func applyDragPose(_ pose: DragPose) {
+        updateDragMoment(for: pose)
         if let image = poseSprites?.image(for: isFacingRight ? pose.mirrored : pose) {
             isShowingDragPose = true
             present(image)
@@ -206,5 +209,33 @@ extension DesktopPetView {
     func hideLift() {
         liftWindow?.hide()
         imageView?.alphaValue = 1
+    }
+}
+
+// MARK: - 拖拽时状态条说什么
+
+extension DesktopPetView {
+    /// 拎着说拎着的话，落地说「完美落地」这类，落地帧放完后再留 `landedLineDuration` 才回到平时那句
+    func updateDragMoment(for pose: DragPose) {
+        let next = PetDragMoment(pose: pose)
+        if next == nil, dragMoment == .landed {
+            guard dragMomentLinger == nil else { return }
+            let linger = DispatchWorkItem { [weak self] in
+                self?.dragMomentLinger = nil
+                self?.setDragMoment(nil)
+            }
+            dragMomentLinger = linger
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.landedLineDuration, execute: linger)
+            return
+        }
+        dragMomentLinger?.cancel()
+        dragMomentLinger = nil
+        setDragMoment(next)
+    }
+
+    private func setDragMoment(_ moment: PetDragMoment?) {
+        guard moment != dragMoment else { return }
+        dragMoment = moment
+        onDragMomentChanged?(moment)
     }
 }

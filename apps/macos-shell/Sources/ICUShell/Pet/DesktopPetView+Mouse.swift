@@ -163,5 +163,6 @@ extension DesktopPetView {
             onPetDragStarted?()
         }
         window.setFrameOrigin(origin)
+        updateCursor(at: convert(window.convertPoint(fromScreen: pointerLocation()), from: nil))
     }
 }

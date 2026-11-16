@@ -123,16 +123,24 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
             self?.updateChase()
         }
         petView.onOverlayLayoutModeChanged = { [weak self] mode in
-            self?.updateWindowSize(for: mode)
-            self?.edgeDock?.overlayVisibilityChanged(mode != .compact)
+            self?.updateOverlayWindowLayout(for: mode)
         }
         petView.onActionClipChanged = { [weak self] _ in
             guard let self else { return }
             self.petView.setStatusText(self.statusText(for: self.workSessionController.state))
         }
+        petView.onDragMomentChanged = { [weak self] _ in
+            guard let self else { return }
+            self.petView.setStatusText(self.statusText(for: self.workSessionController.state))
+        }
         petView.onPresentedWidthChanged = { [weak self] _ in
             guard let self else { return }
-            self.updateWindowSize(for: self.petView.currentOverlayLayoutMode)
+            let mode = self.petView.currentOverlayLayoutMode
+            if mode == .compact {
+                self.updateWindowSize(for: mode)
+            } else {
+                self.updateOverlayWindowLayout(for: mode)
+            }
         }
 
         window.menuModelProvider = { [weak self] in
@@ -561,6 +569,10 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
 
     /// 字跟着画面走：抽到另外画的演法（冲浪、翻箱子、钓鱼……）或者在做待机小动作（晒太阳、看小鸟……）就说它那组话
     private func statusText(for state: ShellWorkState) -> String {
+        // 正被拎着、刚落地：眼前发生的事最要紧，压过其他所有话
+        if let line = SceneLinePool.line(drag: petView.dragMoment) {
+            return line
+        }
         if case let .remind(type)? = reminderScene, let line = SceneLinePool.line(reminder: type) {
             return line
         }
@@ -596,6 +608,13 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
 
     private func logHealthError(_ operation: String, error: Error) {
         NSLog("[ICUShell] failed to \(operation): \(error.localizedDescription)")
+    }
+
+    private func updateOverlayWindowLayout(for mode: DesktopPetView.OverlayLayoutMode) {
+        let visible = mode != .compact
+        edgeDock?.prepareOverlayLayoutChange(visible: visible)
+        updateWindowSize(for: mode)
+        edgeDock?.overlayVisibilityChanged(visible)
     }
 
     private func updateWindowSize(for mode: DesktopPetView.OverlayLayoutMode) {

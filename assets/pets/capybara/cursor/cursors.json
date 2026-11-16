@@ -2,25 +2,39 @@
   "pixelSize": 16,
   "pointSize": 24,
   "cursors": {
-    "grab": {
-      "file": "grab.png",
+    "pat": {
+      "file": "pat.png",
       "hotSpot": [
-        9,
-        9
+        7,
+        5
+      ]
+    },
+    "tickle": {
+      "file": "tickle.png",
+      "hotSpot": [
+        4,
+        3
       ]
     },
     "grabbing": {
       "file": "grabbing.png",
       "hotSpot": [
         8,
-        9
+        7
       ]
     },
-    "pat": {
-      "file": "pat.png",
+    "poke": {
+      "file": "poke.png",
       "hotSpot": [
-        7,
-        8
+        3,
+        2
+      ]
+    },
+    "grab": {
+      "file": "grab.png",
+      "hotSpot": [
+        8,
+        3
       ]
     }
   }

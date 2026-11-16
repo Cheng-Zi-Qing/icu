@@ -162,6 +162,8 @@ swiftc -framework AppKit \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Drag/DragPhysics.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Drag/PetDragController.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Drag/PetPoseSprites.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Drag/PixelSpriteGrid.swift" \
+  "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Drag/PixelSpriteHanging.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Pet/Drag/PetLiftWindow.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Agent/AgentBoard.swift" \
   "$ROOT_DIR/apps/macos-shell/Sources/ICUShell/Agent/AgentActivity.swift" \

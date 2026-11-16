@@ -140,6 +140,25 @@
         "Far away…",
         "Rest eyes",
         "Horizon time"
+      ],
+      "held": [
+        "Put me down~",
+        "Up we go",
+        "Up, up!",
+        "Swing swing…",
+        "Dangling…"
+      ],
+      "dizzy": [
+        "So dizzy…",
+        "Spinning…",
+        "Seeing stars",
+        "Too shaky…"
+      ],
+      "landed": [
+        "Stuck it!",
+        "Touchdown!",
+        "Landed it",
+        "Perfect 10"
       ]
     }
   },

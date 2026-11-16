@@ -12,9 +12,9 @@ struct DragPhysicsConfig {
     /// 每 1pt/s 指针速度（任意方向）带来的额外拉长
     var stretchPerSpeed: CGFloat = 0.00025
     /// 钟摆最大角度（度）：夸张一点，甩起来整个身子荡出去
-    var maxSwingDegrees: CGFloat = 40
+    var maxSwingDegrees: CGFloat = 60
     /// 每 1pt/s 横向速度对应的目标摆角（度）
-    var swingPerVelocity: CGFloat = 0.07
+    var swingPerVelocity: CGFloat = 0.1
     /// 摆的弹簧够硬（固有频率约 4Hz），鼠标晃多快身子就晃多快；
     /// 阻尼比约 0.4，鼠标一停还会来回荡两下
     var swingStiffness: CGFloat = 700
@@ -64,6 +64,26 @@ enum DragPose: Equatable {
     /// 甩晕的豚鼠就会「落地又飞回去」，所以落地这段必须单独一个 case
     case dizzyGrounded(twinkle: Int)
     case landing(frame: Int)
+}
+
+/// 拖拽这一下桌宠在经历什么：状态条说对应那组话（见 SceneLinePool），拎着不会还挂着「干完啦」之类的话
+enum PetDragMoment: Equatable {
+    /// 被拎在半空
+    case held
+    /// 被甩晕了（拎着晕、或者晕着落了地）
+    case dizzy
+    /// 稳稳落地
+    case landed
+
+    /// 这个姿势属于哪一段；没在拖拽（`.none`）时为 nil，落地那句之后留多久由视图决定
+    init?(pose: DragPose) {
+        switch pose {
+        case .none: return nil
+        case .hold: self = .held
+        case .dizzy, .dizzyGrounded: self = .dizzy
+        case .landing: self = .landed
+        }
+    }
 }
 
 /// 每帧的渲染输出

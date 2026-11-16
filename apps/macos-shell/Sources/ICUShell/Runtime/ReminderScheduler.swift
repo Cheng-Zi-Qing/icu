@@ -23,7 +23,13 @@ final class ReminderScheduler {
     private let onEyeReminder: (() -> Void)?
     private var eyeTimer: DispatchSourceTimer?
     private var hydrationTimer: DispatchSourceTimer?
-    private var snoozeTimers: [UUID: DispatchSourceTimer] = [:]
+    private var eyeTimerID: UUID?
+    private var hydrationTimerID: UUID?
+    private var snoozeTimers: [UUID: (id: UUID, timer: DispatchSourceTimer)] = [:]
+    private var isWorkingEnabled = false
+    private var isUserResting = false
+
+    private var canSchedule: Bool { isWorkingEnabled && !isUserResting }
 
     init(
         eyeInterval: TimeInterval = 20 * 60,
@@ -51,25 +57,37 @@ final class ReminderScheduler {
     }
 
     func startWorking() {
+        isWorkingEnabled = true
         armEyeReminder()
         armHydrationReminder()
     }
 
     func enterFocus() {
-        cancelEyeReminder()
-        cancelHydrationReminder()
-        cancelSnoozeReminders()
+        stop()
     }
 
     func resumeWorking() {
-        armEyeReminder()
-        armHydrationReminder()
+        startWorking()
     }
 
     func stop() {
+        isWorkingEnabled = false
         cancelEyeReminder()
         cancelHydrationReminder()
         cancelSnoozeReminders()
+    }
+
+    func setUserResting(_ isResting: Bool) {
+        guard isUserResting != isResting else { return }
+        isUserResting = isResting
+        if isResting {
+            cancelEyeReminder()
+            cancelHydrationReminder()
+            cancelSnoozeReminders()
+        } else if isWorkingEnabled {
+            armEyeReminder()
+            armHydrationReminder()
+        }
     }
 
     /// 设置里改了间隔：已经在计时的提醒按新间隔重新计时，没在计时的不动
@@ -83,26 +101,31 @@ final class ReminderScheduler {
 
     func scheduleSnooze(for payload: ReminderPresentationPayload) {
         cancelSnoozeReminder(for: payload.id)
+        guard canSchedule else { return }
 
+        let timerID = UUID()
         let timer = DispatchSource.makeTimerSource(queue: .main)
         timer.schedule(deadline: .now() + snoozeInterval)
         timer.setEventHandler { [weak self] in
-            guard let self else { return }
+            guard let self, self.canSchedule, self.snoozeTimers[payload.id]?.id == timerID else { return }
             self.cancelSnoozeReminder(for: payload.id)
             self.emitReminder(payload)
         }
-        snoozeTimers[payload.id] = timer
+        snoozeTimers[payload.id] = (timerID, timer)
         timer.resume()
     }
 
     private func armEyeReminder() {
         cancelEyeReminder()
+        guard canSchedule else { return }
         isEyeReminderArmed = true
+        let timerID = UUID()
+        eyeTimerID = timerID
 
         let timer = DispatchSource.makeTimerSource(queue: .main)
         timer.schedule(deadline: .now() + eyeInterval)
         timer.setEventHandler { [weak self] in
-            guard let self else { return }
+            guard let self, self.canSchedule, self.eyeTimerID == timerID else { return }
             self.emitReminder(
                 ReminderPresentationPayload(
                     id: UUID(),
@@ -111,7 +134,7 @@ final class ReminderScheduler {
                     restSeconds: self.eyeRestSeconds
                 )
             )
-            self.armEyeReminder()
+            if self.eyeTimerID == timerID { self.armEyeReminder() }
         }
         eyeTimer = timer
         timer.resume()
@@ -119,12 +142,15 @@ final class ReminderScheduler {
 
     private func armHydrationReminder() {
         cancelHydrationReminder()
+        guard canSchedule else { return }
         isHydrationReminderArmed = true
+        let timerID = UUID()
+        hydrationTimerID = timerID
 
         let timer = DispatchSource.makeTimerSource(queue: .main)
         timer.schedule(deadline: .now() + hydrationInterval)
         timer.setEventHandler { [weak self] in
-            guard let self else { return }
+            guard let self, self.canSchedule, self.hydrationTimerID == timerID else { return }
             self.emitReminder(
                 ReminderPresentationPayload(
                     id: UUID(),
@@ -132,19 +158,21 @@ final class ReminderScheduler {
                     text: DesktopPetCopy.hydrationReminderMessage()
                 )
             )
-            self.armHydrationReminder()
+            if self.hydrationTimerID == timerID { self.armHydrationReminder() }
         }
         hydrationTimer = timer
         timer.resume()
     }
 
     private func cancelEyeReminder() {
+        eyeTimerID = nil
         eyeTimer?.cancel()
         eyeTimer = nil
         isEyeReminderArmed = false
     }
 
     private func cancelHydrationReminder() {
+        hydrationTimerID = nil
         hydrationTimer?.cancel()
         hydrationTimer = nil
         isHydrationReminderArmed = false
@@ -158,13 +186,13 @@ final class ReminderScheduler {
     }
 
     private func cancelSnoozeReminder(for reminderID: UUID) {
-        snoozeTimers[reminderID]?.cancel()
+        snoozeTimers[reminderID]?.timer.cancel()
         snoozeTimers[reminderID] = nil
     }
 
     private func cancelSnoozeReminders() {
-        for timer in snoozeTimers.values {
-            timer.cancel()
+        for entry in snoozeTimers.values {
+            entry.timer.cancel()
         }
         snoozeTimers.removeAll()
     }

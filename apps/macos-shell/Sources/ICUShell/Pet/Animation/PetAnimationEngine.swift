@@ -17,10 +17,8 @@ final class PetAnimationEngine {
     var dragOutputProvider: ((CFTimeInterval) -> DragOutput)?
     /// 拖拽姿势变化时回调（用于切换像素姿势帧）
     var onDragPoseChanged: ((DragPose) -> Void)?
-    /// 拎在半空时实际显示桌宠的图层（拎起窗口里的那张）；nil 表示还在原窗口里画
-    var liftedLayer: (() -> CALayer?)?
-    /// 拎起窗口里脖子以下那一层：只有它被往下拉长（脑袋不拉）
-    var liftedBodyLayer: (() -> CALayer?)?
+    /// 拎在半空时用原像素格合成的专用窗口；nil 表示还在原窗口里画
+    var liftedWindow: (() -> PetLiftWindow?)?
 
     var groundShadowLayer: CALayer { groundShadow.shadowLayer }
 
@@ -84,9 +82,8 @@ final class PetAnimationEngine {
 
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        if drag.pose.isLifted, let lifted = liftedLayer?() {
-            lifted.transform = Self.liftedTransform(drag: drag, layerBounds: lifted.bounds, anchorPoint: lifted.anchorPoint)
-            liftedBodyLayer?()?.transform = Self.liftedBodyTransform(stretchY: drag.stretchY)
+        if drag.pose.isLifted, let lifted = liftedWindow?(), lifted.isVisible {
+            lifted.render(drag: drag)
             layer.transform = CATransform3DIdentity
         } else {
             layer.transform = Self.composedTransform(base: base, drag: drag, layerBounds: layer.bounds, anchorPoint: layer.anchorPoint)

@@ -149,6 +149,10 @@ class DesktopPetView: NSView {
     var onActionClipChanged: ((PetActionClip?) -> Void)?
     /// 上次报过的那段片段
     var reportedActionClip: PetActionClip?
+    /// 拖拽这一下在经历什么（拎着 / 晕了 / 刚落地），状态条跟着说；落地那句落地后还留一会儿
+    var dragMoment: PetDragMoment?
+    var dragMomentLinger: DispatchWorkItem?
+    var onDragMomentChanged: ((PetDragMoment?) -> Void)?
     var isDraggingPet: Bool { dragController.isDragging }
     var completedVariantLoops = 0
     var variantRotationTicksRemaining = 0

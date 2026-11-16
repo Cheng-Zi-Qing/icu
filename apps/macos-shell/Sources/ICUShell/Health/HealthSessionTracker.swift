@@ -8,11 +8,23 @@ enum HealthActivity: Equatable {
     case segmentFinished(ShellWorkState, seconds: Int)
 }
 
+/// 系统层面的「人不在」：锁屏、睡眠、连续 3 分钟没操作都按自动休息记账
+struct WorkRestState {
+    var isScreenLocked = false
+    var isSleeping = false
+    var userIdleSeconds: TimeInterval = 0
+
+    var isResting: Bool {
+        isScreenLocked || isSleeping || userIdleSeconds >= 180
+    }
+}
+
 /// 把上班 / 专注 / 休息的时长按天记到本机。
 ///
 /// 时长不是等到切状态才入账：`checkpoint` 会把「到现在为止」的这一段先结掉（App 每分钟调一次，
 /// 读今日报告前也调一次），所以报告里总是最新的数，App 意外退出最多丢一分钟。
 /// 电脑睡着的那段不算上班：睡前 `suspend`，醒来 `resume`。
+/// 系统自动休息只改变记账状态，保留用户选择的工作 / 专注 / 休息状态。
 final class HealthSessionTracker {
     private let store: HealthMetricsStore
     private var activeState: ShellWorkState?
@@ -22,6 +34,7 @@ final class HealthSessionTracker {
     private var segmentSeconds: TimeInterval = 0
     /// 记好账以后通知一声；记账失败（抛错）时不发
     var onActivity: ((HealthActivity) -> Void)?
+    private var isAutomaticallyResting = false
 
     init(store: HealthMetricsStore) {
         self.store = store
@@ -43,13 +56,11 @@ final class HealthSessionTracker {
             try store.recordClockOut(at: date)
         }
 
-        switch newState {
-        case .focus:
+        if newState == .focus {
             try store.recordFocusSessionStart(at: date)
-        case .breakState:
+        }
+        if effectiveState(settledState) != .breakState, effectiveState(newState) == .breakState {
             try store.recordBreakStart(at: date)
-        case .idle, .working:
-            break
         }
 
         if newState == .idle {
@@ -63,6 +74,25 @@ final class HealthSessionTracker {
         if settledState == .focus || settledState == .breakState, settledState != newState {
             onActivity?(.segmentFinished(settledState, seconds: finishedSegment))
         }
+    }
+
+    func setAutomaticRest(_ isResting: Bool, at date: Date) throws {
+        guard isAutomaticallyResting != isResting else { return }
+        try checkpoint(at: date)
+        if isResting, let activeState, activeState == .working || activeState == .focus {
+            try store.recordBreakStart(at: date)
+        }
+        isAutomaticallyResting = isResting
+        if activeState != nil {
+            activeStateStartedAt = date
+        }
+    }
+
+    private func effectiveState(_ state: ShellWorkState) -> ShellWorkState {
+        if isAutomaticallyResting, state == .working || state == .focus {
+            return .breakState
+        }
+        return state
     }
 
     /// 把正在进行的这一段结到 `date`，然后从 `date` 接着算。没在上班就什么都不做
@@ -141,7 +171,8 @@ final class HealthSessionTracker {
         guard !isSuspended, let startedAt = activeStateStartedAt else { return 0 }
         let duration = date.timeIntervalSince(startedAt).rounded(.down)
         guard duration >= 1 else { return 0 }
-        switch state {
+        let accounted = effectiveState(state)
+        switch accounted {
         case .working:
             try store.settleWorkDuration(seconds: duration, at: startedAt)
         case .focus:
@@ -152,7 +183,10 @@ final class HealthSessionTracker {
             return 0
         }
         try splitShiftAtMidnight(from: startedAt, to: startedAt.addingTimeInterval(duration))
-        segmentSeconds += duration
+        // 自动休息那段按休息入账，不算进这一段专注 / 工作的时长（宝箱按它发奖）
+        if accounted == state {
+            segmentSeconds += duration
+        }
         return duration
     }
 
