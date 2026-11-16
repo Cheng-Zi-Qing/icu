@@ -142,7 +142,7 @@ func testDesktopPetViewHangsTheLiftedPetInABiggerWindow() throws {
     try expect(lift.parent === window, "the lift window rides along with the pet window while it is dragged")
     try expect(lift.ignoresMouseEvents, "the lift window never steals the drag")
     try expect(view.imageView.alphaValue == 0, "the clipped pet in the small window steps aside")
-    try expect(lift.headLayer.contents != nil && lift.bodyLayer.contents != nil, "the hold frame is drawn in the lift window (head and body halves)")
+    try expect(lift.sprite != nil && lift.rasterLayer.contents != nil, "the hold frame is drawn in the lift window")
     let canvas = window.convertToScreen(view.convert(view.imageView.frame, to: nil))
     try expect(
         lift.frame.insetBy(dx: PetLiftWindow.sideMargin - 1, dy: 0).contains(CGPoint(x: canvas.midX, y: canvas.midY))
@@ -354,23 +354,109 @@ func testLiftedPetStretchesTheBodyButNotTheHead() throws {
     try expect(share > 0.35 && share < 0.6, "the neck sits around the middle of the canvas (got \(share))")
 }
 
-/// 拎起窗口里的那只分成脑袋和身体两层，拼起来正好是整张图
-@MainActor
-func testPetLiftWindowSplitsHeadAndBody() throws {
-    let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 256, pixelsHigh: 256, bitsPerSample: 8, samplesPerPixel: 4,
-                               hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
-    let image = NSImage(size: NSSize(width: 128, height: 128))
-    image.addRepresentation(rep)
-    let lift = PetLiftWindow()
-    let parent = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 128, height: 152), styleMask: [.borderless], backing: .buffered, defer: true)
-    lift.show(image: image, canvas: NSRect(x: 100, y: 100, width: 128, height: 128), over: parent)
-    defer { lift.hide() }
-    let head = lift.headLayer.frame
-    let body = lift.bodyLayer.frame
-    try expect(lift.headLayer.contents != nil && lift.bodyLayer.contents != nil, "both halves have their part of the picture")
-    try expect(abs(body.maxY - head.minY) < 0.01 && abs(body.minY) < 0.01 && abs(head.maxY - 128) < 0.01,
-               "body below, head on top, together the whole canvas (head \(head), body \(body))")
-    try expect(abs(body.height - 128 * PetAnimationEngine.liftedBodyShare) < 4.01, "split at the neck (got \(body.height))")
+// MARK: - 原像素格上的拉长和甩动
+
+private let outline: UInt32 = 0x2A1A14FF
+private let fur: UInt32 = 0xB07048FF
+private let belly: UInt32 = 0xD8A070FF
+
+/// 带一格深色描边的圆角身子（20×24 格），肚子一块浅色，像素画常见的样子
+private func outlinedBlob() -> PixelSpriteGrid {
+    let width = 20, height = 24
+    // 上下两头每行左右各缩进几格，收成圆角
+    let roundedInsets = [4, 2, 1, 1]
+    func inside(_ x: Int, _ y: Int) -> Bool {
+        guard y >= 0, y < height else { return false }
+        let edge = min(y, height - 1 - y)
+        let inset = edge < roundedInsets.count ? roundedInsets[edge] : 0
+        return x >= inset && x < width - inset
+    }
+    let cells = (0..<height).flatMap { y in
+        (0..<width).map { x -> UInt32 in
+            guard inside(x, y) else { return PixelSpriteGrid.clear }
+            let onEdge = !inside(x - 1, y) || !inside(x + 1, y) || !inside(x, y - 1) || !inside(x, y + 1)
+            if onEdge { return outline }
+            return (6...13).contains(x) && (12...20).contains(y) ? belly : fur
+        }
+    }
+    return PixelSpriteGrid(width: width, height: height, cells: cells)
+}
+
+/// 8 邻接下有几块连通的描边
+private func outlinePieces(_ grid: PixelSpriteGrid) -> Int {
+    var seen = Set<Int>()
+    var pieces = 0
+    for start in grid.cells.indices where grid.cells[start] == outline && !seen.contains(start) {
+        pieces += 1
+        var stack = [start]
+        seen.insert(start)
+        while let next = stack.popLast() {
+            let x = next % grid.width, y = next / grid.width
+            for dy in -1...1 {
+                for dx in -1...1 where grid[x + dx, y + dy] == outline {
+                    let index = (y + dy) * grid.width + x + dx
+                    if seen.insert(index).inserted { stack.append(index) }
+                }
+            }
+        }
+    }
+    return pieces
+}
+
+func testPixelSpriteHangingStretchesTheBodyByWholeRowsAndKeepsTheHead() throws {
+    let blob = outlinedBlob()
+    let headRows = blob.height - PetLiftWindow.bodyRows(in: blob)
+    let rows = PixelSpriteHanging.stretchedBodyRows(bodyRows: blob.height - headRows, stretch: 1.4)
+    let hung = PixelSpriteHanging.hanging(blob, headRows: headRows, stretchedBodyRows: rows, slimming: PetAnimationEngine.liftedSlimming)
+    try expect(hung.height == headRows + rows && rows > blob.height - headRows, "the body grows by whole rows (got \(rows))")
+    try expect(Array(hung.cells[0..<(headRows * blob.width)]) == Array(blob.cells[0..<(headRows * blob.width)]),
+               "the head is copied cell for cell")
+    let neck = (0..<blob.width).map { hung[$0, headRows] }
+    try expect(neck == (0..<blob.width).map { blob[$0, headRows] }, "the neck row is untouched, so the outline meets the head")
+    try expect(Set(hung.cells).isSubset(of: Set(blob.cells)), "stretching never invents colors")
+    let feet = hung.height - 1
+    try expect((0..<blob.width).allSatisfy { hung[$0, feet] == PixelSpriteGrid.clear || hung[$0, feet] == outline },
+               "the bottom outline stays one row thick")
+    try expect((0..<blob.width).filter { hung[$0, feet - 1] == outline }.count < (0..<blob.width).filter { hung[$0, feet] == outline }.count,
+               "the row above the feet is not a second copy of the bottom outline")
+    for row in headRows..<hung.height {
+        guard let span = hung.opaqueSpan(row: row) else { continue }
+        try expect(hung[span.lowerBound, row] == outline && hung[span.upperBound, row] == outline,
+                   "row \(row) keeps its outline on both ends")
+    }
+    guard let neckSpan = hung.opaqueSpan(row: headRows), let feetSpan = hung.opaqueSpan(row: feet - 1),
+          let sourceFeet = blob.opaqueSpan(row: blob.height - 2) else {
+        throw TestFailure(message: "the hung body should stay visible")
+    }
+    try expect(feetSpan.count < sourceFeet.count && neckSpan.count == blob.opaqueSpan(row: headRows)?.count,
+               "only the lower body slims: neck \(neckSpan), feet \(feetSpan)")
+    try expect(outlinePieces(hung) == 1, "the stretched outline is still one closed stroke")
+}
+
+func testPixelSpriteHangingSwingsWithoutBreakingTheOutline() throws {
+    let blob = outlinedBlob()
+    let rows = PixelSpriteHanging.stretchedBodyRows(bodyRows: PetLiftWindow.bodyRows(in: blob), stretch: 1.32)
+    let hung = PixelSpriteHanging.hanging(blob, headRows: blob.height - PetLiftWindow.bodyRows(in: blob),
+                                         stretchedBodyRows: rows, slimming: PetAnimationEngine.liftedSlimming)
+    let smooth = PixelSpriteHanging.oversampled(hung)
+    let pivot = CGPoint(x: CGFloat(blob.width) / 2, y: 0)
+    let still = PixelSpriteHanging.placed(hung, oversampled: smooth, degrees: 0, pivot: pivot, origin: (10, 4), canvasWidth: 50, canvasHeight: 50)
+    try expect((0..<hung.height).allSatisfy { y in (0..<hung.width).allSatisfy { still[$0 + 10, y + 4] == hung[$0, y] } },
+               "at rest the hung sprite is placed cell for cell")
+    for degrees in [-40, -23, -7, 3, 12, 31, 40] {
+        let swung = PixelSpriteHanging.placed(hung, oversampled: smooth, degrees: degrees, pivot: pivot, origin: (10, 4), canvasWidth: 50, canvasHeight: 50)
+        try expect(Set(swung.cells).isSubset(of: Set(hung.cells).union([PixelSpriteGrid.clear])), "swinging never blends colors (\(degrees)°)")
+        try expect(outlinePieces(swung) == 1, "at \(degrees)° the outline is one connected stroke, without stray pixels")
+        let opaque = swung.cells.filter { $0 != PixelSpriteGrid.clear }.count
+        let original = hung.cells.filter { $0 != PixelSpriteGrid.clear }.count
+        try expect(abs(opaque - original) * 10 < original, "at \(degrees)° the body keeps its size (\(opaque) vs \(original))")
+        try expect(swung[10 + Int(pivot.x), 4] != PixelSpriteGrid.clear || swung[9 + Int(pivot.x), 4] != PixelSpriteGrid.clear,
+                   "the scruff stays at the grab point at \(degrees)°")
+    }
+    let right = PixelSpriteHanging.placed(hung, oversampled: smooth, degrees: 30, pivot: pivot, origin: (10, 4), canvasWidth: 50, canvasHeight: 50)
+    let feetRow = (0..<50).last { row in (0..<50).contains { right[$0, row] != PixelSpriteGrid.clear } } ?? 0
+    let feetX = (0..<50).filter { right[$0, feetRow] != PixelSpriteGrid.clear }
+    try expect((feetX.first ?? 0) > 10 + blob.width / 2, "a positive swing throws the feet to the right (\(feetX))")
 }
 
 private struct LiftRasterPixels {
@@ -492,6 +578,7 @@ func testPetLiftRasterStretchesOnlyTheBodyAndKeepsTheNeckJoined() throws {
     lift.show(image: liftPixelSource(), canvas: liftCanvas, over: parent)
     var headCounts: [Int] = []
     var bodySizes: [CGSize] = []
+    var feetWidths: [Int] = []
     for stretch in [CGFloat(1), 1.37, 1.8] {
         try drawLiftFrame(lift, drag: DragOutput(pose: .hold(tilt: 0), stretchY: stretch, swingDegrees: 0, landingSquash: 1))
         let output = try liftDisplayPixels(lift, scale: 1)
@@ -513,14 +600,22 @@ func testPetLiftRasterStretchesOnlyTheBodyAndKeepsTheNeckJoined() throws {
             throw TestFailure(message: "the stretched blue body should remain visible")
         }
         bodySizes.append(CGSize(width: maxX - minX + 1, height: maxY - minY + 1))
+        // 脖子那行和脑袋最下面一行一样宽：收细从脖子往下渐进，轮廓不会在脖子处错出台阶
+        let rowWidth = { (row: Int, isBody: Bool) in
+            (0..<output.width).filter { x in let p = output.pixel(x, row); return p[3] == 255 && (p[2] == 255) == isBody }.count
+        }
+        let neckRow = Int(minY), headBottomRow = Int(minY) - 1
+        try expect(rowWidth(neckRow, true) == rowWidth(headBottomRow, false),
+                   "the neck row must be as wide as the head above it at stretch \(stretch)")
+        feetWidths.append(rowWidth(Int(maxY), true))
         try expect(Set(centerRows).count == centerRows.max()! - centerRows.min()! + 1,
                    "the head/body split must stay joined at zero swing")
     }
     try expect(Set(headCounts).count == 1 && headCounts[0] > 0, "stretch must leave the head's actual rendered area unchanged")
     try expect(bodySizes[1].height > bodySizes[0].height && bodySizes[2].height > bodySizes[1].height,
                "the actual body must get longer: \(bodySizes)")
-    try expect(bodySizes[1].width < bodySizes[0].width && bodySizes[2].width < bodySizes[1].width,
-               "the actual body must get slimmer: \(bodySizes)")
+    try expect(feetWidths[1] < feetWidths[0] && feetWidths[2] < feetWidths[1],
+               "the body must taper slimmer towards the feet: \(feetWidths)")
 }
 
 func testPetLiftRasterCachesFramesAndPreservesTheLastValidImage() throws {
@@ -534,7 +629,7 @@ func testPetLiftRasterCachesFramesAndPreservesTheLastValidImage() throws {
     guard let first = lift.rasterLayer.contents else { throw TestFailure(message: "lifting must produce a bitmap immediately") }
     let raster = first as! CGImage
     try expect(raster.width == 88 && raster.height == 67, "the lift is composed on the original 4pt grid")
-    try expect(lift.spriteLayer.isHidden && !lift.rasterLayer.isHidden && CATransform3DIsIdentity(lift.rasterLayer.transform),
+    try expect(!lift.rasterLayer.isHidden && CATransform3DIsIdentity(lift.rasterLayer.transform),
                "only the untransformed raster should be visible")
     lift.render(drag: drag)
     try expect(lift.rasterLayer.contents as AnyObject === first as AnyObject, "identical source and drag should reuse the raster")

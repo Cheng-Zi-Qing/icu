@@ -5,6 +5,10 @@ import QuartzCore
 ///
 /// 桌宠窗口只有画布那么大，身体一拉长、一甩就会被窗口边裁掉；
 /// 拎着的这段时间改在这里画，四周留够地方让它荡到最大角度也能整只露出来。
+///
+/// 画法：当前帧先还原成原像素格（一格 4pt），拉长、收细、甩动都在这张小图上按整格做
+/// （见 PixelSpriteHanging），再整张最近邻放大上屏。位置也按整格对齐，所以屏幕上的方块
+/// 和地上那只一样大、一样齐，不会半格错位或被拉成扁格。
 final class PetLiftWindow: NSWindow {
     /// 左右各留多少：最大摆角时脚能荡出画布约 90pt
     static let sideMargin: CGFloat = 112
@@ -13,15 +17,25 @@ final class PetLiftWindow: NSWindow {
     /// 脚下留白：拉长后身体往下坠
     static let bottomMargin: CGFloat = 64
 
-    /// 原图与几何数据；实际显示统一由 rasterLayer 在原像素格合成
-    let spriteLayer = CALayer()
+    /// 唯一上屏的图层：整窗一张低分辨率位图，一格放大成 4pt
     let rasterLayer = CALayer()
-    private var lastRenderedDrag: DragOutput?
+    /// 当前帧还原出的原像素格；nil 表示还没有可画的帧
+    private(set) var sprite: PixelSpriteGrid?
+    /// 原像素格在窗口里的位置（左下角，单位：格）
+    private var spriteOrigin = (x: 0, y: 0)
+    /// 后颈（画布顶边中点）在 sprite 里的位置，格子坐标、y 向下
+    private var scruff = CGPoint.zero
+    /// 拉长到某个行数后的样子和它的 8 倍平滑图；换帧就清空
+    private var hangingCache: [Int: (sprite: PixelSpriteGrid, oversampled: PixelSpriteGrid?)] = [:]
+    private var lastRenderedKey: RenderKey?
     private var lastDrag = DragOutput.rest
-    /// 脖子以上：拎着时不变形
-    let headLayer = CALayer()
-    /// 脖子以下：锚点在上沿（脖子），往下拉长
-    let bodyLayer = CALayer()
+
+    /// 同一个 key 画出来的图完全一样：拉长按整行、角度按整度、抬高按整格
+    private struct RenderKey: Equatable {
+        let bodyRows: Int
+        let degrees: Int
+        let lift: Int
+    }
 
     convenience init() {
         self.init(contentRect: .zero, styleMask: [.borderless], backing: .buffered, defer: false)
@@ -33,20 +47,10 @@ final class PetLiftWindow: NSWindow {
         let content = NSView()
         content.wantsLayer = true
         contentView = content
-        spriteLayer.anchorPoint = .zero
-        spriteLayer.isHidden = true
         rasterLayer.anchorPoint = .zero
         rasterLayer.contentsGravity = .resize
         rasterLayer.magnificationFilter = .nearest
         rasterLayer.minificationFilter = .nearest
-        for part in [bodyLayer, headLayer] {
-            part.contentsGravity = .resize
-            part.magnificationFilter = .nearest
-            part.minificationFilter = .nearest
-            spriteLayer.addSublayer(part)
-        }
-        bodyLayer.anchorPoint = CGPoint(x: 0.5, y: 1)
-        content.layer?.addSublayer(spriteLayer)
         content.layer?.addSublayer(rasterLayer)
     }
 
@@ -70,18 +74,11 @@ final class PetLiftWindow: NSWindow {
         collectionBehavior = parent.collectionBehavior
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        spriteLayer.transform = CATransform3DIdentity
-        bodyLayer.transform = CATransform3DIdentity
-        spriteLayer.frame = NSRect(x: Self.sideMargin, y: Self.bottomMargin, width: canvas.width, height: canvas.height)
         rasterLayer.frame = CGRect(origin: .zero, size: frame.size)
         rasterLayer.contentsScale = parent.backingScaleFactor
-        lastRenderedDrag = nil
-        for part in [headLayer, bodyLayer] {
-            part.contentsScale = parent.backingScaleFactor
-        }
         CATransaction.commit()
         if !isVisible { lastDrag = .rest }
-        setImage(image)
+        setImage(image, canvasSize: canvas.size)
         if self.parent !== parent {
             self.parent?.removeChildWindow(self)
             parent.addChildWindow(self, ordered: .above)
@@ -89,72 +86,91 @@ final class PetLiftWindow: NSWindow {
         orderFront(nil)
     }
 
-    /// 换一帧：按脖子那一行切成脑袋、身体两块，各自摆在画布里原来的位置（拼起来就是整张图）
+    /// 换一帧：还原成原像素格后按当前拎着的样子重画。帧缺失时保留上一张，不闪空
     func setImage(_ image: NSImage?) {
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        let halves = image.flatMap(Self.split)
-        guard let halves, let image else {
-            CATransaction.commit()
-            return
-        }
-        lastRenderedDrag = nil
-        headLayer.contents = halves.head
-        bodyLayer.contents = halves.body
-        let fit = Self.aspectFit(image.size, in: spriteLayer.bounds)
-        let bodyHeight = fit.height * halves.bodyShare
-        headLayer.frame = CGRect(x: fit.minX, y: fit.minY + bodyHeight, width: fit.width, height: fit.height - bodyHeight)
-        bodyLayer.frame = CGRect(x: fit.minX, y: fit.minY, width: fit.width, height: bodyHeight)
-        CATransaction.commit()
+        setImage(image, canvasSize: CGSize(
+            width: frame.width - 2 * Self.sideMargin,
+            height: frame.height - Self.bottomMargin - Self.topMargin
+        ))
+    }
+
+    private func setImage(_ image: NSImage?, canvasSize: CGSize) {
+        guard let image, let placement = Self.placement(of: image, canvasSize: canvasSize) else { return }
+        sprite = placement.sprite
+        spriteOrigin = placement.origin
+        scruff = placement.scruff
+        hangingCache = [:]
+        lastRenderedKey = nil
         render(drag: lastDrag)
     }
 
-    /// 先在 4pt 原像素格摆动、拉伸，再用单张位图整数放大，变形不再打碎像素边缘。
+    /// 按拖拽输出重画；和上一帧画出来一样时什么都不做
     func render(drag: DragOutput) {
         lastDrag = drag
-        guard lastRenderedDrag != drag,
-              let head = headLayer.contents,
-              let body = bodyLayer.contents else { return }
+        guard let sprite else { return }
         let pixel = InteractionLayer.spritePixel
-        let width = Int(rasterLayer.bounds.width / pixel)
-        let height = Int(rasterLayer.bounds.height / pixel)
-        guard width > 0, height > 0,
-              let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
-                                      space: CGColorSpaceCreateDeviceRGB(),
-                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return }
-        context.interpolationQuality = .none
-        context.setShouldAntialias(false)
-        context.clear(CGRect(x: 0, y: 0, width: width, height: height))
-        context.scaleBy(x: 1 / pixel, y: 1 / pixel)
-        context.translateBy(x: spriteLayer.frame.minX, y: spriteLayer.frame.minY)
-        context.concatenate(CATransform3DGetAffineTransform(PetAnimationEngine.liftedTransform(
-            drag: drag, layerBounds: spriteLayer.bounds, anchorPoint: spriteLayer.anchorPoint
-        )))
-        context.saveGState()
-        let bodyFrame = bodyLayer.frame
-        context.translateBy(x: bodyFrame.midX, y: bodyFrame.maxY)
-        context.concatenate(CATransform3DGetAffineTransform(PetAnimationEngine.liftedBodyTransform(stretchY: drag.stretchY)))
-        context.draw(body as! CGImage, in: CGRect(x: -bodyFrame.width / 2, y: -bodyFrame.height, width: bodyFrame.width, height: bodyFrame.height))
-        context.restoreGState()
-        context.draw(head as! CGImage, in: headLayer.frame)
-        guard let image = context.makeImage() else { return }
+        let headRows = sprite.height - Self.bodyRows(in: sprite)
+        let key = RenderKey(
+            bodyRows: PixelSpriteHanging.stretchedBodyRows(bodyRows: sprite.height - headRows, stretch: drag.stretchY),
+            degrees: Int(drag.swingDegrees.rounded()),
+            lift: Int((drag.fallOffset / pixel).rounded())
+        )
+        guard key != lastRenderedKey else { return }
+        let hanging = hangingSprite(from: sprite, headRows: headRows, bodyRows: key.bodyRows, needsOversample: key.degrees != 0)
+        let columns = Int((rasterLayer.bounds.width / pixel).rounded())
+        let rows = Int((rasterLayer.bounds.height / pixel).rounded())
+        // 网格第 0 行在上：原画布顶边（后颈所在行）抬高 lift 格
+        let top = rows - (spriteOrigin.y + sprite.height + key.lift)
+        let composed = PixelSpriteHanging.placed(
+            hanging.sprite, oversampled: hanging.oversampled, degrees: key.degrees, pivot: scruff,
+            origin: (spriteOrigin.x, top), canvasWidth: columns, canvasHeight: rows
+        )
+        guard let image = composed.makeImage() else { return }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         rasterLayer.contents = image
         CATransaction.commit()
-        lastRenderedDrag = drag
+        lastRenderedKey = key
     }
 
-    /// 切在脖子那一行（按像素行取整，不切开一格像素）
-    private static func split(_ image: NSImage) -> (head: CGImage, body: CGImage, bodyShare: CGFloat)? {
-        guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil), cg.height > 1 else { return nil }
-        let bodyRows = min(cg.height - 1, max(1, Int((CGFloat(cg.height) * PetAnimationEngine.liftedBodyShare).rounded())))
-        let headRows = cg.height - bodyRows
-        guard
-            let head = cg.cropping(to: CGRect(x: 0, y: 0, width: cg.width, height: headRows)),
-            let body = cg.cropping(to: CGRect(x: 0, y: headRows, width: cg.width, height: bodyRows))
-        else { return nil }
-        return (head, body, CGFloat(bodyRows) / CGFloat(cg.height))
+    private func hangingSprite(
+        from sprite: PixelSpriteGrid, headRows: Int, bodyRows: Int, needsOversample: Bool
+    ) -> (sprite: PixelSpriteGrid, oversampled: PixelSpriteGrid?) {
+        let cached = hangingCache[bodyRows] ?? (PixelSpriteHanging.hanging(
+            sprite, headRows: headRows, stretchedBodyRows: bodyRows, slimming: PetAnimationEngine.liftedSlimming
+        ), nil)
+        let entry = needsOversample && cached.oversampled == nil
+            ? (cached.sprite, PixelSpriteHanging.oversampled(cached.sprite))
+            : cached
+        hangingCache[bodyRows] = entry
+        return entry
+    }
+
+    /// 脖子以下有几行（按整行取整，不切开一格像素）
+    static func bodyRows(in sprite: PixelSpriteGrid) -> Int {
+        min(sprite.height - 1, max(1, Int((CGFloat(sprite.height) * PetAnimationEngine.liftedBodyShare).rounded())))
+    }
+
+    /// 帧图按原像素格还原，并算出它在拎起窗口里落在哪几格
+    private static func placement(
+        of image: NSImage, canvasSize: CGSize
+    ) -> (sprite: PixelSpriteGrid, origin: (x: Int, y: Int), scruff: CGPoint)? {
+        let pixel = InteractionLayer.spritePixel
+        guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+        let fit = aspectFit(image.size, in: CGRect(origin: .zero, size: canvasSize))
+        let columns = Int((fit.width / pixel).rounded())
+        let rows = Int((fit.height / pixel).rounded())
+        guard rows > 1, let sprite = PixelSpriteGrid.sampling(cg, columns: columns, rows: rows) else { return nil }
+        let origin = (
+            x: Int(((sideMargin + fit.minX) / pixel).rounded()),
+            y: Int(((bottomMargin + fit.minY) / pixel).rounded())
+        )
+        // 后颈：画布顶边中点，换算到 sprite 自己的格子坐标里
+        let scruff = CGPoint(
+            x: (sideMargin + canvasSize.width / 2) / pixel - CGFloat(origin.x),
+            y: CGFloat(origin.y + rows) - (bottomMargin + canvasSize.height) / pixel
+        )
+        return (sprite, origin, scruff)
     }
 
     private static func aspectFit(_ size: NSSize, in bounds: CGRect) -> CGRect {
