@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { DEFAULT_MODEL, PALETTE } from './model.mjs';
 import { EDGE_BIRD_FLYBY, allFrames, birdVisitOptions, napOptions, pettedOptions, renderPose, resolvePose, yuzuWobbleOptions } from './render.mjs';
 import { Grid } from './raster.mjs';
+import { FIGURE_TAGS, measure } from './measure.mjs';
 import { renderFrontPeek, renderFrontUpright } from './front-peek.mjs';
 import { EYE_LEFT } from './front-head.mjs';
 import { OUTFIT_HEADWEAR } from './headwear.mjs';
@@ -410,6 +411,34 @@ test('settings title bar decoration is the upright front peek with paws on the b
   assert.deepEqual(bar.cells, renderFrontUpright({}).cells);
   const bottom = Array.from({ length: 32 }, (_, x) => bar.get(x, 31)).filter((c) => c !== 'clear');
   assert.ok(bottom.length >= 6, 'paws rest on the bottom edge');
+});
+
+test('hold body projection stays narrow relative to the unchanged head', () => {
+  const held = measure(renderPose(DEFAULT_MODEL, 'hold', { props: false }));
+  assert.ok(held.body.w <= 22, `body width ${held.body.w} must be at most 22`);
+  assert.ok(held.head.w / held.body.w >= 0.77, `head/body width ratio ${held.head.w}/${held.body.w}`);
+});
+
+test('hold back widens smoothly from the neck to the rump in source coordinates', () => {
+  // Tilt shears the whole pose; measure the unsheared source silhouette.
+  const options = { tilt: 0, props: false, grass: false, squeezeSweat: false };
+  const rightEdge = (grid) => Array.from({ length: 12 }, (_, row) => {
+    const y = row + 12;
+    const columns = Array.from({ length: grid.width }, (_, x) => x)
+      .filter((x) => FIGURE_TAGS.includes(grid.tagAt(x, y)));
+    assert.ok(columns.length > 0, `figure is present at row ${y}`);
+    return Math.max(...columns);
+  });
+  const edge = rightEdge(renderPose(DEFAULT_MODEL, 'hold', options));
+  for (let i = 1; i < edge.length; i += 1) {
+    const step = edge[i] - edge[i - 1];
+    assert.ok(step >= 0 && step <= 1,
+      `hold back rows ${i + 11}->${i + 12}: ${edge[i - 1]}->${edge[i]} (edge ${edge})`);
+  }
+  for (const headwear of ['orange', 'straw_hat']) {
+    const dressed = renderPose(DEFAULT_MODEL, 'hold', { ...options, props: true, headwear });
+    assert.deepEqual(rightEdge(dressed), edge, `${headwear}: headwear keeps the same back contour`);
+  }
 });
 
 test('lying pose is long and low', () => {

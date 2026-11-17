@@ -5,10 +5,10 @@ import Foundation
 struct DragPhysicsConfig {
     /// 按下后移动超过该距离才算拖拽，否则视为点击
     var dragThreshold: CGFloat = 3
-    /// 拎着不动时的麻糬拉长量（相对原高度）：拎起来整只往下坠，拉得长一点才像被提溜着
-    var holdStretch: CGFloat = 0.32
-    /// 甩得快时额外拉长的上限
-    var maxExtraStretch: CGFloat = 0.16
+    /// 拎着不动时身体自然下坠的拉长量（相对原高度），轻一点避免头身比例失衡
+    var holdStretch: CGFloat = 0.20
+    /// 甩得快时额外下坠的拉长上限，保留摆动和 Q 弹
+    var maxExtraStretch: CGFloat = 0.12
     /// 每 1pt/s 指针速度（任意方向）带来的额外拉长
     var stretchPerSpeed: CGFloat = 0.00025
     /// 钟摆最大角度（度）：夸张一点，甩起来整个身子荡出去

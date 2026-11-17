@@ -46,6 +46,8 @@ struct ThemeAppKitManualMain {
             try testPixelSpriteHangingStretchesTheBodyByWholeRowsAndKeepsTheHead()
             try testPixelSpriteHangingSwingsWithoutBreakingTheOutline()
             try testPixelSpriteHangingKeepsTheCurveOfTheBack()
+            try testRealHeldPetKeepsEveryHeadPixelAtRuntimeStretches()
+            try testRealHeldPetKeepsTheNeckAndBackContinuousAtRuntimeStretches()
             try testPetLiftRasterKeepsTheOriginalPixelGridWhileSwinging()
             try testPetLiftRasterStretchesOnlyTheBodyAndKeepsTheNeckJoined()
             try testPetLiftRasterCachesFramesAndPreservesTheLastValidImage()

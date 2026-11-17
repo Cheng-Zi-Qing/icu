@@ -58,10 +58,10 @@ func testDragPhysicsStretchesWhileHeldAndStaysBounded() throws {
         DragPhysics(config: config).pressed(at: .zero, at: 0),
         from: .zero, to: CGPoint(x: 0, y: 10), start: 0, duration: 0.05
     )
-    let settled = stepping(held, from: 0.05, to: 0.8)
-    let stretch = settled.output(at: 0.8).stretchY
+    let settled = stepping(held, from: 0.05, to: 2.0)
+    let stretch = settled.output(at: 2.0).stretchY
 
-    try expect(stretch > 1 + config.holdStretch * 0.8, "held pet should stretch like mochi (got \(stretch))")
+    try expect((1.18...1.22).contains(stretch), "held still should settle near 1.20 (got \(stretch))")
     try expect(stretch <= 1 + config.holdStretch + config.maxExtraStretch + 0.01, "stretch should stay bounded (got \(stretch))")
 }
 
@@ -100,6 +100,7 @@ func testDragPhysicsFallsFromTheLiftedHeightBeforeItLands() throws {
     var physics = released
     var offsets: [CGFloat] = []
     var poses: [DragPose] = []
+    var elapsedTimes: [TimeInterval] = []
     var time: TimeInterval = 0.2
     let end = 0.2 + config.fallDuration + frame
     while time < end {
@@ -108,14 +109,15 @@ func testDragPhysicsFallsFromTheLiftedHeightBeforeItLands() throws {
         let output = physics.output(at: time)
         offsets.append(output.fallOffset)
         poses.append(output.pose)
+        elapsedTimes.append(time - 0.2)
     }
     // 从抬高处一路掉到贴地，中间只降不升、也不越界
     try expect(abs((offsets.first ?? 0) - config.liftHeight) < 0.5, "the fall starts from the lifted height (got \(offsets.first ?? 0))")
     try expect(abs(offsets.last ?? -1) < 0.001, "the fall ends exactly on the ground (got \(offsets.last ?? 0))")
     try expect(offsets.allSatisfy { $0 >= 0 && $0 <= config.liftHeight }, "the fall stays between the ground and the lift height")
     try expect(zip(offsets, offsets.dropFirst()).allSatisfy { $0 >= $1 }, "the pet should only go down while it falls")
-    // 下落全程姿势还是拎着那套（窗户不会中途切回主窗口），最后一帧才换成地上姿势
-    try expect(poses.dropLast().allSatisfy { $0.isLifted }, "the pet should keep hanging in the lift window while it falls (got \(poses))")
+    // 每个采样按实际经过时间判断：下落期间保持拎起姿势，到达落地时间后换成地上姿势
+    try expect(zip(elapsedTimes, poses).allSatisfy { elapsed, pose in pose.isLifted == (elapsed < config.fallDuration) }, "each sampled pose should match whether its elapsed time is before landing (elapsed times \(elapsedTimes), poses \(poses))")
     try expect(!(poses.last ?? .none).isLifted, "landing should put the pet back into the normal window (got \(poses.last ?? DragPose.none))")
 }
 
@@ -340,8 +342,9 @@ func testDragPhysicsStretchesMoreWhenYankedFast() throws {
         DragPhysics(config: config).pressed(at: .zero, at: 0),
         from: .zero, to: CGPoint(x: 0, y: 300), start: 0, duration: 0.3
     ).output(at: 0.3).stretchY
-    try expect(still >= 1.12, "hanging still should already look clearly stretched (got \(still))")
+    try expect((1.18...1.22).contains(still), "hanging still should settle near 1.20 (got \(still))")
     try expect(yanked > still + 0.05, "yanking up fast should stretch the body further (\(yanked) vs \(still))")
+    try expect(yanked <= 1 + config.holdStretch + config.maxExtraStretch + 0.01, "fast yanks should stay within the stretch limit (got \(yanked))")
 }
 
 /// 3Hz 甩动时每帧的完整输出

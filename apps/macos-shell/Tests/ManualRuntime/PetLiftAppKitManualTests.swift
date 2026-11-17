@@ -336,10 +336,10 @@ func testDesktopPetViewLandsNormallyWhenTheStarsAlreadyBurnedOut() throws {
     try expect(after.last?.pose == DragPose.none, "after landing it should return to rest (got \(after.last?.pose ?? DragPose.none))")
 }
 
-/// 拎起来：脑袋不被拉，只有脖子以下的身体往下坠得长、收得细（2026-11-11 用户：拉伸多一点、别圆鼓鼓、脑袋不要被拉）
+/// 拎起来：脑袋不被拉，只有脖子以下的身体自然下坠、收细；保留摇摆和 Q 弹（2026-11-11 用户：改善头小身大的比例，脑袋不要被拉）
 func testLiftedPetStretchesTheBodyButNotTheHead() throws {
     let config = DragPhysicsConfig()
-    try expect(config.holdStretch >= 0.3, "held still the body already hangs a third longer (got \(config.holdStretch))")
+    try expect((0.18...0.22).contains(config.holdStretch), "held still the body should hang naturally (got \(config.holdStretch))")
     let stretch = 1 + config.holdStretch
     let whole = PetAnimationEngine.liftedTransform(
         drag: DragOutput(pose: .hold(tilt: 0), stretchY: stretch, swingDegrees: 0, landingSquash: 1),
@@ -681,6 +681,95 @@ func testPixelSpriteHangingKeepsTheCurveOfTheBack() throws {
         let widest = { (grid: PixelSpriteGrid) in (headRows..<grid.height).compactMap { grid.opaqueSpan(row: $0)?.upperBound }.max() ?? 0 }
         try expect(widest(hung) < widest(drop) && widest(hung) > rightEdges[headRows - 1],
                    "the belly still bulges past the neck, just slimmer at \(stretch) (\(widest(hung)) vs \(widest(drop)))")
+    }
+}
+
+/// 真实 hold_0 经过上屏用的 scaler 和 lift window 后，前 19 行（含头部源行 4...18）逐格不变。
+func testRealHeldPetKeepsEveryHeadPixelAtRuntimeStretches() throws {
+    let parent = NSWindow(contentRect: liftCanvas, styleMask: [.borderless], backing: .buffered, defer: false)
+    parent.isReleasedWhenClosed = false
+    let lift = PetLiftWindow()
+    defer { lift.hide(); lift.close(); parent.close() }
+    for outfit in ["", "outfits/straw_hat/"] {
+        let image = try realHeldImage(outfit: outfit)
+        lift.show(image: image, canvas: liftCanvas, over: parent)
+        guard let source = lift.sprite else { throw TestFailure(message: "\(outfit)hold_0 must load its real pixel grid") }
+        let headRows = source.height - PetLiftWindow.bodyRows(in: source)
+        try expect(source.width == 32 && source.height == 32 && headRows == 19,
+                   "the real 32×32 sprite keeps source head rows 4...18 above the split, got \(source.width)×\(source.height), split \(headRows)")
+        for stretch in [CGFloat(1), 1.20, 1.32] {
+            let rendered = try realHeldRaster(lift, stretch: stretch)
+            let originX = Int(PetLiftWindow.sideMargin / InteractionLayer.spritePixel)
+            let originY = Int(PetLiftWindow.topMargin / InteractionLayer.spritePixel)
+            for row in 0..<headRows {
+                for column in 0..<source.width {
+                    try expect(rendered[column + originX, row + originY] == source[column, row],
+                               "\(outfit)hold_0 stretch \(stretch) changed head pixel \(column),\(row)")
+                }
+            }
+        }
+    }
+}
+
+private func realHeldImage(outfit: String) throws -> NSImage {
+    let url = inferredManualTestRepoRootURL().appendingPathComponent("assets/pets/capybara/\(outfit)drag/hold_0.png")
+    guard let raw = NSImage(contentsOf: url) else { throw TestFailure(message: "could not read \(url.path)") }
+    return PixelArtScaler.upscaledForDisplay(raw, canvasPointSize: liftCanvas.size)
+}
+
+private func realHeldRaster(_ lift: PetLiftWindow, stretch: CGFloat) throws -> PixelSpriteGrid {
+    lift.render(drag: DragOutput(pose: .hold(tilt: 0), stretchY: stretch, swingDegrees: 0, landingSquash: 1))
+    guard let raster = lift.rasterLayer.contents.map({ $0 as! CGImage }),
+          let grid = PixelSpriteGrid.sampling(raster, columns: raster.width, rows: raster.height) else {
+        throw TestFailure(message: "the real held sprite must render at stretch \(stretch)")
+    }
+    return grid
+}
+
+/// 只量源行 12...23 的皮毛右缘；汗滴 / 星星不用皮毛色，头饰在此区段上方，不能混入后背。
+func testRealHeldPetKeepsTheNeckAndBackContinuousAtRuntimeStretches() throws {
+    let furColors: Set<UInt32> = [0x2F1C12FF, 0xB0714AFF, 0x8A5236FF, 0xCB8F62FF, 0x4A2E22FF, 0x99603FFF, 0xE58D86FF]
+    let parent = NSWindow(contentRect: liftCanvas, styleMask: [.borderless], backing: .buffered, defer: false)
+    parent.isReleasedWhenClosed = false
+    let lift = PetLiftWindow()
+    defer { lift.hide(); lift.close(); parent.close() }
+    for outfit in ["", "outfits/straw_hat/"] {
+        lift.show(image: try realHeldImage(outfit: outfit), canvas: liftCanvas, over: parent)
+        guard let source = lift.sprite else { throw TestFailure(message: "\(outfit)hold_0 must load") }
+        let headRows = source.height - PetLiftWindow.bodyRows(in: source)
+        for stretch in [CGFloat(1), 1.20, 1.32] {
+            let rendered = try realHeldRaster(lift, stretch: stretch)
+            let bodyRows = source.height - headRows
+            let stretchedRows = PixelSpriteHanging.stretchedBodyRows(bodyRows: bodyRows, stretch: stretch)
+            let actualStretch = CGFloat(stretchedRows) / CGFloat(bodyRows)
+            let originX = Int(PetLiftWindow.sideMargin / InteractionLayer.spritePixel)
+            let originY = Int(PetLiftWindow.topMargin / InteractionLayer.spritePixel)
+            // 和运行时的格子中心取样对齐，将目标行追溯到源行；脚 / 爪的急收不属于颈背段。
+            let sourceRows = (0..<(headRows + stretchedRows)).map { row in
+                row < headRows ? row : headRows + Int(min(max((CGFloat(row - headRows) + 0.5) / actualStretch - 0.5, 0), CGFloat(bodyRows - 1)).rounded())
+            }
+            let targetRows = sourceRows.indices.filter { (12...23).contains(sourceRows[$0]) }
+            try expect(sourceRows[targetRows.first!] == 12 && sourceRows[targetRows.last!] == 23,
+                       "the real contour check must cover the neck through the widest back")
+            // 同查皮毛边和外描边：外描边会把旧素材的两格皮毛台阶包住，单查透明边会漏报。
+            for includeOutline in [false, true] {
+                let edgeName = includeOutline ? "outline" : "fur"
+                let edges = try targetRows.map { row -> Int in
+                    guard let right = (0..<source.width).last(where: {
+                        let color = rendered[$0 + originX, row + originY]
+                        return furColors.contains(color) && (includeOutline || color != 0x2F1C12FF)
+                    }) else {
+                        throw TestFailure(message: "\(outfit)hold_0 stretch \(stretch): no \(edgeName) at target row \(row), source row \(sourceRows[row])")
+                    }
+                    return right
+                }
+                for index in 1..<edges.count {
+                    let above = targetRows[index - 1], below = targetRows[index]
+                    try expect(abs(edges[index] - edges[index - 1]) <= 1,
+                               "\(outfit)hold_0 stretch \(stretch): neck/back \(edgeName) jumps \(edges[index - 1])->\(edges[index]), source rows \(sourceRows[above])->\(sourceRows[below]), target rows \(above)->\(below), edges \(edges)")
+                }
+            }
+        }
     }
 }
 

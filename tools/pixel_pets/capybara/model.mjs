@@ -130,15 +130,14 @@ export const DEFAULT_MODEL = Object.freeze({
       pivotRow: 17,
       tiltDegrees: 8,
       parts: [
-        // 身子和坐姿一样壮（体型检查：坐姿的 95–105%）：肚子、屁股各一团，垂下来不缩水。
-        // 被拎起来时身子正对你，露出浅色肚皮（侧面姿势都不画肚皮，2026-11-11 用户定）
+        // 悬挂时身体沿颈肩向下收窄，投影比坐姿更窄；正面仍露出圆润肚皮。
         // 腿和身体同色，只有脚是深色
         box('farHindLeg', '远侧后腿', 'body', 15, 28.5, 2, 5, 0),
         box('nearHindLeg', '近侧后腿', 'body', 22, 28.5, 2, 5, 0),
-        ell('neck', '后颈', 'body', 19.5, 16.5, 6, 5),
-        ell('rump', '屁股', 'body', 21, 22.8, 9.2, 7.4),
-        ell('belly', '圆肚子', 'body', 15.5, 22.4, 10.6, 8.1),
-        ell('tummy', '浅色肚皮', 'light', 13, 23.4, 5.2, 5.2, { onlyOver: 'body' }),
+        ell('neck', '后颈', 'body', 18.5, 16.5, 6.0, 5),
+        ell('rump', '屁股', 'body', 20, 22.8, 8.1, 7.4),
+        ell('belly', '圆肚子', 'body', 15.5, 22.4, 9, 8.1),
+        ell('tummy', '浅色肚皮', 'light', 14, 23.4, 4, 4.6, { onlyOver: 'body' }),
         HEAD,
         cap('frontLeg', '前腿（垂在胸前）', 'body', 9.5, 19, 8.5, 22, 1.4, { edge: 'inner' }),
         ell('frontPawTip', '前爪尖', 'dark', 8.5, 22.4, 1.4, 0.9, { onlyOver: 'body' }),

@@ -11,7 +11,8 @@ export const VIEWS = Object.freeze(['side', 'front', 'back']);
 /** 每种姿势的整只大小（头 + 身体 + 腿 + 爪的格数）：坐姿的多少倍 */
 export const FIGURE_RANGE = Object.freeze({
   sit: [0.95, 1.05],
-  hold: [0.95, 1.05],
+  // 悬挂身体是较窄的下垂投影，不沿用坐姿的横向体量范围
+  hold: [0.85, 1.0],
   stand: [0.95, 1.05],
   lie: [1.0, 1.12],
   flip: [1.0, 1.12],
