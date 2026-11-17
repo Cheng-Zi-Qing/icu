@@ -18,9 +18,16 @@ final class ReminderScheduler {
     private(set) var eyeInterval: TimeInterval
     private(set) var hydrationInterval: TimeInterval
     private(set) var eyeRestSeconds: TimeInterval = 20
+    /// 今天喝了几杯 / 目标几杯；够了就不再排喝水提醒
+    var hydrationProgress: () -> (done: Int, goal: Int) = { (0, Int.max) }
+
     private let snoozeInterval: TimeInterval
+    private let nowProvider: () -> Date
     private let onReminder: ((ReminderPresentationPayload) -> Void)?
-    private let onEyeReminder: (() -> Void)?
+    /// 点「我要上班」那一刻：喝水网格以它为锚点，暂停回来不变
+    private var hydrationAnchor: Date?
+    /// 下一杯的网格序号（第 k 杯在锚点后 (k - 0.5) * 间隔）
+    private var nextHydrationSlot = 1
     private var eyeTimer: DispatchSourceTimer?
     private var hydrationTimer: DispatchSourceTimer?
     private var eyeTimerID: UUID?
@@ -35,28 +42,25 @@ final class ReminderScheduler {
         eyeInterval: TimeInterval = 20 * 60,
         hydrationInterval: TimeInterval = 45 * 60,
         snoozeInterval: TimeInterval = 5 * 60,
+        nowProvider: @escaping () -> Date = { Date() },
         onReminder: ((ReminderPresentationPayload) -> Void)? = nil
     ) {
         self.eyeInterval = eyeInterval
         self.hydrationInterval = hydrationInterval
         self.snoozeInterval = snoozeInterval
+        self.nowProvider = nowProvider
         self.onReminder = onReminder
-        self.onEyeReminder = nil
     }
 
-    init(
-        eyeInterval: TimeInterval = 20 * 60,
-        hydrationInterval: TimeInterval = 45 * 60,
-        onEyeReminder: (() -> Void)? = nil
-    ) {
-        self.eyeInterval = eyeInterval
-        self.hydrationInterval = hydrationInterval
-        self.snoozeInterval = 5 * 60
-        self.onReminder = nil
-        self.onEyeReminder = onEyeReminder
+    /// 点了「我要上班」：新的上下班段，喝水网格从这一刻重新算起
+    func startWorking(at anchor: Date? = nil) {
+        hydrationAnchor = anchor ?? nowProvider()
+        nextHydrationSlot = 1
+        beginWorking()
     }
 
-    func startWorking() {
+    /// 暂停后回来：不换锚点、不重置网格，只重新排
+    private func beginWorking() {
         isWorkingEnabled = true
         armEyeReminder()
         armHydrationReminder()
@@ -67,7 +71,7 @@ final class ReminderScheduler {
     }
 
     func resumeWorking() {
-        startWorking()
+        beginWorking()
     }
 
     func stop() {
@@ -140,17 +144,37 @@ final class ReminderScheduler {
         timer.resume()
     }
 
+    /// 喝水提醒：点「我喝了」后按最新进度重排；今天够数就停，没够就接着按网格排
+    func hydrationProgressChanged() {
+        let progress = hydrationProgress()
+        if progress.done >= progress.goal {
+            cancelHydrationReminder()
+        } else {
+            armHydrationReminder()
+        }
+    }
+
     private func armHydrationReminder() {
         cancelHydrationReminder()
         guard canSchedule else { return }
+        let progress = hydrationProgress()
+        guard progress.done < progress.goal else { return }
         isHydrationReminderArmed = true
         let timerID = UUID()
         hydrationTimerID = timerID
 
+        // 网格第 k 杯在锚点后 (k - 0.5) 个间隔：第一杯半格，最后一杯落在班末前，暂停回来接着网格走
+        let anchor = hydrationAnchor ?? nowProvider()
+        let now = nowProvider()
+        let timeSlot = Int(floor(now.timeIntervalSince(anchor) / hydrationInterval)) + 1
+        let slot = max(nextHydrationSlot, timeSlot)
+        let slotTime = anchor.addingTimeInterval((Double(slot) - 0.5) * hydrationInterval)
+
         let timer = DispatchSource.makeTimerSource(queue: .main)
-        timer.schedule(deadline: .now() + hydrationInterval)
+        timer.schedule(deadline: .now() + max(0.5, slotTime.timeIntervalSince(now)))
         timer.setEventHandler { [weak self] in
             guard let self, self.canSchedule, self.hydrationTimerID == timerID else { return }
+            self.nextHydrationSlot = slot + 1
             self.emitReminder(
                 ReminderPresentationPayload(
                     id: UUID(),
@@ -180,9 +204,6 @@ final class ReminderScheduler {
 
     private func emitReminder(_ payload: ReminderPresentationPayload) {
         onReminder?(payload)
-        if onReminder == nil {
-            onEyeReminder?()
-        }
     }
 
     private func cancelSnoozeReminder(for reminderID: UUID) {

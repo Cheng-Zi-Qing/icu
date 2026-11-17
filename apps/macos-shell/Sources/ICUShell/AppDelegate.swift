@@ -70,11 +70,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let timers = settingsStore.loadReminderTimerSettings()
             let scheduler = ReminderScheduler(
                 eyeInterval: timers.eyeInterval,
-                hydrationInterval: hydrationPlan.interval
-            ) { [weak self] payload in
+                hydrationInterval: hydrationPlan.interval,
+                onReminder: { [weak self] payload in
                 self?.petWindowController?.presentReminder(payload: payload)
-            }
+            })
             scheduler.updateIntervals(eye: timers.eyeInterval, hydration: hydrationPlan.interval, eyeRest: timers.eyeRestSeconds)
+            // 今天喝够了就别再催：每次排提醒前读一次今天的水喝进度
+            scheduler.hydrationProgress = { [weak self] in
+                guard let self else { return (0, Int.max) }
+                return (self.todayDayReport()?.hydrationReminder.completed ?? 0, self.cupsGoal())
+            }
 
             self.appPaths = paths
             self.stateStore = store

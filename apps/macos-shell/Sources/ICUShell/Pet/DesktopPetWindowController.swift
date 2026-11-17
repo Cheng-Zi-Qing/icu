@@ -472,7 +472,7 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
             case .startWork:
                 try workSessionController.startWork(now: now)
                 recordHealthTransition(from: oldState, to: workSessionController.state, at: now)
-                reminderScheduler.startWorking()
+                reminderScheduler.startWorking(at: now)
             case .enterFocus:
                 try workSessionController.enterFocus(now: now)
                 recordHealthTransition(from: oldState, to: workSessionController.state, at: now)
@@ -538,6 +538,11 @@ class DesktopPetWindowController: NSWindowController, NSWindowDelegate {
             try healthTracker.recordReminderOutcome(for: payload, outcome: outcome, at: now)
         } catch {
             logHealthError("record reminder outcome", error: error)
+        }
+
+        // 点「我喝了」后按最新进度重排喝水网格；今天够数就停
+        if outcome == .completed, payload.type == .hydration {
+            reminderScheduler.hydrationProgressChanged()
         }
 
         if outcome == .snoozed {
