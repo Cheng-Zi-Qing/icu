@@ -72,6 +72,8 @@ write_info_plist() {
   <string>${APP_NAME}</string>
   <key>CFBundleExecutable</key>
   <string>ICUShell</string>
+  <key>CFBundleIconFile</key>
+  <string>ICU.icns</string>
   <key>CFBundleIdentifier</key>
   <string>${BUNDLE_ID}</string>
   <key>CFBundleInfoDictionaryVersion</key>
@@ -100,6 +102,7 @@ EOF
 copy_runtime_resources() {
   mkdir -p "$RESOURCE_REPO_DIR/config"
   cp -R "$ROOT_DIR/assets" "$RESOURCE_REPO_DIR/assets"
+  cp "$ROOT_DIR/assets/app/ICU.icns" "$RESOURCES_DIR/ICU.icns"
   cp -R "$ROOT_DIR/config/copy" "$RESOURCE_REPO_DIR/config/copy"
   cp "$ROOT_DIR/config/wardrobe.json" "$RESOURCE_REPO_DIR/config/wardrobe.json"
 }
