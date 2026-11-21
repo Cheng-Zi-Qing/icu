@@ -184,32 +184,46 @@ func testAutomaticRestBlocksStartResumeUpdatesAndSnooze() throws {
     scheduler.resumeWorking()
     scheduler.updateIntervals(eye: 0.02, hydration: 0.02)
     scheduler.scheduleSnooze(for: payload)
-    try expect(!scheduler.isEyeReminderArmed && !scheduler.isHydrationReminderArmed, "start/resume/settings changes must not arm during automatic rest")
-    try expect(!waitForCondition(timeout: 0.08) { !reminders.isEmpty }, "rest must cancel old eye/hydration/snooze timers and reject new snoozes")
+    // 自动休息只压喝水/snooze；护眼只被锁屏停表
+    try expect(scheduler.isEyeReminderArmed, "automatic rest must keep the eye reminder counting")
+    try expect(!scheduler.isHydrationReminderArmed, "start/resume/settings changes must not arm hydration during automatic rest")
+    try expect(!waitForCondition(timeout: 0.08) { reminders.contains { $0.type == .hydration } }, "rest must cancel the old hydration timer and reject new ones")
+    try expect(!reminders.contains { $0.id == payload.id }, "snoozes scheduled before rest must not fire during rest")
     scheduler.setUserResting(false)
-    try expect(scheduler.isEyeReminderArmed && scheduler.isHydrationReminderArmed, "returning to manual working should rearm both reminders")
+    try expect(scheduler.isEyeReminderArmed && scheduler.isHydrationReminderArmed, "returning to manual working should have both reminders armed")
     try expect(waitForCondition(timeout: 0.9) { reminders.contains { $0.type == .eyeCare } && reminders.contains { $0.type == .hydration } }, "both reminders should run after returning")
     try expect(!reminders.contains { $0.id == payload.id }, "cancelled snoozes must not revive on return")
 }
 
 @MainActor
-func testAutomaticRestReturnUsesFullEyeIntervalWithoutResettingOnRepeatedSamples() throws {
-    // 喝水改成按网格排了（见 hydration 的测试），这里只看护眼：回来还是从头数一整个间隔
+func testAutomaticRestDoesNotResetTheEyeCountdown() throws {
+    // 喝水改成按网格排了（见 hydration 的测试），这里只看护眼：自动休息不清零，休息期间照常到点，回来接着数剩下的
     var reminders: [ReminderPresentationPayload] = []
-    let scheduler = ReminderScheduler(eyeInterval: 0.15, hydrationInterval: 3600, snoozeInterval: 300, onReminder: { reminders.append($0) })
+    let scheduler = ReminderScheduler(eyeInterval: 0.3, hydrationInterval: 3600, snoozeInterval: 300, onReminder: { reminders.append($0) })
     defer { scheduler.stop() }
     scheduler.startWorking()
-    try expect(!waitForCondition(timeout: 0.07) { !reminders.isEmpty }, "first interval should not have elapsed")
     scheduler.setUserResting(true)
-    try expect(!waitForCondition(timeout: 0.12) { !reminders.isEmpty }, "old deadlines must not fire during rest")
-    scheduler.setUserResting(false)
-    try expect(!waitForCondition(timeout: 0.09) { !reminders.isEmpty }, "return should start a complete interval")
-    scheduler.setUserResting(false)
-    try expect(waitForCondition(timeout: 0.1) { !reminders.isEmpty }, "repeated active samples must not restart the interval")
+    try expect(scheduler.isEyeReminderArmed, "automatic rest must not cancel the eye countdown")
+    try expect(waitForCondition(timeout: 0.9) { !reminders.isEmpty }, "护眼在自动休息期间也照常到点提醒")
 }
 
 @MainActor
-func testAutomaticRestReturnDoesNotReviveFocusBreakOrStop() throws {
+func testRepeatedAutomaticRestSamplesDoNotRestartTheEyeCountdown() throws {
+    var reminders: [ReminderPresentationPayload] = []
+    let scheduler = ReminderScheduler(eyeInterval: 1, hydrationInterval: 3600, snoozeInterval: 300, onReminder: { reminders.append($0) })
+    defer { scheduler.stop() }
+    scheduler.startWorking()
+    // 每 0.2s 来一次空闲采样（rest 在真假之间来回切）：不能把护眼倒计时重启
+    for _ in 0..<4 {
+        try expect(!waitForCondition(timeout: 0.2) { !reminders.isEmpty }, "每次采样都不该把护眼倒计时清零")
+        scheduler.setUserResting(true)
+        scheduler.setUserResting(false)
+    }
+    try expect(waitForCondition(timeout: 0.5) { !reminders.isEmpty }, "反复的空闲采样不能把护眼计时重置")
+}
+
+@MainActor
+func testFocusAndStopStillDisableRemindersAroundAutomaticRest() throws {
     let scheduler = ReminderScheduler(eyeInterval: 1200, hydrationInterval: 3600)
     defer { scheduler.stop() }
     scheduler.startWorking()
@@ -219,6 +233,7 @@ func testAutomaticRestReturnDoesNotReviveFocusBreakOrStop() throws {
     try expect(!scheduler.isEyeReminderArmed && !scheduler.isHydrationReminderArmed, "return to focus must keep reminders disabled")
     scheduler.setUserResting(true)
     scheduler.resumeWorking()
+    try expect(scheduler.isEyeReminderArmed, "resume working still arms the eye reminder")
     scheduler.stop()
     scheduler.setUserResting(false)
     scheduler.updateIntervals(eye: 900, hydration: 1800)
@@ -230,7 +245,7 @@ func testAutomaticRestReturnDoesNotReviveFocusBreakOrStop() throws {
 }
 
 @MainActor
-func testReminderCallbackCannotRearmAfterAutomaticRest() throws {
+func testReminderCallbackCannotRearmAfterThePause() throws {
     for type in [HealthReminderType.eyeCare, .hydration] {
         var scheduler: ReminderScheduler!
         var reminderCount = 0
@@ -239,15 +254,84 @@ func testReminderCallbackCannotRearmAfterAutomaticRest() throws {
             hydrationInterval: type == .hydration ? 0.01 : 3600,
             snoozeInterval: 300,
             onReminder: { _ in
-            reminderCount += 1
-            scheduler.setUserResting(true)
-        })
+                reminderCount += 1
+                // 护眼现在只被锁屏 / 睡眠暂停，喝水还是被自动休息暂停
+                if type == .eyeCare {
+                    scheduler.setEyeClockPaused(true)
+                } else {
+                    scheduler.setUserResting(true)
+                }
+            })
         defer { scheduler.stop() }
         scheduler.startWorking()
-        try expect(waitForCondition(timeout: 0.9) { reminderCount > 0 }, "reminder should fire before entering rest")
-        try expect(!scheduler.isEyeReminderArmed && !scheduler.isHydrationReminderArmed, "a callback that enters rest must not rearm its old timer")
+        try expect(waitForCondition(timeout: 0.9) { reminderCount > 0 }, "reminder should fire before the pause")
+        let pauseStoppedIt = type == .eyeCare ? !scheduler.isEyeReminderArmed : !scheduler.isHydrationReminderArmed
+        try expect(pauseStoppedIt, "a callback that pauses must not rearm its old timer")
         try expect(!waitForCondition(timeout: 0.04) { reminderCount > 1 }, "cancelled callbacks must not emit again")
     }
+}
+
+// MARK: - 护眼只扣掉锁屏 / 睡眠那段时间
+
+@MainActor
+func testLockPausesTheEyeCountdownAndUnlockCountsTheRest() throws {
+    var clockShift: TimeInterval = 0
+    let now: () -> Date = { Date().addingTimeInterval(clockShift) }
+    var reminders: [ReminderPresentationPayload] = []
+    let scheduler = ReminderScheduler(eyeInterval: 2, hydrationInterval: 3600, snoozeInterval: 300, nowProvider: now, onReminder: { reminders.append($0) })
+    defer { scheduler.stop() }
+
+    scheduler.startWorking(at: now())
+    // 数了 1.4s（虚拟时间）之后锁屏
+    clockShift = 1.4
+    scheduler.setEyeClockPaused(true)
+    try expect(!scheduler.isEyeReminderArmed, "锁屏要停表")
+    // 锁屏期间把表往前拨远超一个间隔，也不该提醒
+    clockShift += 10 * 2
+    try expect(!waitForCondition(timeout: 0.4) { !reminders.isEmpty }, "锁屏期间不该提醒")
+
+    // 解锁只数剩下的 0.6s，不是一整个间隔（2s）
+    scheduler.setEyeClockPaused(false)
+    try expect(scheduler.isEyeReminderArmed, "解锁要继续数")
+    try expect(!waitForCondition(timeout: 0.25) { !reminders.isEmpty }, "接着数的是剩下的 0.6s，不是立刻提醒")
+    try expect(waitForCondition(timeout: 1.1) { !reminders.isEmpty }, "解锁后要接着数剩下的时间，而不是重数一整个间隔")
+}
+
+/// 合盖睡眠走的是同一套停表：睡两小时醒来不该立刻弹卡，也不该把这段算进用眼时间
+@MainActor
+func testSleepPausesTheEyeCountdownLikeLock() throws {
+    var clockShift: TimeInterval = 0
+    let now: () -> Date = { Date().addingTimeInterval(clockShift) }
+    var reminders: [ReminderPresentationPayload] = []
+    let scheduler = ReminderScheduler(eyeInterval: 2, hydrationInterval: 3600, snoozeInterval: 300, nowProvider: now, onReminder: { reminders.append($0) })
+    defer { scheduler.stop() }
+
+    scheduler.startWorking(at: now())
+    clockShift = 0.5
+    scheduler.setEyeClockPaused(true)
+    clockShift += 2 * 3600
+    try expect(!waitForCondition(timeout: 0.3) { !reminders.isEmpty }, "睡着的两个小时不算用眼")
+
+    scheduler.setEyeClockPaused(false)
+    try expect(!waitForCondition(timeout: 0.9) { !reminders.isEmpty }, "醒来不能立刻弹卡：还剩 1.5s 才到点")
+    try expect(waitForCondition(timeout: 1.2) { !reminders.isEmpty }, "醒来后接着数剩下的 1.5s")
+}
+
+@MainActor
+func testStopResetsTheEyeCountdown() throws {
+    var clockShift: TimeInterval = 0
+    let now: () -> Date = { Date().addingTimeInterval(clockShift) }
+    var reminders: [ReminderPresentationPayload] = []
+    let scheduler = ReminderScheduler(eyeInterval: 2, hydrationInterval: 3600, snoozeInterval: 300, nowProvider: now, onReminder: { reminders.append($0) })
+    defer { scheduler.stop() }
+
+    scheduler.startWorking(at: now())
+    // 已经数了 1.4s 就下班：新的一段重新算，不能接着上一段的进度
+    clockShift = 1.4
+    scheduler.stop()
+    scheduler.startWorking(at: now())
+    try expect(!waitForCondition(timeout: 1.2) { !reminders.isEmpty }, "下班归零后要重新数满一整个间隔，不是立刻提醒")
+    try expect(waitForCondition(timeout: 1.4) { !reminders.isEmpty }, "数满一个间隔后照常提醒")
 }
 
 // MARK: - 喝水提醒的时间网格（锚点是点「我要上班」那一刻）
