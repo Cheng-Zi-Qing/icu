@@ -35,8 +35,14 @@ final class ReminderScheduler {
     private var snoozeTimers: [UUID: (id: UUID, timer: DispatchSourceTimer)] = [:]
     private var isWorkingEnabled = false
     private var isUserResting = false
+    private var isEyeClockPaused = false
+    /// 护眼累计在岗时间（锁屏、睡眠那段不算）；提醒一次后清零
+    private var eyeElapsed: TimeInterval = 0
+    private var eyeRunningSince: Date?
 
     private var canSchedule: Bool { isWorkingEnabled && !isUserResting }
+    /// 护眼只在锁屏 / 睡眠时停表
+    private var canCountEyeTime: Bool { isWorkingEnabled && !isEyeClockPaused }
 
     init(
         eyeInterval: TimeInterval = 20 * 60,
@@ -76,6 +82,7 @@ final class ReminderScheduler {
 
     func stop() {
         isWorkingEnabled = false
+        eyeElapsed = 0
         cancelEyeReminder()
         cancelHydrationReminder()
         cancelSnoozeReminders()
@@ -85,12 +92,22 @@ final class ReminderScheduler {
         guard isUserResting != isResting else { return }
         isUserResting = isResting
         if isResting {
-            cancelEyeReminder()
             cancelHydrationReminder()
             cancelSnoozeReminders()
         } else if isWorkingEnabled {
-            armEyeReminder()
             armHydrationReminder()
+        }
+    }
+
+    /// 锁屏、电脑睡眠时护眼停表，回来接着数剩下的（护眼只扣掉锁屏和睡眠这段）
+    func setEyeClockPaused(_ isPaused: Bool) {
+        guard isEyeClockPaused != isPaused else { return }
+        isEyeClockPaused = isPaused
+        if isPaused {
+            if let since = eyeRunningSince { eyeElapsed += nowProvider().timeIntervalSince(since) }
+            cancelEyeReminder()
+        } else {
+            armEyeReminder()
         }
     }
 
@@ -121,15 +138,19 @@ final class ReminderScheduler {
 
     private func armEyeReminder() {
         cancelEyeReminder()
-        guard canSchedule else { return }
+        guard canCountEyeTime else { return }
         isEyeReminderArmed = true
         let timerID = UUID()
         eyeTimerID = timerID
+        eyeRunningSince = nowProvider()
+        // 锁屏那段不算：解锁后接着数剩下的（0.01 只是防 0/负数截止时间）
+        let remaining = max(0.01, eyeInterval - eyeElapsed)
 
         let timer = DispatchSource.makeTimerSource(queue: .main)
-        timer.schedule(deadline: .now() + eyeInterval)
+        timer.schedule(deadline: .now() + remaining)
         timer.setEventHandler { [weak self] in
-            guard let self, self.canSchedule, self.eyeTimerID == timerID else { return }
+            guard let self, self.canCountEyeTime, self.eyeTimerID == timerID else { return }
+            self.eyeElapsed = 0
             self.emitReminder(
                 ReminderPresentationPayload(
                     id: UUID(),
@@ -189,6 +210,7 @@ final class ReminderScheduler {
     }
 
     private func cancelEyeReminder() {
+        eyeRunningSince = nil
         eyeTimerID = nil
         eyeTimer?.cancel()
         eyeTimer = nil

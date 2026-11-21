@@ -258,6 +258,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func applyAutomaticRest() {
         reminderScheduler?.setUserResting(workRestState.isResting)
+        // 护眼只扣掉「屏幕没在工作」的时间：锁屏、合盖睡眠都算
+        reminderScheduler?.setEyeClockPaused(workRestState.isScreenLocked || workRestState.isSleeping)
         do {
             try healthTracker?.setAutomaticRest(workRestState.isResting, at: .now)
         } catch {
